@@ -18,12 +18,15 @@
 const SUPABASE_URL = "https://skcoxtdppdcietgojdal.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_NCxP_LqiNJCKv3yrpi33fg_osKCmQIL"; // clave publicable ("anon" / "public")
 
-/* Fijamos un único origen para desarrollo local. localhost y 127.0.0.1 son,
-   para el navegador, dos sitios distintos con almacenamiento de sesión
-   separado — por eso hay que entrar SIEMPRE por esta misma URL, tanto al
-   pedir el enlace mágico como al abrirlo. Si más adelante despliegas a un
-   dominio real, este valor es lo único que hay que actualizar aquí. */
-const SITE_URL = "http://127.0.0.1:5500";
+/* Calcula el origen + carpeta de la página actual (sin el nombre del
+   archivo), para que el enlace mágico funcione igual en local y en
+   cualquier despliegue (GitHub Pages, dominio propio, etc.) sin tocar
+   nada a mano cada vez que cambie el entorno. Ejemplos:
+     http://127.0.0.1:5500/login.html            -> http://127.0.0.1:5500/
+     https://usuario.github.io/mobau/login.html  -> https://usuario.github.io/mobau/ */
+function getSiteBaseUrl() {
+  return window.location.origin + window.location.pathname.replace(/[^/]+$/, "");
+}
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -51,7 +54,7 @@ const MobauAuth = {
      extraData es opcional (por ejemplo { name: "Ana Rosario" })
      y queda disponible luego como raw_user_meta_data en Supabase. */
   async sendMagicLink(email, extraData) {
-    const redirectTo = SITE_URL + "/cuenta.html";
+    const redirectTo = getSiteBaseUrl() + "cuenta.html";
     return supabaseClient.auth.signInWithOtp({
       email,
       options: {
