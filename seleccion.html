@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi selección — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Selección</div>
+    <h1>Mi selección</h1>
+    <p style="margin-top:14px; max-width:60ch;">Productos que estás considerando para un proyecto — se guardan en este navegador, todavía no en tu cuenta.</p>
+  </div>
+</div>
+
+<main class="wrap" style="max-width:760px; padding: 28px 0 100px;">
+
+  <div id="selection-empty" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Tu selección está vacía por ahora.</p>
+    <p style="margin:0;">Explora el catálogo y añade productos a tu selección.</p>
+    <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+  </div>
+
+  <div id="selection-content" style="display:none;">
+    <div id="selection-list"></div>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:28px;">
+      <button type="button" class="btn btn-primary" id="create-project-btn">Crear proyecto</button>
+      <button type="button" class="btn btn-outline" id="request-quote-btn">Solicitar cotización</button>
+    </div>
+
+    <div id="create-project-result" style="display:none;" class="form-card">
+      <p id="cpr-message" style="margin:0 0 12px; font-weight:600; color:var(--ink);"></p>
+      <a href="#" id="cpr-open-link" class="btn btn-primary">Abrir proyecto</a>
+      <p class="card-meta" style="margin-top:14px;">Los productos que faltan siguen en tu selección — pulsa "Crear proyecto" de nuevo más adelante para reintentar solo con ellos.</p>
+    </div>
+  </div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  function renderSelection(){
+    const ids = getSelection();
+    const emptyEl = document.getElementById("selection-empty");
+    const contentEl = document.getElementById("selection-content");
+
+    if (!ids.length){
+      contentEl.style.display = "none";
+      emptyEl.style.display = "block";
+      return;
+    }
+    emptyEl.style.display = "none";
+    contentEl.style.display = "block";
+
+    const listEl = document.getElementById("selection-list");
+    listEl.innerHTML = ids.map(id => {
+      const p = PRODUCTS.find(pp => pp.id === id);
+      if (!p) return "";
+      const dist = DISTRIBUTORS[p.distribuidor];
+      return `
+        <div class="saved-project">
+          <div>
+            <div class="sp-name">${p.nombre}</div>
+            <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
+            <button type="button" class="btn btn-outline btn-sm remove-selection-btn" data-id="${p.id}">Quitar de la selección</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    listEl.querySelectorAll(".remove-selection-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        removeFromSelection(btn.dataset.id);
+        updateSelectionBadge();
+        showToast("Producto quitado de la selección.");
+        renderSelection();
+      });
+    });
+  }
+
+  async function startCreateProjectFlow(){
+    const ids = getSelection();
+    if (!ids.length){
+      alert("Tu selección está vacía — añade productos antes de crear un proyecto.");
+      return;
+    }
+
+    const session = await MobauAuth.requireSession();
+    if (!session) return; // ya redirigió a login.html, la selección no se toca
+
+    const { data: profile, error: profileError } = await supabaseClient
+      .from("professional_profiles")
+      .select("id")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (profileError){
+      alert(profileError.message);
+      return;
+    }
+
+    if (!profile){
+      window.location.href = "inscripcion-profesional.html?despues=crear-proyecto";
+      return;
+    }
+
+    // Evita duplicar proyectos: si ya hay uno activo (reintento o preexistente),
+    // se reutiliza en vez de crear otro.
+    let project;
+    const activeProjects = await MobauProjects.list("active");
+
+    if (activeProjects.length){
+      project = activeProjects[0];
+    } else {
+      const name = prompt("¿Cómo quieres llamar a este proyecto?");
+      if (!name || !name.trim()){
+        return; // cancelado o vacío — nada que crear todavía
+      }
+      const { data, error: createError } = await MobauProjects.create({ name: name.trim() }, session.user.id);
+      if (createError){
+        alert(createError.message);
+        return;
+      }
+      project = data;
+    }
+
+    // Qué falta por añadir: lo que ya está en el proyecto no se repite.
+    const alreadyIn = await MobauProjects.listProductsInProject(project.id);
+    const alreadyIds = new Set(alreadyIn.map(row => row.product_id));
+    const pending = ids.filter(id => !alreadyIds.has(id));
+
+    let addedCount = alreadyIn.length;
+    let failedCount = 0;
+
+    for (const productId of pending){
+      const { error: saveError } = await MobauProjects.saveProductToProject(project.id, productId);
+      if (saveError){
+        failedCount++;
+      } else {
+        addedCount++;
+      }
+    }
+
+    const totalCount = ids.length;
+
+    if (failedCount === 0){
+      clearSelection();
+      updateSelectionBadge();
+      window.location.href = `proyectos-detalle.html?id=${project.id}`;
+      return;
+    }
+
+    // Fallo parcial: la selección se conserva intacta, no se crea nada más.
+    document.getElementById("cpr-message").textContent =
+      `Se creó el proyecto "${project.name}" y se añadieron ${addedCount} de ${totalCount} productos. Algunos no se pudieron añadir todavía.`;
+    document.getElementById("cpr-open-link").href = `proyectos-detalle.html?id=${project.id}`;
+    document.getElementById("create-project-result").style.display = "block";
+  }
+
+  document.getElementById("create-project-btn").addEventListener("click", startCreateProjectFlow);
+
+  document.getElementById("request-quote-btn").addEventListener("click", () => {
+    showToast("Solicitar cotización desde tu selección se habilitará en un próximo paso.");
+  });
+
+  renderSelection();
+
+  // Si venimos de inscribir el perfil, continuamos el flujo automáticamente.
+  if (new URLSearchParams(window.location.search).get("despues") === "crear-proyecto"){
+    startCreateProjectFlow();
+  }
+</script>
+</body>
+</html>

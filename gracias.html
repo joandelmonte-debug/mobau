@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solicitud enviada — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="confirm-wrap">
+    <div class="confirm-mark">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l5 5L20 6"/></svg>
+    </div>
+    <h1>Gracias. Tu solicitud de cotización ha sido enviada.</h1>
+    <p>Nos pondremos en contacto contigo en breve para coordinar la información con cada distribuidor y avanzar con la cotización de tu proyecto.</p>
+
+    <div class="confirm-ref">
+      <span id="ref-code">COT-2026-0000</span>
+      <span id="ref-fecha">—</span>
+    </div>
+
+    <p style="font-size:14.5px;"><strong id="ref-piezas">Tu proyecto</strong> — solicitado por <span id="ref-nombre">—</span>.</p>
+    <p style="font-size:13px; color:var(--ink-faint);" id="ref-rfqs"></p>
+
+    <div class="confirm-actions">
+      <a href="catalogo.html" class="btn btn-primary">Volver al catálogo</a>
+      <a href="index.html" class="btn btn-outline">Ir al inicio</a>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get("ref");
+  const nombre = params.get("nombre");
+  const piezas = params.get("piezas");
+  const rfqs = params.get("rfqs");
+
+  document.getElementById("ref-code").textContent = ref || "COT-2026-0000";
+  document.getElementById("ref-fecha").textContent = new Date().toLocaleDateString("es-DO", { year:"numeric", month:"long", day:"numeric" });
+  document.getElementById("ref-nombre").textContent = nombre || "tu estudio";
+
+  const n = parseInt(piezas || "0", 10);
+  document.getElementById("ref-piezas").textContent =
+    n > 0 ? `Tu proyecto (${n} ${n === 1 ? "pieza" : "piezas"})` : "Tu consulta";
+
+  const r = parseInt(rfqs || "0", 10);
+  document.getElementById("ref-rfqs").textContent =
+    r > 1 ? `Se generaron ${r} solicitudes de cotización separadas, una por cada distribuidor.` :
+    r === 1 ? `Se generó 1 solicitud de cotización.` : "";
+</script>
+</body>
+</html>

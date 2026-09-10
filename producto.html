@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha de producto — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html" class="active">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap breadcrumb" id="breadcrumb">
+  <a href="index.html">Inicio</a> / <a href="catalogo.html">Catálogo</a> / <span id="bc-name">Producto</span>
+</div>
+
+<main class="wrap product-layout" id="product-root">
+
+  <div>
+    <div class="gallery-main" id="gallery-main"></div>
+    <div class="gallery-thumbs">
+      <div></div><div></div><div></div><div></div>
+    </div>
+  </div>
+
+  <div class="product-info">
+    <span class="card-brand" id="p-brand">MARCA</span>
+    <h1 id="p-name">Nombre del producto</h1>
+    <div class="avail-row">
+      <span class="badge" id="p-badge">Disponibilidad</span>
+      <span class="card-meta" id="p-meta" style="margin:0;">Categoría · Subcategoría</span>
+    </div>
+    <p class="desc" id="p-desc">Descripción del producto.</p>
+    <p class="resource-note" style="margin-top:-14px;">Precio, disponibilidad y plazo sujetos a confirmación del distribuidor.</p>
+
+    <p class="section-note">Antes de sumarlo a tu proyecto, esto es lo que necesitas saber:</p>
+    <dl class="spec-table">
+      <div class="spec-row"><dt>Medidas</dt><dd id="p-medidas">—</dd></div>
+      <div class="spec-row"><dt>Materiales</dt><dd id="p-materiales">—</dd></div>
+      <div class="spec-row"><dt>Acabados</dt><dd id="p-acabados">—</dd></div>
+      <div class="spec-row"><dt>Lead time</dt><dd id="p-leadtime">—</dd></div>
+      <div class="spec-row"><dt>Uso recomendado</dt><dd id="p-uso">—</dd></div>
+      <div class="spec-row"><dt>Distribuidor</dt><dd id="p-distribuidor">—</dd></div>
+      <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
+    </dl>
+
+    <p class="section-note">Archivos descargables — para incorporar el producto directamente en tu proyecto:</p>
+    <div class="resource-list" id="resource-list"></div>
+    <p class="resource-note">Descargas de demostración. En la versión completa, cada archivo se sirve directamente desde el distribuidor.</p>
+
+    <div class="product-actions">
+      <button type="button" class="btn btn-primary" id="add-project-btn" data-id="">Añadir a la selección</button>
+      <a href="proyectos.html" class="btn btn-outline">Ver proyecto</a>
+    </div>
+
+    <div class="supplier-box">
+      <div>
+        <div class="s-name" id="s-name">Distribuidor</div>
+        <div class="s-loc" id="s-loc">Ubicación</div>
+      </div>
+      <a href="catalogo.html" id="s-more-link">Ver más piezas de este distribuidor</a>
+    </div>
+  </div>
+
+</main>
+
+<section class="wrap related-strip">
+  <div class="section-head">
+    <h2>Otras piezas de la misma categoría</h2>
+  </div>
+  <div class="product-grid" id="related-grid"></div>
+</section>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get("id") || "p1";
+  const product = PRODUCTS.find(p => p.id === id) || PRODUCTS[0];
+  const distribuidor = DISTRIBUTORS[product.distribuidor];
+  const marcaLabel = LABELS.marca[product.marca];
+
+  document.title = `${product.nombre} — Mobau`;
+  document.getElementById("bc-name").textContent = product.nombre;
+  document.getElementById("p-brand").textContent = marcaLabel;
+  document.getElementById("p-name").textContent = product.nombre;
+  document.getElementById("p-meta").textContent = `${LABELS.categoria[product.categoria]} · ${product.subcategoria}`;
+  document.getElementById("p-desc").textContent = product.descripcion;
+  document.getElementById("p-medidas").textContent = product.medidas;
+  document.getElementById("p-materiales").textContent = product.materiales;
+  document.getElementById("p-acabados").textContent = product.acabados;
+  document.getElementById("p-leadtime").textContent = product.leadtime;
+  document.getElementById("p-uso").textContent = LABELS.uso[product.uso];
+  document.getElementById("p-distribuidor").textContent = `${distribuidor.nombre} — ${distribuidor.ubicacion}`;
+  document.getElementById("p-marca").textContent = marcaLabel;
+
+  const badge = document.getElementById("p-badge");
+  badge.textContent = LABELS.disponibilidad[product.disponibilidad];
+  badge.classList.add(badgeClass(product.disponibilidad));
+
+  document.getElementById("gallery-main").innerHTML = iconMarkup(product.icon, 120);
+
+  document.getElementById("s-name").textContent = distribuidor.nombre;
+  document.getElementById("s-loc").textContent = distribuidor.ubicacion;
+  document.getElementById("s-more-link").href = `catalogo.html?distribuidor=${product.distribuidor}`;
+
+  document.getElementById("resource-list").innerHTML = DOWNLOADS.map(d => `
+    <div class="resource-row">
+      <span class="r-label">${d.label}</span>
+      <span class="r-ext">${d.ext}</span>
+      <button type="button" class="btn btn-outline" data-download="${d.label}">Descargar</button>
+    </div>`).join("");
+
+  document.querySelectorAll('[data-download]').forEach(btn => {
+    btn.addEventListener("click", () => showToast(`Descarga simulada — ${btn.dataset.download}`));
+  });
+
+  function refreshAddButton(){
+    const btn = document.getElementById("add-project-btn");
+    const already = inSelection(product.id);
+    btn.textContent = already ? "En mi selección" : "Añadir a la selección";
+    btn.classList.toggle("btn-added", already);
+    btn.classList.toggle("btn-primary", !already);
+    btn.disabled = already;
+  }
+
+  function renderRelated(){
+    const related = PRODUCTS.filter(p => p.categoria === product.categoria && p.id !== product.id).slice(0,3);
+    const grid = document.getElementById("related-grid");
+    grid.innerHTML = related.map(renderProductCard).join("");
+    injectIconSprite();
+    bindAddButtons(grid, renderRelated);
+    propagateCartLinks();
+  }
+
+  document.getElementById("add-project-btn").addEventListener("click", () => {
+    const btn = document.getElementById("add-project-btn");
+    btn.disabled = true;
+    btn.textContent = "Añadiendo…";
+
+    setTimeout(() => {
+      const result = addToSelection(product.id);
+
+      if (!result.success){
+        btn.textContent = "Añadir a la selección";
+        btn.disabled = false;
+        if (result.error) alert(result.error);
+        return;
+      }
+
+      btn.textContent = "En mi selección";
+      btn.classList.remove("btn-primary");
+      btn.classList.add("btn-added");
+      // queda deshabilitado a propósito
+
+      updateSelectionBadge();
+    }, 220);
+  });
+
+  refreshAddButton();
+  renderRelated();
+  injectIconSprite();
+</script>
+</body>
+</html>

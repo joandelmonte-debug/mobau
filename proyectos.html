@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mis proyectos — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Área profesional</div>
+    <h1>Mis proyectos</h1>
+    <p style="margin-top:14px; max-width:60ch;">Crea proyectos para guardar productos, preparar una selección visual y solicitar cotizaciones.</p>
+  </div>
+</div>
+
+<main class="wrap" style="padding: 40px 0 100px;">
+
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:22px;">
+    <div style="display:flex; gap:10px;">
+      <button type="button" class="btn btn-primary btn-sm" id="filter-active" data-status="active">Activos</button>
+      <button type="button" class="btn btn-outline btn-sm" id="filter-archived" data-status="archived">Archivados</button>
+    </div>
+    <a href="proyectos-nuevo.html" class="btn btn-primary">Crear proyecto</a>
+  </div>
+
+  <p id="plan-usage" style="font-size:13px; color:var(--ink-faint); margin-bottom:28px;"></p>
+
+  <div id="projects-empty" class="cart-empty" style="display:none;">
+    <div class="auth-card">
+      <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no tienes proyectos aquí.</p>
+      <p id="projects-empty-text" style="margin:0;">Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.</p>
+      <a href="proyectos-nuevo.html" class="btn btn-primary">Crear proyecto</a>
+    </div>
+  </div>
+
+  <div class="provider-grid" id="projects-grid"></div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  let currentStatus = "active";
+  let session = null;
+  let currentPlan = null;
+
+  function renderCard(p, productCount, distributorCount, plan, activeCount){
+    const isActive = p.status === "active";
+    const typeLabel = p.project_type ? (PROJECT_TYPE_LABELS[p.project_type] || p.project_type) : "Tipo no definido";
+    const productsLabel = `${productCount} ${productCount === 1 ? "producto guardado" : "productos guardados"}`;
+    const distributorsLabel = `${distributorCount} ${distributorCount === 1 ? "distribuidor" : "distribuidores"}`;
+    const isStudioPlan = planAllowsMultipleActive(plan);
+
+    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm"${!isActive && isStudioPlan ? ' style="flex:1;"' : ""}>Abrir</a>`;
+
+    if (isActive){
+      actionsHtml += `<button type="button" class="btn btn-outline btn-sm archive-btn" data-id="${p.id}" data-status="active">Archivar proyecto</button>`;
+    } else if (isStudioPlan){
+      const hasCupo = activeCount < plan.max_active_projects;
+      actionsHtml += hasCupo
+        ? `<button type="button" class="btn btn-outline btn-sm archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
+        : `<button type="button" class="btn btn-outline btn-sm" style="flex:1;" disabled>Sin cupo para reactivar</button>`;
+    }
+    /* Individual/prueba + archivado: no se añade ningún botón más — solo "Abrir". */
+
+    return `
+      <article class="provider-card">
+        <div class="provider-top">
+          <div>
+            <div class="provider-mark">${p.name}</div>
+            <div class="provider-loc">${p.client_name ? "Cliente: " + p.client_name : "Sin cliente asignado"}</div>
+          </div>
+          <span class="status-chip ${isActive ? "sent" : "closed"}">${isActive ? "Activo" : "Archivado"}</span>
+        </div>
+        <div class="provider-cats">
+          <span class="chip">${typeLabel}</span>
+          <span class="chip">${productsLabel}</span>
+          <span class="chip">${distributorsLabel}</span>
+        </div>
+        <p style="margin:0; font-size:13px; color:var(--ink-faint);">Actualizado ${relativeDate(p.updated_at)}</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:auto;">
+          ${actionsHtml}
+        </div>
+      </article>`;
+  }
+
+  async function renderPlanUsage(){
+    const activeCount = await MobauProjects.countActive();
+    const el = document.getElementById("plan-usage");
+    if (!currentPlan) { el.textContent = ""; return; }
+    const label = currentPlan.max_active_projects === 1 ? "proyecto activo" : "proyectos activos";
+    el.textContent = `${activeCount} de ${currentPlan.max_active_projects} ${label} en tu plan.`;
+  }
+
+  async function loadProjects(){
+    const grid = document.getElementById("projects-grid");
+    const empty = document.getElementById("projects-empty");
+    const emptyText = document.getElementById("projects-empty-text");
+
+    const projects = await MobauProjects.list(currentStatus);
+    const activeCount = await MobauProjects.countActive();
+
+    if (!projects.length){
+      grid.innerHTML = "";
+      emptyText.textContent = currentStatus === "archived"
+        ? "Todavía no has archivado ningún proyecto."
+        : "Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.";
+      empty.style.display = "block";
+    } else {
+      empty.style.display = "none";
+      const cardsHtml = await Promise.all(projects.map(async (p) => {
+        const rows = await MobauProjects.listProductsInProject(p.id);
+        const distributorIds = new Set();
+        rows.forEach(row => {
+          const prod = PRODUCTS.find(pp => pp.id === row.product_id);
+          if (prod) distributorIds.add(prod.distribuidor);
+        });
+        return renderCard(p, rows.length, distributorIds.size, currentPlan, activeCount);
+      }));
+      grid.innerHTML = cardsHtml.join("");
+      grid.querySelectorAll(".archive-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          const nextStatus = btn.dataset.status === "active" ? "archived" : "active";
+          btn.disabled = true;
+          const { error } = await MobauProjects.setStatus(id, nextStatus);
+          if (error){
+            alert(error.message);
+            btn.disabled = false;
+            return;
+          }
+          await loadProjects();
+          await renderPlanUsage();
+        });
+      });
+    }
+  }
+
+  function setFilter(status){
+    currentStatus = status;
+    document.getElementById("filter-active").className = "btn btn-sm " + (status === "active" ? "btn-primary" : "btn-outline");
+    document.getElementById("filter-archived").className = "btn btn-sm " + (status === "archived" ? "btn-primary" : "btn-outline");
+    loadProjects();
+  }
+
+  document.getElementById("filter-active").addEventListener("click", () => setFilter("active"));
+  document.getElementById("filter-archived").addEventListener("click", () => setFilter("archived"));
+
+  (async () => {
+    session = await MobauAuth.requireSession();
+    if (!session) return;
+    currentPlan = await MobauProjects.myPlan(session.user.id);
+    await renderPlanUsage();
+    await loadProjects();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi cuenta — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Área profesional</div>
+    <h1>Mi cuenta</h1>
+    <p style="margin-top:14px; max-width:60ch;">Esto es lo que tienes en marcha. Retoma tu proyecto actual o revisa proyectos anteriores.</p>
+    <p id="session-info" style="margin-top:10px; font-size:13px; color:var(--ink-faint);"></p>
+    <button type="button" id="logout-btn" class="btn btn-outline btn-sm" style="margin-top:14px;">Cerrar sesión</button>
+  </div>
+</div>
+
+<main class="wrap" style="padding: 40px 0 100px;">
+
+  <div class="account-section">
+    <h2>Proyecto activo</h2>
+    <div id="current-project-empty" style="display:none;" class="cart-empty">
+      <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No tienes un proyecto activo</p>
+      <p style="margin:0;">Empieza en el catálogo y crea uno cuando estés listo.</p>
+      <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+    </div>
+    <div id="current-project-box" style="display:none;" class="current-project-box">
+      <div>
+        <div class="cp-label" id="cp-name">—</div>
+        <div class="cp-value" id="cp-summary">—</div>
+      </div>
+      <a href="#" id="cp-view-link" class="btn btn-primary">Ver proyecto</a>
+    </div>
+  </div>
+
+  <div class="account-section">
+    <h2>Tus solicitudes</h2>
+    <div class="cart-empty">
+      <p style="margin:0;">Aquí aparecerán las solicitudes que prepares desde tus proyectos.</p>
+    </div>
+  </div>
+
+  <div class="account-section">
+    <h2>Proyectos guardados</h2>
+    <p class="demo-note">Datos de ejemplo para esta demo — en la versión completa reflejarán tus proyectos reales.</p>
+
+    <div class="saved-project">
+      <div>
+        <div class="sp-name">Hotel Boutique Punta Cana</div>
+        <div class="sp-meta">Hospitality · 10 piezas · 2 distribuidores · Actualizado hace 1 día</div>
+      </div>
+      <span class="status-chip review">En curso</span>
+    </div>
+
+    <div class="saved-project">
+      <div>
+        <div class="sp-name">Apartamento Piantini</div>
+        <div class="sp-meta">Residencial · 8 piezas · 2 distribuidores · Actualizado hace 4 días</div>
+      </div>
+      <span class="status-chip draft">En curso</span>
+    </div>
+
+    <div class="saved-project">
+      <div>
+        <div class="sp-name">Oficinas Corporativas Blue Mall</div>
+        <div class="sp-meta">Oficina · 8 piezas · 1 distribuidor · Actualizado hace 3 semanas</div>
+      </div>
+      <span class="status-chip closed">Cerrado</span>
+    </div>
+  </div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  (async () => {
+    const session = await MobauAuth.requireSession();
+    if (!session) return; // ya redirigió a login.html
+
+    document.getElementById("session-info").textContent =
+      `Sesión iniciada como ${session.user.email}`;
+
+    const projects = await MobauProjects.list("active");
+    const empty = document.getElementById("current-project-empty");
+    const box = document.getElementById("current-project-box");
+
+    if (projects.length){
+      const project = projects[0];
+      const rows = await MobauProjects.listProductsInProject(project.id);
+      document.getElementById("cp-name").textContent = project.name;
+      document.getElementById("cp-summary").textContent =
+        `Activo · ${rows.length} ${rows.length === 1 ? "producto" : "productos"}`;
+      document.getElementById("cp-view-link").href = `proyectos-detalle.html?id=${project.id}`;
+      box.style.display = "flex";
+    } else {
+      empty.style.display = "block";
+    }
+  })();
+
+  document.getElementById("logout-btn").addEventListener("click", () => {
+    MobauAuth.signOut();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solicitar cotización — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap breadcrumb">
+  <a href="proyectos.html">Mis proyectos</a> / <span id="bc-project">Proyecto</span> / Solicitar cotización
+</div>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Cotización</div>
+    <h1>Solicitar cotización</h1>
+    <p id="page-subtitle" style="margin-top:10px; max-width:60ch;"></p>
+  </div>
+</div>
+
+<main class="wrap" style="max-width:720px; padding: 28px 0 100px;">
+
+  <div id="not-found" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No encontramos este proyecto.</p>
+    <p style="margin:0;">Puede que ya no exista, o que pertenezca a otra cuenta.</p>
+    <a href="proyectos.html" class="btn btn-primary">Volver a mis proyectos</a>
+  </div>
+
+  <div id="is-archived" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto está archivado.</p>
+    <p style="margin:0;">Los proyectos archivados no admiten nuevas solicitudes de cotización.</p>
+    <a href="#" id="archived-back-link" class="btn btn-primary">Volver al proyecto</a>
+  </div>
+
+  <div id="no-products" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto todavía no tiene productos.</p>
+    <p style="margin:0;">Añade al menos un producto antes de solicitar una cotización.</p>
+    <a href="#" id="no-products-back-link" class="btn btn-primary">Volver al proyecto</a>
+  </div>
+
+  <div id="quote-view" style="display:none;">
+
+    <form class="form-card" id="quote-form">
+
+      <div class="account-section" style="margin-bottom:28px;">
+        <h2 style="margin-bottom:16px;">Datos de la solicitud</h2>
+        <div class="field full">
+          <label for="q-type">Tipo de proyecto</label>
+          <select id="q-type" required>
+            <option value="">Selecciona una opción</option>
+            <option value="residencial">Residencial</option>
+            <option value="comercial">Comercial</option>
+            <option value="hospitalidad">Hospitalidad</option>
+            <option value="oficina">Oficina</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="q-location">Ubicación</label>
+          <input id="q-location" type="text" required placeholder="Ej. Santo Domingo, Piantini">
+        </div>
+        <div class="field full">
+          <label for="q-client">Cliente <span class="hint">(opcional)</span></label>
+          <input id="q-client" type="text" placeholder="Ej. Familia Rosario">
+        </div>
+        <div class="field full">
+          <label for="q-description">Descripción <span class="hint">(opcional)</span></label>
+          <textarea id="q-description" placeholder="Notas breves sobre el proyecto…"></textarea>
+        </div>
+        <div class="field full">
+          <label for="q-notes">Información adicional para la solicitud <span class="hint">(opcional)</span></label>
+          <textarea id="q-notes" placeholder="Cantidades, plazos, preferencias…"></textarea>
+        </div>
+        <p id="quote-form-error" style="display:none; color:var(--danger); font-size:13px; margin:14px 0 0;"></p>
+      </div>
+
+      <div class="account-section" style="margin-bottom:0;">
+        <h2 style="margin-bottom:6px;">Productos incluidos</h2>
+        <p id="quote-products-count" class="card-meta" style="margin-bottom:16px;"></p>
+        <div id="quote-products-list"></div>
+      </div>
+
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:28px;">
+        <button type="submit" class="btn btn-primary" id="continue-btn">Continuar</button>
+        <a href="#" id="back-to-project-link" class="btn btn-outline">Volver al proyecto</a>
+      </div>
+
+    </form>
+
+    <div class="form-card" id="quote-review" style="display:none;">
+      <h2 style="margin-bottom:6px;">Revisa tu solicitud</h2>
+      <p class="card-meta" style="margin-bottom:20px;">Todavía no se ha enviado ni guardado — puedes editarla o confirmarla.</p>
+
+      <dl class="spec-table">
+        <div class="spec-row"><dt>Proyecto</dt><dd id="qr-project-name">—</dd></div>
+        <div class="spec-row"><dt>Tipo de proyecto</dt><dd id="qr-type">—</dd></div>
+        <div class="spec-row"><dt>Ubicación</dt><dd id="qr-location">—</dd></div>
+        <div class="spec-row" id="qr-client-row"><dt>Cliente</dt><dd id="qr-client">—</dd></div>
+        <div class="spec-row" id="qr-description-row"><dt>Descripción</dt><dd id="qr-description">—</dd></div>
+        <div class="spec-row" id="qr-notes-row"><dt>Información adicional</dt><dd id="qr-notes">—</dd></div>
+      </dl>
+
+      <h2 style="margin:28px 0 6px;">Productos incluidos</h2>
+      <p id="qr-products-count" class="card-meta" style="margin-bottom:16px;"></p>
+      <div id="qr-products-list"></div>
+
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:28px;">
+        <button type="button" class="btn btn-outline" id="edit-quote-btn">Editar datos</button>
+        <button type="button" class="btn btn-primary" id="confirm-quote-btn">Confirmar solicitud</button>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  let session = null;
+  let project = null;
+  let productRows = [];
+  let quoteDraft = null; /* se llena solo en memoria, nunca se envía ni se guarda */
+
+  const params = new URLSearchParams(window.location.search);
+  const projectId = params.get("id");
+
+  function renderProductList(listId, countId){
+    const listEl = document.getElementById(listId);
+    listEl.innerHTML = productRows.map(row => {
+      const p = PRODUCTS.find(pp => pp.id === row.product_id);
+      if (!p){
+        return `
+          <div class="saved-project">
+            <div>
+              <div class="sp-name">Producto no disponible</div>
+              <div class="sp-meta">ID: ${row.product_id}</div>
+            </div>
+          </div>`;
+      }
+      const dist = DISTRIBUTORS[p.distribuidor];
+      return `
+        <div class="saved-project">
+          <div>
+            <div class="sp-name">${p.nombre}</div>
+            <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+          </div>
+        </div>`;
+    }).join("");
+    document.getElementById(countId).textContent =
+      `${productRows.length} ${productRows.length === 1 ? "producto" : "productos"}`;
+  }
+
+  function toggleOptionalRow(rowId, valueId, value){
+    const hasValue = !!value;
+    document.getElementById(rowId).style.display = hasValue ? "grid" : "none";
+    document.getElementById(valueId).textContent = value;
+  }
+
+  document.getElementById("quote-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("quote-form-error");
+    errorEl.style.display = "none";
+
+    const type = document.getElementById("q-type").value;
+    const location = document.getElementById("q-location").value.trim();
+
+    if (!type || !location){
+      errorEl.textContent = "Completa el tipo de proyecto y la ubicación para continuar.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    quoteDraft = {
+      project_type: type,
+      location: location,
+      client_name: document.getElementById("q-client").value.trim(),
+      description: document.getElementById("q-description").value.trim(),
+      notes: document.getElementById("q-notes").value.trim()
+    };
+
+    document.getElementById("qr-project-name").textContent = project.name;
+    document.getElementById("qr-type").textContent = PROJECT_TYPE_LABELS[quoteDraft.project_type] || quoteDraft.project_type;
+    document.getElementById("qr-location").textContent = quoteDraft.location;
+    toggleOptionalRow("qr-client-row", "qr-client", quoteDraft.client_name);
+    toggleOptionalRow("qr-description-row", "qr-description", quoteDraft.description);
+    toggleOptionalRow("qr-notes-row", "qr-notes", quoteDraft.notes);
+    renderProductList("qr-products-list", "qr-products-count");
+
+    document.getElementById("quote-form").style.display = "none";
+    document.getElementById("quote-review").style.display = "block";
+    showToast("Información lista para revisar.");
+  });
+
+  document.getElementById("edit-quote-btn").addEventListener("click", () => {
+    document.getElementById("quote-review").style.display = "none";
+    document.getElementById("quote-form").style.display = "block";
+  });
+
+  document.getElementById("confirm-quote-btn").addEventListener("click", () => {
+    showToast("El envío real a los distribuidores se habilitará en un próximo paso.");
+  });
+
+  (async () => {
+    session = await MobauAuth.requireSession();
+    if (!session) return;
+
+    if (!projectId){
+      document.getElementById("not-found").style.display = "block";
+      return;
+    }
+
+    const backLink = `proyectos-detalle.html?id=${projectId}`;
+    document.getElementById("archived-back-link").href = backLink;
+    document.getElementById("no-products-back-link").href = backLink;
+    document.getElementById("back-to-project-link").href = backLink;
+
+    project = await MobauProjects.get(projectId);
+
+    if (!project){
+      document.getElementById("not-found").style.display = "block";
+      return;
+    }
+
+    document.getElementById("bc-project").textContent = project.name;
+    document.getElementById("page-subtitle").textContent = `Para el proyecto "${project.name}".`;
+
+    if (project.status === "archived"){
+      document.getElementById("is-archived").style.display = "block";
+      return;
+    }
+
+    productRows = await MobauProjects.listProductsInProject(project.id);
+
+    if (!productRows.length){
+      document.getElementById("no-products").style.display = "block";
+      return;
+    }
+
+    renderProductList("quote-products-list", "quote-products-count");
+    document.getElementById("quote-view").style.display = "block";
+  })();
+</script>
+</body>
+</html>

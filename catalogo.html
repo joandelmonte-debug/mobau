@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catálogo — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html" class="active">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Catálogo</div>
+    <h1>Productos para arquitectura e interiorismo</h1>
+  </div>
+</div>
+
+<main class="wrap catalog-layout">
+
+  <aside class="filters" aria-label="Filtros de catálogo">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <h3>Filtrar</h3>
+      <button class="clear" id="clear-filters">Limpiar</button>
+    </div>
+
+    <fieldset class="filter-group" data-group="categoria">
+      <legend>Categoría</legend>
+      <label class="filter-option"><input type="checkbox" value="iluminacion"> Iluminación</label>
+      <label class="filter-option"><input type="checkbox" value="mobiliario"> Mobiliario</label>
+      <label class="filter-option"><input type="checkbox" value="revestimientos"> Revestimientos</label>
+      <label class="filter-option"><input type="checkbox" value="bano"> Baño</label>
+      <label class="filter-option"><input type="checkbox" value="cocina"> Cocina</label>
+      <label class="filter-option"><input type="checkbox" value="accesorios-decorativos"> Accesorios decorativos</label>
+    </fieldset>
+
+    <fieldset class="filter-group" data-group="subcategoria">
+      <legend>Subcategoría</legend>
+      <label class="filter-option"><input type="checkbox" value="Decorativa"> Decorativa</label>
+      <label class="filter-option"><input type="checkbox" value="Empotrada"> Empotrada</label>
+      <label class="filter-option"><input type="checkbox" value="De superficie"> De superficie</label>
+      <label class="filter-option"><input type="checkbox" value="Rieles y perfiles"> Rieles y perfiles</label>
+      <label class="filter-option"><input type="checkbox" value="Exterior"> Exterior</label>
+      <label class="filter-option"><input type="checkbox" value="Residencial"> Residencial</label>
+      <label class="filter-option"><input type="checkbox" value="Oficina"> Oficina</label>
+      <label class="filter-option"><input type="checkbox" value="Hospitality"> Hospitality</label>
+      <label class="filter-option"><input type="checkbox" value="Pisos"> Pisos</label>
+      <label class="filter-option"><input type="checkbox" value="Porcelanato"> Porcelanato</label>
+      <label class="filter-option"><input type="checkbox" value="Sanitarios"> Sanitarios</label>
+      <label class="filter-option"><input type="checkbox" value="Griferías"> Griferías</label>
+      <label class="filter-option"><input type="checkbox" value="Fregaderos"> Fregaderos</label>
+      <label class="filter-option"><input type="checkbox" value="Espejos"> Espejos</label>
+      <label class="filter-option"><input type="checkbox" value="Objetos"> Objetos</label>
+    </fieldset>
+
+    <fieldset class="filter-group" data-group="distribuidor">
+      <legend>Distribuidor</legend>
+      <label class="filter-option"><input type="checkbox" value="spectro"> Spectro Lighting</label>
+      <label class="filter-option"><input type="checkbox" value="altritempi"> Altri Tempi</label>
+      <label class="filter-option"><input type="checkbox" value="charo"> Charo</label>
+      <label class="filter-option"><input type="checkbox" value="casalua"> Casa Lúa</label>
+      <label class="filter-option"><input type="checkbox" value="terraceramica"> Terra Cerámica</label>
+      <label class="filter-option"><input type="checkbox" value="baccara"> Baccara Baño</label>
+      <label class="filter-option"><input type="checkbox" value="fontanacocina"> Fontana Cocina</label>
+    </fieldset>
+
+    <fieldset class="filter-group" data-group="marca">
+      <legend>Marca</legend>
+      <label class="filter-option"><input type="checkbox" value="delta-light"> Delta Light</label>
+      <label class="filter-option"><input type="checkbox" value="marset"> Marset</label>
+      <label class="filter-option"><input type="checkbox" value="leds-c4"> Leds-C4</label>
+      <label class="filter-option"><input type="checkbox" value="norden-studio"> Norden Studio</label>
+      <label class="filter-option"><input type="checkbox" value="vero-contract"> Vero Contract</label>
+      <label class="filter-option"><input type="checkbox" value="palma-outdoor"> Palma Outdoor</label>
+      <label class="filter-option"><input type="checkbox" value="terra-ceramica"> Terra Cerámica</label>
+      <label class="filter-option"><input type="checkbox" value="baccara"> Baccara</label>
+      <label class="filter-option"><input type="checkbox" value="fontana"> Fontana</label>
+    </fieldset>
+
+    <fieldset class="filter-group" data-group="uso">
+      <legend>Uso</legend>
+      <label class="filter-option"><input type="checkbox" value="residencial"> Residencial</label>
+      <label class="filter-option"><input type="checkbox" value="comercial"> Comercial</label>
+      <label class="filter-option"><input type="checkbox" value="hospitality"> Hospitality</label>
+      <label class="filter-option"><input type="checkbox" value="oficina"> Oficina</label>
+    </fieldset>
+
+    <fieldset class="filter-group" data-group="espacio">
+      <legend>Espacio</legend>
+      <label class="filter-option"><input type="checkbox" value="sala"> Sala</label>
+      <label class="filter-option"><input type="checkbox" value="comedor"> Comedor</label>
+      <label class="filter-option"><input type="checkbox" value="dormitorio"> Dormitorio</label>
+      <label class="filter-option"><input type="checkbox" value="cocina"> Cocina</label>
+      <label class="filter-option"><input type="checkbox" value="bano"> Baño</label>
+      <label class="filter-option"><input type="checkbox" value="exterior"> Exterior</label>
+      <label class="filter-option"><input type="checkbox" value="oficina"> Oficina</label>
+      <label class="filter-option"><input type="checkbox" value="areas-comunes"> Áreas comunes</label>
+      <label class="filter-option"><input type="checkbox" value="retail"> Retail / comercial</label>
+    </fieldset>
+
+    <fieldset class="filter-group" data-group="disponibilidad">
+      <legend>Disponibilidad</legend>
+      <label class="filter-option"><input type="checkbox" value="en-stock"> En stock habitual</label>
+      <label class="filter-option"><input type="checkbox" value="bajo-pedido"> Bajo pedido</label>
+      <label class="filter-option"><input type="checkbox" value="por-confirmar"> Por confirmar</label>
+    </fieldset>
+  </aside>
+
+  <section>
+    <div class="search-bar">
+      <input type="search" id="search-input" placeholder="Buscar por nombre de producto, marca o categoría…" aria-label="Buscar en el catálogo">
+    </div>
+
+    <div class="catalog-toolbar">
+      <span class="result-count" id="result-count">20 productos</span>
+      <select class="sort-select" id="sort-select">
+        <option value="relevancia">Ordenar por relevancia</option>
+        <option value="nombre">Nombre A–Z</option>
+        <option value="marca">Marca A–Z</option>
+      </select>
+    </div>
+
+    <div class="product-grid" id="product-grid"></div>
+    <div class="empty-state" id="empty-state" style="display:none;">
+      No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  const state = {
+    categoria: new Set(),
+    subcategoria: new Set(),
+    distribuidor: new Set(),
+    marca: new Set(),
+    uso: new Set(),
+    espacio: new Set(),
+    disponibilidad: new Set(),
+    search: "",
+    sort: "relevancia"
+  };
+
+  const GROUPS = ["categoria","subcategoria","distribuidor","marca","uso","espacio","disponibilidad"];
+
+  const params = new URLSearchParams(window.location.search);
+  GROUPS.forEach(key => {
+    const val = params.get(key);
+    if(val){
+      state[key].add(val);
+      const input = document.querySelector(`.filter-group[data-group="${key}"] input[value="${val.replace(/"/g,'\\"')}"]`);
+      if(input) input.checked = true;
+    }
+  });
+
+  function matches(product){
+    return (state.categoria.size === 0 || state.categoria.has(product.categoria)) &&
+           (state.subcategoria.size === 0 || state.subcategoria.has(product.subcategoria)) &&
+           (state.distribuidor.size === 0 || state.distribuidor.has(product.distribuidor)) &&
+           (state.marca.size === 0 || state.marca.has(product.marca)) &&
+           (state.uso.size === 0 || state.uso.has(product.uso)) &&
+           (state.espacio.size === 0 || state.espacio.has(product.espacio)) &&
+           (state.disponibilidad.size === 0 || state.disponibilidad.has(product.disponibilidad)) &&
+           matchesSearch(product, state.search);
+  }
+
+  function sortList(list){
+    const sorted = [...list];
+    if(state.sort === "nombre") sorted.sort((a,b) => a.nombre.localeCompare(b.nombre));
+    if(state.sort === "marca") sorted.sort((a,b) => LABELS.marca[a.marca].localeCompare(LABELS.marca[b.marca]));
+    return sorted;
+  }
+
+  function render(){
+    const filtered = sortList(PRODUCTS.filter(matches));
+    const grid = document.getElementById("product-grid");
+    grid.innerHTML = filtered.map(renderProductCard).join("");
+    document.getElementById("empty-state").style.display = filtered.length ? "none" : "block";
+    document.getElementById("result-count").textContent =
+      filtered.length === 1 ? "1 producto" : `${filtered.length} productos`;
+    injectIconSprite();
+    bindAddButtons(grid, render);
+    propagateCartLinks();
+  }
+
+  document.querySelectorAll(".filter-group input[type=checkbox]").forEach(input => {
+    input.addEventListener("change", () => {
+      const group = input.closest(".filter-group").dataset.group;
+      input.checked ? state[group].add(input.value) : state[group].delete(input.value);
+      render();
+    });
+  });
+
+  document.getElementById("search-input").addEventListener("input", (e) => {
+    state.search = e.target.value;
+    render();
+  });
+
+  document.getElementById("sort-select").addEventListener("change", (e) => {
+    state.sort = e.target.value;
+    render();
+  });
+
+  document.getElementById("clear-filters").addEventListener("click", () => {
+    document.querySelectorAll(".filter-group input[type=checkbox]").forEach(i => i.checked = false);
+    GROUPS.forEach(k => state[k].clear());
+    document.getElementById("search-input").value = "";
+    state.search = "";
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

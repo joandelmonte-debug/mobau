@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobau — Descubre, organiza y cotiza productos para tus proyectos</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html" class="active">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- HERO -->
+  <section class="wrap hero">
+    <div>
+      <div class="eyebrow">Plataforma de diseño · piloto en preparación</div>
+      <h1>Descubre, organiza y cotiza productos para tus proyectos</h1>
+      <p class="lede">Iluminación, mobiliario, revestimientos, baño, cocina y accesorios decorativos, reunidos en un catálogo curado para arquitectos e interioristas.</p>
+      <div class="hero-actions">
+        <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+        <a href="distribuidores.html" class="btn btn-ghost">Ver distribuidores</a>
+      </div>
+      <div class="pill-row">
+        <span class="pill">Catálogo inicial curado</span>
+        <span class="pill">Retailers fundadores</span>
+        <span class="pill">Piloto en preparación</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMax slice">
+        <ellipse cx="205" cy="432" rx="150" ry="28" fill="var(--brass-soft)" opacity="0.7"/>
+        <rect x="66" y="176" width="164" height="66" rx="22" fill="var(--accent)"/>
+        <rect x="66" y="230" width="164" height="104" rx="16" fill="var(--accent)" opacity="0.92"/>
+        <rect x="52" y="238" width="26" height="84" rx="13" fill="var(--accent-ink)"/>
+        <rect x="218" y="238" width="26" height="84" rx="13" fill="var(--accent-ink)"/>
+        <rect x="80" y="330" width="14" height="26" fill="var(--ink-soft)"/>
+        <rect x="200" y="330" width="14" height="26" fill="var(--ink-soft)"/>
+        <rect x="250" y="318" width="66" height="10" rx="2" fill="var(--ink-soft)"/>
+        <rect x="256" y="328" width="4" height="46" fill="var(--ink-soft)"/>
+        <rect x="306" y="328" width="4" height="46" fill="var(--ink-soft)"/>
+        <path d="M292 70h48l14 34h-76z" fill="var(--brass)"/>
+        <rect x="313" y="104" width="4" height="150" fill="var(--brass)"/>
+        <ellipse cx="315" cy="258" rx="26" ry="7" fill="var(--ink-soft)"/>
+      </svg>
+      <div class="caption">Ambientación de referencia — productos de distintas categorías para un mismo proyecto.</div>
+    </div>
+  </section>
+
+  <!-- COMO FUNCIONA -->
+  <section class="wrap section">
+    <div class="section-head">
+      <h2>Cómo funciona</h2>
+      <p>Del descubrimiento a la cotización, en tu propio ritmo.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>Descubre productos de varias categorías</h3>
+        <p>Iluminación, mobiliario, revestimientos, baño, cocina y accesorios decorativos — todo en un mismo catálogo.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>Revisa la información técnica</h3>
+        <p>Medidas, materiales, acabados y archivos descargables, ficha por ficha.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>Arma tu proyecto y solicita cotización</h3>
+        <p>Suma productos de distintos distribuidores; Mobau organiza una solicitud separada para cada uno.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- UN PROYECTO, VARIOS DISTRIBUIDORES -->
+  <section class="wrap" style="padding-bottom:72px;">
+    <div class="info-banner">
+      <h3>Un proyecto, varios distribuidores</h3>
+      <p>Puedes crear un único proyecto con productos de varias categorías — una lámpara, un porcelanato, una grifería. Al solicitar cotización, Mobau organiza una solicitud (RFQ) separada para cada distribuidor involucrado, con solo los productos que le corresponden a cada uno.</p>
+    </div>
+  </section>
+
+  <!-- CATEGORÍAS -->
+  <section class="wrap section" style="padding-top:0;">
+    <div class="section-head">
+      <h2>Las categorías del piloto</h2>
+      <p>Así arranca el catálogo — con lo que un proyecto suele necesitar resolver primero.</p>
+    </div>
+    <div class="cat-grid">
+      <a href="catalogo.html?categoria=iluminacion" class="cat-tile">
+        <svg><use href="#ic-lampFloor"></use></svg>
+        <h3>Iluminación</h3>
+        <p>Decorativa, arquitectónica, empotrada, exterior, rieles y perfiles.</p>
+      </a>
+      <a href="catalogo.html?categoria=mobiliario" class="cat-tile">
+        <svg><use href="#ic-sofa"></use></svg>
+        <h3>Mobiliario</h3>
+        <p>Residencial, oficina, hospitality, comercial y exterior.</p>
+      </a>
+      <a href="catalogo.html?categoria=revestimientos" class="cat-tile">
+        <svg><use href="#ic-tile"></use></svg>
+        <h3>Revestimientos</h3>
+        <p>Pisos, paredes, cerámica, porcelanato, piedra y acabados.</p>
+      </a>
+      <a href="catalogo.html?categoria=bano" class="cat-tile">
+        <svg><use href="#ic-bath"></use></svg>
+        <h3>Baño</h3>
+        <p>Sanitarios, griferías, duchas y accesorios.</p>
+      </a>
+      <a href="catalogo.html?categoria=cocina" class="cat-tile">
+        <svg><use href="#ic-faucet"></use></svg>
+        <h3>Cocina</h3>
+        <p>Griferías, fregaderos, accesorios y complementarios.</p>
+      </a>
+      <a href="catalogo.html?categoria=accesorios-decorativos" class="cat-tile">
+        <svg><use href="#ic-decor"></use></svg>
+        <h3>Accesorios decorativos</h3>
+        <p>Alfombras, espejos, papel tapiz, objetos y decoración.</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- DISTRIBUIDORES -->
+  <section class="providers-section">
+    <div class="wrap section">
+      <div class="providers-intro">
+        <div>
+          <div class="eyebrow">Showrooms y distribuidores</div>
+          <h2>Una vitrina de diseño orientada a prescriptores</h2>
+        </div>
+        <p>Showrooms y distribuidores especializados muestran su oferta a más arquitectos e interioristas — sin reemplazar su canal comercial actual. Mobau complementa la relación directa que ya tienen, ordenando y visibilizando los proyectos en desarrollo.</p>
+      </div>
+      <div class="logo-row">
+        <div class="logo-tile featured"><div class="wordmark">Spectro Lighting</div><div class="cat">Iluminación</div></div>
+        <div class="logo-tile"><div class="wordmark">Altri Tempi</div><div class="cat">Mobiliario</div></div>
+        <div class="logo-tile"><div class="wordmark">Terra Cerámica</div><div class="cat">Revestimientos</div></div>
+        <div class="logo-tile"><div class="wordmark">Baccara Baño</div><div class="cat">Baño</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="wrap section">
+    <div class="cta-band">
+      <div>
+        <h2>¿Listo para armar tu proyecto?</h2>
+        <p>Explora el catálogo y ve añadiendo lo que necesites.</p>
+      </div>
+      <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

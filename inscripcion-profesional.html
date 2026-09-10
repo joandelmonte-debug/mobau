@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Completa tu perfil profesional — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Perfil</div>
+    <h1>Completa tu perfil profesional</h1>
+    <p style="margin-top:14px; max-width:60ch;">Estos datos nos ayudan a identificarte ante los distribuidores cuando solicites una cotización.</p>
+  </div>
+</div>
+
+<main class="wrap" style="max-width:640px; padding: 28px 0 100px;">
+
+  <form class="form-card" id="pp-form" style="display:none;">
+    <div class="field full">
+      <label for="pp-name">Nombre profesional</label>
+      <input id="pp-name" type="text" required placeholder="Ej. Ana María Rosario">
+    </div>
+    <div class="field full">
+      <label for="pp-type">Tipo profesional</label>
+      <select id="pp-type" required>
+        <option value="">Selecciona una opción</option>
+        <option value="arquitecto">Arquitecto/a</option>
+        <option value="interiorista">Interiorista</option>
+        <option value="disenador">Diseñador/a</option>
+        <option value="estudio">Estudio</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="field full">
+      <label for="pp-city">Ciudad</label>
+      <input id="pp-city" type="text" required placeholder="Ej. Santo Domingo">
+    </div>
+    <div class="field full">
+      <label for="pp-studio">Estudio o empresa <span class="hint">(opcional)</span></label>
+      <input id="pp-studio" type="text" placeholder="Ej. Rosario Arquitectos">
+    </div>
+    <div class="field full">
+      <label for="pp-phone">Teléfono <span class="hint">(opcional)</span></label>
+      <input id="pp-phone" type="tel" placeholder="+1 (809) 000 0000">
+    </div>
+    <div class="field full">
+      <label for="pp-website">Sitio web <span class="hint">(opcional)</span></label>
+      <input id="pp-website" type="text" placeholder="https://...">
+    </div>
+    <div class="field full">
+      <label for="pp-instagram">Instagram <span class="hint">(opcional)</span></label>
+      <input id="pp-instagram" type="text" placeholder="@usuario">
+    </div>
+    <p id="pp-error" style="display:none; color:var(--danger); font-size:13px; margin:-8px 0 14px;"></p>
+    <button type="submit" class="btn btn-primary btn-block" id="pp-submit-btn">Guardar perfil</button>
+  </form>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  let session = null;
+  let isUpdate = false;
+
+  function fieldValue(id){
+    return document.getElementById(id).value.trim();
+  }
+
+  document.getElementById("pp-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("pp-error");
+    const btn = document.getElementById("pp-submit-btn");
+    errorEl.style.display = "none";
+
+    const professional_name = fieldValue("pp-name");
+    const professional_type = document.getElementById("pp-type").value;
+    const city = fieldValue("pp-city");
+
+    if (!professional_name || !professional_type || !city){
+      errorEl.textContent = "Completa nombre profesional, tipo profesional y ciudad para continuar.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Guardando…";
+
+    const record = {
+      professional_name,
+      professional_type,
+      city,
+      studio_name: fieldValue("pp-studio") || null,
+      phone: fieldValue("pp-phone") || null,
+      website: fieldValue("pp-website") || null,
+      instagram: fieldValue("pp-instagram") || null
+    };
+
+    let error;
+    if (isUpdate){
+      ({ error } = await supabaseClient
+        .from("professional_profiles")
+        .update(record)
+        .eq("user_id", session.user.id));
+    } else {
+      ({ error } = await supabaseClient
+        .from("professional_profiles")
+        .insert({ ...record, user_id: session.user.id }));
+    }
+
+    if (error){
+      errorEl.textContent = error.message || "No pudimos guardar tu perfil. Intenta de nuevo.";
+      errorEl.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Guardar perfil";
+      return;
+    }
+
+    isUpdate = true;
+
+    const despues = new URLSearchParams(window.location.search).get("despues");
+    if (despues === "crear-proyecto"){
+      window.location.href = "seleccion.html?despues=crear-proyecto";
+      return;
+    }
+
+    showToast("Perfil guardado correctamente.");
+    btn.disabled = false;
+    btn.textContent = "Guardar perfil";
+  });
+
+  (async () => {
+    session = await MobauAuth.requireSession();
+    if (!session) return;
+
+    const { data: existing, error } = await supabaseClient
+      .from("professional_profiles")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (error){
+      const errorEl = document.getElementById("pp-error");
+      errorEl.textContent = "No pudimos cargar tu perfil. Intenta recargar la página.";
+      errorEl.style.display = "block";
+    }
+
+    if (existing){
+      isUpdate = true;
+      document.getElementById("pp-name").value = existing.professional_name || "";
+      document.getElementById("pp-type").value = existing.professional_type || "";
+      document.getElementById("pp-city").value = existing.city || "";
+      document.getElementById("pp-studio").value = existing.studio_name || "";
+      document.getElementById("pp-phone").value = existing.phone || "";
+      document.getElementById("pp-website").value = existing.website || "";
+      document.getElementById("pp-instagram").value = existing.instagram || "";
+    }
+
+    document.getElementById("pp-form").style.display = "block";
+  })();
+</script>
+</body>
+</html>
