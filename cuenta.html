@@ -40,7 +40,7 @@
 
   <div class="account-section">
     <h2>Proyecto activo</h2>
-    <div id="current-project-empty" style="display:none;" class="cart-empty">
+    <div id="current-project-empty" style="display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:220px;" class="cart-empty">
       <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No tienes un proyecto activo</p>
       <p style="margin:0;">Empieza en el catálogo y crea uno cuando estés listo.</p>
       <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
@@ -153,7 +153,7 @@
       document.getElementById("cp-view-link").href = `proyectos-detalle.html?id=${project.id}`;
       box.style.display = "flex";
     } else {
-      empty.style.display = "block";
+      empty.style.display = "flex";
     }
   })();
 
