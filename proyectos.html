@@ -110,17 +110,19 @@
     const distributorsLabel = `${distributorCount} ${distributorCount === 1 ? "distribuidor" : "distribuidores"}`;
     const isStudioPlan = planAllowsMultipleActive(plan);
 
-    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm"${!isActive && isStudioPlan ? ' style="flex:1;"' : ""}>Abrir</a>`;
+    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm"${!isActive ? ' style="flex:1;"' : ""}>Abrir</a>`;
 
     if (isActive){
       actionsHtml += `<button type="button" class="btn btn-outline btn-sm archive-btn" data-id="${p.id}" data-status="active">Archivar proyecto</button>`;
-    } else if (isStudioPlan){
-      const hasCupo = activeCount < plan.max_active_projects;
-      actionsHtml += hasCupo
-        ? `<button type="button" class="btn btn-outline btn-sm archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
-        : `<button type="button" class="btn btn-outline btn-sm" style="flex:1;" disabled>Sin cupo para reactivar</button>`;
+    } else {
+      if (isStudioPlan){
+        const hasCupo = activeCount < plan.max_active_projects;
+        actionsHtml += hasCupo
+          ? `<button type="button" class="btn btn-outline btn-sm archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
+          : `<button type="button" class="btn btn-outline btn-sm" style="flex:1;" disabled>Sin cupo para reactivar</button>`;
+      }
+      actionsHtml += `<button type="button" class="btn btn-outline btn-sm delete-project-btn" style="flex:1; color:var(--danger); border-color:var(--danger);" data-id="${p.id}" data-name="${p.name.replace(/"/g, "&quot;")}">Eliminar proyecto</button>`;
     }
-    /* Individual/prueba + archivado: no se añade ningún botón más — solo "Abrir". */
 
     return `
       <article class="provider-card">
@@ -183,6 +185,23 @@
           const nextStatus = btn.dataset.status === "active" ? "archived" : "active";
           btn.disabled = true;
           const { error } = await MobauProjects.setStatus(id, nextStatus);
+          if (error){
+            alert(error.message);
+            btn.disabled = false;
+            return;
+          }
+          await loadProjects();
+          await renderPlanUsage();
+        });
+      });
+
+      grid.querySelectorAll(".delete-project-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const confirmed = confirm(`¿Seguro que quieres eliminar "${btn.dataset.name}"? Esta acción no se puede deshacer.`);
+          if (!confirmed) return; // cancelado: no se ejecuta ninguna operación
+
+          btn.disabled = true;
+          const { error } = await MobauProjects.deleteProject(btn.dataset.id);
           if (error){
             alert(error.message);
             btn.disabled = false;

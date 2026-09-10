@@ -70,6 +70,19 @@ const MobauProjects = {
     return { data, error };
   },
 
+  /* Elimina definitivamente un proyecto archivado. RLS exige que
+     pertenezca al usuario actual y que status = 'archived' — esta
+     llamada no puede afectar proyectos activos ni de otro usuario,
+     sin importar qué id se le pase. project_products y moodboards
+     se eliminan solos por ON DELETE CASCADE. */
+  async deleteProject(id) {
+    const { error } = await supabaseClient
+      .from("projects")
+      .delete()
+      .eq("id", id);
+    return { error };
+  },
+
   /* Cuenta cuántos proyectos activos tiene el usuario ahora mismo. */
   async countActive() {
     const { count, error } = await supabaseClient

@@ -260,11 +260,11 @@ button{ font-family: inherit; }
   border-top: 1px solid var(--line);
 }
 .step{
-  padding: 32px 28px 32px 0;
+  padding: 32px 28px;
   border-right: 1px solid var(--line);
 }
-.step:last-child{ border-right:none; }
 .step:first-child{ padding-left: 0; }
+.step:last-child{ border-right:none; padding-right: 0; }
 .step .num{
   font-family: var(--f-head);
   font-size: 15px;
