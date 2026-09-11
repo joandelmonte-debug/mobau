@@ -229,9 +229,13 @@
 
     const quoteBtn = document.getElementById("request-quote-btn");
     const quoteHint = document.getElementById("quote-hint");
+    const allValid = rows.length > 0 && rows.every(row => isValidQuantity(row.quantity));
     quoteBtn.dataset.projectId = project.id;
-    quoteBtn.disabled = rows.length === 0;
-    quoteHint.style.display = rows.length === 0 ? "block" : "none";
+    quoteBtn.disabled = !allValid;
+    quoteHint.textContent = rows.length === 0
+      ? "Añade productos para poder solicitar una cotización."
+      : "Indica la cantidad de todos los productos antes de solicitar una cotización.";
+    quoteHint.style.display = allValid ? "none" : "block";
 
     const distributorIds = new Set();
     rows.forEach(row => {
@@ -263,11 +267,14 @@
           </div>`;
       }
       const dist = DISTRIBUTORS[p.distribuidor];
+      const unit = row.unit || getProductUnit(p);
+      const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
       return `
         <div class="saved-project">
           <div>
             <div class="sp-name">${p.nombre}</div>
             <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+            <div class="sp-meta">${quantity} ${unit}</div>
           </div>
           <div style="display:flex; gap:10px; align-items:center;">
             <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>

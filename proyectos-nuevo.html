@@ -3,186 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Crear proyecto — Mobau</title>
+<title>Redirigiendo… — Mobau</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<header class="site-header">
-  <div class="wrap nav">
-    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
-    <nav class="nav-links" aria-label="Principal">
-      <a href="index.html">Inicio</a>
-      <a href="catalogo.html">Catálogo</a>
-      <a href="distribuidores.html">Distribuidores</a>
-      <a href="index.html#contacto">Contacto</a>
-      <span class="nav-sep"></span>
-      <span id="nav-session-slot"></span>
-    </nav>
-    <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
-      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
-    </div>
-  </div>
-</header>
+<!--
+  Esta página dejó de ser un destino real. El formulario de nombre
+  de proyecto se unificó dentro de proyectos-cotizacion.html, que
+  ahora sirve tanto para "Guardar proyecto" como para "Solicitar
+  cotización" desde Mi selección. Se conserva el archivo (sin
+  borrarlo) únicamente para redirigir cualquier enlace o marcador
+  antiguo al lugar correcto.
+-->
 
-<div class="page-head">
-  <div class="wrap">
-    <div class="eyebrow"><a href="proyectos.html" style="color:inherit;">← Mis proyectos</a></div>
-    <h1>Crear proyecto</h1>
-  </div>
-</div>
-
-<main class="wrap" style="max-width:640px; padding: 40px 0 100px;">
-
-  <div id="pending-product-note" class="rfq-split-note" style="display:none;">Crea un proyecto nuevo para añadir este producto.</div>
-
-  <!-- Panel de límite alcanzado (se muestra en vez del formulario, si aplica) -->
-  <div id="limit-panel" class="form-card" style="display:none;">
-    <p id="limit-message" style="margin:0 0 20px; font-weight:600; color:var(--ink);"></p>
-    <div style="display:flex; gap:12px; flex-wrap:wrap;">
-      <a href="#" id="limit-view-btn" class="btn btn-primary">Ver mi proyecto activo</a>
-      <button type="button" id="limit-archive-btn" class="btn btn-outline">Archivar proyecto</button>
-      <button type="button" id="limit-studio-btn" class="btn btn-ghost">Conocer Plan Estudio</button>
-    </div>
-  </div>
-
-  <!-- Formulario de creación (se muestra si el usuario está bajo su límite) -->
-  <form class="form-card" id="project-form" style="display:none;">
-    <div class="field full">
-      <label for="p-name">Nombre del proyecto</label>
-      <input id="p-name" type="text" required placeholder="Ej. Apartamento Piantini">
-      <p class="hint" style="margin-top:6px;">Podrás completar los detalles cuando solicites una cotización.</p>
-    </div>
-    <p id="form-error" style="display:none; color:var(--danger); font-size:13px; margin:-8px 0 14px;"></p>
-    <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Crear proyecto</button>
-  </form>
-
+<main class="wrap" style="padding: 80px 0; text-align:center;">
+  <p>Redirigiendo…</p>
+  <p><a href="proyectos-cotizacion.html" class="btn btn-primary">Continuar</a></p>
 </main>
 
-<footer class="site-footer" id="contacto">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div>
-        <h4>Mobau</h4>
-        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
-      </div>
-      <div>
-        <h4>Plataforma</h4>
-        <ul>
-          <li><a href="catalogo.html">Catálogo</a></li>
-          <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Para distribuidores</h4>
-        <ul>
-          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
-          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Contacto</h4>
-        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
-      <span>Hecho para arquitectos e interioristas en RD</span>
-    </div>
-  </div>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-client.js"></script>
-<script src="nav-session.js"></script>
-<script src="proyectos-data.js"></script>
-<script src="seleccion-data.js"></script>
-<script src="script.js"></script>
 <script>
-  let session = null;
-
-  const params = new URLSearchParams(window.location.search);
-  const rawPendingId = params.get("producto_pendiente");
-  const pendingProduct = rawPendingId ? PRODUCTS.find(p => p.id === rawPendingId) : null;
-  const pendingProductId = pendingProduct ? pendingProduct.id : null;
-  if (pendingProductId) document.getElementById("pending-product-note").style.display = "flex";
-
-  async function checkLimitAndShow(){
-    const plan = await MobauProjects.myPlan(session.user.id);
-    const activeCount = await MobauProjects.countActive();
-
-    if (plan && activeCount >= plan.max_active_projects){
-      const activeProjects = await MobauProjects.list("active");
-      const first = activeProjects[0];
-
-      document.getElementById("limit-message").textContent =
-        plan.max_active_projects === 1
-          ? `Tu plan ${plan.name} incluye un proyecto activo. Puedes archivar el proyecto actual o cambiar al plan Estudio Fundador para trabajar en varios proyectos a la vez.`
-          : `Tu plan ${plan.name} permite hasta ${plan.max_active_projects} proyectos activos, y ya los tienes todos en uso. Archiva uno para crear otro.`;
-
-      document.getElementById("limit-view-btn").href = first ? `proyectos-detalle.html?id=${first.id}` : "proyectos.html";
-
-      document.getElementById("limit-archive-btn").addEventListener("click", async () => {
-        if (!first) return;
-        const { error } = await MobauProjects.setStatus(first.id, "archived");
-        if (error){ alert(error.message); return; }
-        document.getElementById("limit-panel").style.display = "none";
-        document.getElementById("project-form").style.display = "block";
-      });
-
-      document.getElementById("limit-studio-btn").addEventListener("click", () => {
-        showToast("El plan Estudio llega en una próxima fase — escríbenos a hola@mobau.do mientras tanto.");
-      });
-
-      document.getElementById("limit-panel").style.display = "block";
-    } else {
-      document.getElementById("project-form").style.display = "block";
-    }
-  }
-
-  document.getElementById("project-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const errorEl = document.getElementById("form-error");
-    const btn = document.getElementById("submit-btn");
-    errorEl.style.display = "none";
-    btn.disabled = true;
-    btn.textContent = "Creando…";
-
-    const fields = {
-      name: document.getElementById("p-name").value.trim()
-    };
-
-    const { data, error } = await MobauProjects.create(fields, session.user.id);
-
-    if (error){
-      errorEl.textContent = error.message || "No pudimos crear el proyecto. Intenta de nuevo.";
-      errorEl.style.display = "block";
-      btn.disabled = false;
-      btn.textContent = "Crear proyecto";
-      return;
-    }
-
-    if (pendingProductId){
-      const { error: saveError } = await MobauProjects.saveProductToProject(data.id, pendingProductId);
-      if (saveError){
-        errorEl.innerHTML = `Tu proyecto "${data.name}" se creó, pero no pudimos añadir el producto automáticamente: ${saveError.message} <a href="proyectos-detalle.html?id=${data.id}" style="color:var(--danger); text-decoration:underline;">Ver el proyecto</a> para añadirlo manualmente.`;
-        errorEl.style.display = "block";
-        btn.disabled = false;
-        btn.textContent = "Crear proyecto";
-        return;
-      }
-    }
-
-    window.location.href = `proyectos-detalle.html?id=${data.id}`;
-  });
-
-  (async () => {
-    session = await MobauAuth.requireSession();
-    if (!session) return;
-    await checkLimitAndShow();
-  })();
+  window.location.href = "proyectos-cotizacion.html";
 </script>
 </body>
 </html>

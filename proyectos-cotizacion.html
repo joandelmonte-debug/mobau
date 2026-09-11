@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Solicitar cotización — Mobau</title>
+<title>Proyecto y cotización — Mobau</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,19 +27,18 @@
 </header>
 
 <div class="wrap breadcrumb">
-  <a href="proyectos.html">Mis proyectos</a> / <span id="bc-project">Proyecto</span> / Solicitar cotización
+  <a href="proyectos.html">Mis proyectos</a> / <span id="bc-project">Mi selección</span>
 </div>
 
 <div class="page-head">
   <div class="wrap">
-    <div class="eyebrow">Cotización</div>
-    <h1>Solicitar cotización</h1>
+    <div class="eyebrow" id="page-eyebrow">Proyecto</div>
+    <h1 id="page-title">Guarda tu proyecto</h1>
     <p id="page-subtitle" style="margin-top:10px; max-width:60ch;"></p>
   </div>
 </div>
 
-<main class="wrap" style="max-width:720px; padding: 28px 0 100px;">
-
+<div class="wrap" style="max-width:720px; padding-top:28px;">
   <div id="not-found" style="display:none;" class="cart-empty">
     <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No encontramos este proyecto.</p>
     <p style="margin:0;">Puede que ya no exista, o que pertenezca a otra cuenta.</p>
@@ -58,80 +57,143 @@
     <a href="#" id="no-products-back-link" class="btn btn-primary">Volver al proyecto</a>
   </div>
 
-  <div id="quote-view" style="display:none;">
+  <div id="empty-selection" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Tu selección está vacía.</p>
+    <p style="margin:0;">Añade productos antes de crear o solicitar un proyecto.</p>
+    <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+  </div>
+</div>
 
-    <form class="form-card" id="quote-form">
+<!-- ============ MODO: Crear proyecto — una sola columna ============ -->
+<main class="wrap" id="view-save" style="display:none; max-width:720px; padding: 28px 0 100px;">
+  <form class="form-card" id="save-form">
 
-      <div class="account-section" style="margin-bottom:28px;">
-        <h2 style="margin-bottom:16px;">Datos de la solicitud</h2>
-        <div class="field full">
-          <label for="q-type">Tipo de proyecto</label>
-          <select id="q-type" required>
-            <option value="">Selecciona una opción</option>
-            <option value="residencial">Residencial</option>
-            <option value="comercial">Comercial</option>
-            <option value="hospitalidad">Hospitalidad</option>
-            <option value="oficina">Oficina</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
-        <div class="field full">
-          <label for="q-location">Ubicación</label>
-          <input id="q-location" type="text" required placeholder="Ej. Santo Domingo, Piantini">
-        </div>
-        <div class="field full">
-          <label for="q-client">Cliente <span class="hint">(opcional)</span></label>
-          <input id="q-client" type="text" placeholder="Ej. Familia Rosario">
-        </div>
-        <div class="field full">
-          <label for="q-description">Descripción <span class="hint">(opcional)</span></label>
-          <textarea id="q-description" placeholder="Notas breves sobre el proyecto…"></textarea>
-        </div>
-        <div class="field full">
-          <label for="q-notes">Información adicional para la solicitud <span class="hint">(opcional)</span></label>
-          <textarea id="q-notes" placeholder="Cantidades, plazos, preferencias…"></textarea>
-        </div>
-        <p id="quote-form-error" style="display:none; color:var(--danger); font-size:13px; margin:14px 0 0;"></p>
+    <div class="account-section">
+      <h2 style="margin-bottom:16px;">Datos del proyecto</h2>
+      <div class="field full" id="save-name-field">
+        <label for="save-name">Nombre del proyecto</label>
+        <input id="save-name" type="text" placeholder="Ej. Apartamento Piantini">
       </div>
+      <p id="save-existing-label" style="display:none; font-weight:600; color:var(--ink); margin:0 0 20px;"></p>
 
-      <div class="account-section" style="margin-bottom:0;">
-        <h2 style="margin-bottom:6px;">Productos incluidos</h2>
-        <p id="quote-products-count" class="card-meta" style="margin-bottom:16px;"></p>
-        <div id="quote-products-list"></div>
+      <div class="field full">
+        <label for="save-type">Tipo de proyecto <span class="hint">(opcional)</span></label>
+        <select id="save-type">
+          <option value="">Selecciona una opción</option>
+          <option value="residencial">Residencial</option>
+          <option value="comercial">Comercial</option>
+          <option value="hospitalidad">Hospitalidad</option>
+          <option value="oficina">Oficina</option>
+          <option value="otro">Otro</option>
+        </select>
       </div>
-
-      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:28px;">
-        <button type="submit" class="btn btn-primary" id="continue-btn">Continuar</button>
-        <a href="#" id="back-to-project-link" class="btn btn-outline">Volver al proyecto</a>
+      <div class="field full">
+        <label for="save-location">Ubicación <span class="hint">(opcional)</span></label>
+        <input id="save-location" type="text" placeholder="Ej. Santo Domingo, Piantini">
       </div>
-
-    </form>
-
-    <div class="form-card" id="quote-review" style="display:none;">
-      <h2 style="margin-bottom:6px;">Revisa tu solicitud</h2>
-      <p class="card-meta" style="margin-bottom:20px;">Todavía no se ha enviado ni guardado — puedes editarla o confirmarla.</p>
-
-      <dl class="spec-table">
-        <div class="spec-row"><dt>Proyecto</dt><dd id="qr-project-name">—</dd></div>
-        <div class="spec-row"><dt>Tipo de proyecto</dt><dd id="qr-type">—</dd></div>
-        <div class="spec-row"><dt>Ubicación</dt><dd id="qr-location">—</dd></div>
-        <div class="spec-row" id="qr-client-row"><dt>Cliente</dt><dd id="qr-client">—</dd></div>
-        <div class="spec-row" id="qr-description-row"><dt>Descripción</dt><dd id="qr-description">—</dd></div>
-        <div class="spec-row" id="qr-notes-row"><dt>Información adicional</dt><dd id="qr-notes">—</dd></div>
-      </dl>
-
-      <h2 style="margin:28px 0 6px;">Productos incluidos</h2>
-      <p id="qr-products-count" class="card-meta" style="margin-bottom:16px;"></p>
-      <div id="qr-products-list"></div>
-
-      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:28px;">
-        <button type="button" class="btn btn-outline" id="edit-quote-btn">Editar datos</button>
-        <button type="button" class="btn btn-primary" id="confirm-quote-btn">Confirmar solicitud</button>
+      <div class="field full">
+        <label for="save-client">Cliente / estudio <span class="hint">(opcional)</span></label>
+        <input id="save-client" type="text" placeholder="Ej. Familia Rosario">
+      </div>
+      <div class="field full">
+        <label for="save-description">Descripción <span class="hint">(opcional)</span></label>
+        <textarea id="save-description" placeholder="Notas breves sobre el proyecto…"></textarea>
       </div>
     </div>
 
-  </div>
+    <div class="account-section" style="margin-bottom:0;">
+      <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
+      <p id="save-products-count" class="card-meta" style="margin-bottom:16px;"></p>
+      <div id="save-products-list"></div>
+    </div>
 
+    <p id="save-form-error" style="display:none; color:var(--danger); font-size:13px; margin:20px 0 0;"></p>
+
+    <button type="button" class="btn btn-primary btn-block" id="save-project-btn" style="margin-top:24px;">Guardar proyecto</button>
+  </form>
+</main>
+
+<!-- ============ MODO: Solicitar cotización — dos columnas ============ -->
+<main class="wrap rfq-layout" id="view-send" style="display:none;">
+
+  <form class="form-card" id="send-form">
+
+    <div class="account-section">
+      <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
+      <p id="send-products-count" class="card-meta" style="margin-bottom:12px;"></p>
+      <div id="send-products-list"></div>
+      <p style="margin-top:12px;"><a href="seleccion.html">Editar piezas del proyecto</a></p>
+    </div>
+
+    <div class="account-section">
+      <h2 style="margin-bottom:16px;">Datos de contacto</h2>
+      <div class="field full">
+        <label for="send-contact-name">Nombre completo</label>
+        <input id="send-contact-name" type="text" placeholder="Ej. Ana María Rosario">
+      </div>
+      <div class="field full">
+        <label for="send-contact-company">Estudio / empresa <span class="hint">(opcional)</span></label>
+        <input id="send-contact-company" type="text" placeholder="Ej. Rosario Arquitectos">
+      </div>
+      <div class="field full">
+        <label for="send-contact-email">Email</label>
+        <input id="send-contact-email" type="email" placeholder="nombre@estudio.com">
+      </div>
+    </div>
+
+    <div class="account-section">
+      <h2 style="margin-bottom:16px;">Detalles del proyecto</h2>
+      <div class="field full" id="send-name-field">
+        <label for="send-name">Nombre del proyecto</label>
+        <input id="send-name" type="text" placeholder="Ej. Apartamento Piantini">
+      </div>
+      <p id="send-existing-label" style="display:none; font-weight:600; color:var(--ink); margin:0 0 20px;"></p>
+      <div class="field full">
+        <label for="send-type">Tipo de proyecto</label>
+        <select id="send-type">
+          <option value="">Selecciona una opción</option>
+          <option value="residencial">Residencial</option>
+          <option value="comercial">Comercial</option>
+          <option value="hospitalidad">Hospitalidad</option>
+          <option value="oficina">Oficina</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label for="send-location">Ubicación del proyecto</label>
+        <input id="send-location" type="text" placeholder="Ej. Santo Domingo, Piantini">
+      </div>
+      <div class="field full">
+        <label for="send-purchase-date">Fecha estimada de compra <span class="hint">(opcional)</span></label>
+        <input id="send-purchase-date" type="date">
+      </div>
+    </div>
+
+    <div class="account-section" style="margin-bottom:0;">
+      <h2 style="margin-bottom:16px;">Notas</h2>
+      <div class="field full">
+        <label for="send-notes">Comentarios adicionales <span class="hint">(opcional)</span></label>
+        <textarea id="send-notes" placeholder="Contexto del proyecto, plazos, preferencias de estilo…"></textarea>
+      </div>
+      <div class="field full">
+        <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400; cursor:pointer;">
+          <input type="checkbox" id="send-consent" style="margin-top:3px;">
+          <span>Autorizo compartir estos datos con los distribuidores para recibir la cotización.</span>
+        </label>
+      </div>
+    </div>
+
+    <p id="send-form-error" style="display:none; color:var(--danger); font-size:13px; margin:20px 0 0;"></p>
+
+    <button type="button" class="btn btn-primary btn-block" id="send-request-btn" style="margin-top:24px;">Enviar solicitud</button>
+  </form>
+
+  <aside class="rfq-summary">
+    <h3>Resumen</h3>
+    <div class="sum-row"><span>Piezas</span><span id="sum-piezas">0</span></div>
+    <div class="sum-row" style="border-bottom:none;"><span>Distribuidores</span><span id="sum-distribuidores">0</span></div>
+    <p class="note">Tu solicitud queda registrada junto con los productos y tus datos de contacto. El equipo de Mobau la coordina con los distribuidores correspondientes.</p>
+  </aside>
 </main>
 
 <footer class="site-footer" id="contacto">
@@ -178,125 +240,272 @@
   let session = null;
   let project = null;
   let productRows = [];
-  let quoteDraft = null; /* se llena solo en memoria, nunca se envía ni se guarda */
+  let arrivedWithProjectId = false;
+  let mode = "send"; /* por defecto, comportamiento histórico si no llega ?mode= */
 
   const params = new URLSearchParams(window.location.search);
-  const projectId = params.get("id");
+  const projectIdParam = params.get("id");
+  if (params.get("mode") === "save" || params.get("mode") === "send") {
+    mode = params.get("mode");
+  }
 
-  function renderProductList(listId, countId){
-    const listEl = document.getElementById(listId);
+  function renderPiecesList(containerId, countId){
+    const listEl = document.getElementById(containerId);
     listEl.innerHTML = productRows.map(row => {
       const p = PRODUCTS.find(pp => pp.id === row.product_id);
       if (!p){
-        return `
-          <div class="saved-project">
-            <div>
-              <div class="sp-name">Producto no disponible</div>
-              <div class="sp-meta">ID: ${row.product_id}</div>
-            </div>
-          </div>`;
+        return `<p class="card-meta">Producto no disponible (ID: ${row.product_id})</p>`;
       }
       const dist = DISTRIBUTORS[p.distribuidor];
-      return `
-        <div class="saved-project">
-          <div>
-            <div class="sp-name">${p.nombre}</div>
-            <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
-          </div>
-        </div>`;
+      const unit = row.unit || getProductUnit(p);
+      const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
+      return `<p style="margin:0 0 6px;">${p.nombre} (${dist.nombre}) × ${quantity} ${unit}</p>`;
     }).join("");
     document.getElementById(countId).textContent =
-      `${productRows.length} ${productRows.length === 1 ? "producto" : "productos"}`;
+      `${productRows.length} ${productRows.length === 1 ? "pieza" : "piezas"}`;
   }
 
-  function toggleOptionalRow(rowId, valueId, value){
-    const hasValue = !!value;
-    document.getElementById(rowId).style.display = hasValue ? "grid" : "none";
-    document.getElementById(valueId).textContent = value;
+  function renderSummarySidebar(){
+    const distributorIds = new Set();
+    productRows.forEach(row => {
+      const p = PRODUCTS.find(pp => pp.id === row.product_id);
+      if (p) distributorIds.add(p.distribuidor);
+    });
+    document.getElementById("sum-piezas").textContent = productRows.length;
+    document.getElementById("sum-distribuidores").textContent = distributorIds.size;
   }
 
-  document.getElementById("quote-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const errorEl = document.getElementById("quote-form-error");
+  function setButtonsDisabled(disabled){
+    const saveBtn = document.getElementById("save-project-btn");
+    const sendBtn = document.getElementById("send-request-btn");
+    if (saveBtn) saveBtn.disabled = disabled;
+    if (sendBtn) sendBtn.disabled = disabled;
+  }
+
+  async function handleSubmit(submitMode){
+    const errorEl = document.getElementById(submitMode === "save" ? "save-form-error" : "send-form-error");
     errorEl.style.display = "none";
+    errorEl.innerHTML = "";
 
-    const type = document.getElementById("q-type").value;
-    const location = document.getElementById("q-location").value.trim();
+    const needsName = !project;
+    const name = document.getElementById(submitMode === "save" ? "save-name" : "send-name").value.trim();
 
-    if (!type || !location){
-      errorEl.textContent = "Completa el tipo de proyecto y la ubicación para continuar.";
+    if (needsName && !name){
+      errorEl.textContent = "Escribe un nombre para el proyecto.";
       errorEl.style.display = "block";
       return;
     }
 
-    quoteDraft = {
-      project_type: type,
-      location: location,
-      client_name: document.getElementById("q-client").value.trim(),
-      description: document.getElementById("q-description").value.trim(),
-      notes: document.getElementById("q-notes").value.trim()
-    };
+    let contactName = "", contactEmail = "";
+    if (submitMode === "send"){
+      const type = document.getElementById("send-type").value;
+      const location = document.getElementById("send-location").value.trim();
+      if (!type || !location){
+        errorEl.textContent = "Completa el tipo de proyecto y la ubicación para continuar.";
+        errorEl.style.display = "block";
+        return;
+      }
+      contactName = document.getElementById("send-contact-name").value.trim();
+      contactEmail = document.getElementById("send-contact-email").value.trim();
+      if (!contactName || !contactEmail){
+        errorEl.textContent = "Completa tu nombre de contacto y email para solicitar la cotización.";
+        errorEl.style.display = "block";
+        return;
+      }
+      if (!document.getElementById("send-consent").checked){
+        errorEl.textContent = "Debes autorizar compartir tus datos con los distribuidores para enviar la solicitud.";
+        errorEl.style.display = "block";
+        return;
+      }
+    }
 
-    document.getElementById("qr-project-name").textContent = project.name;
-    document.getElementById("qr-type").textContent = PROJECT_TYPE_LABELS[quoteDraft.project_type] || quoteDraft.project_type;
-    document.getElementById("qr-location").textContent = quoteDraft.location;
-    toggleOptionalRow("qr-client-row", "qr-client", quoteDraft.client_name);
-    toggleOptionalRow("qr-description-row", "qr-description", quoteDraft.description);
-    toggleOptionalRow("qr-notes-row", "qr-notes", quoteDraft.notes);
-    renderProductList("qr-products-list", "qr-products-count");
+    const activeBtn = document.getElementById(submitMode === "save" ? "save-project-btn" : "send-request-btn");
+    const originalText = activeBtn.textContent;
+    setButtonsDisabled(true);
+    activeBtn.textContent = submitMode === "save" ? "Guardando…" : "Enviando…";
 
-    document.getElementById("quote-form").style.display = "none";
-    document.getElementById("quote-review").style.display = "block";
-    showToast("Información lista para revisar.");
-  });
+    /* Paso 1: reutilizar el proyecto activo o crear uno — nunca ambas cosas.
+       Se pasan todos los campos reales que existan en el formulario de
+       este modo, para que se guarden (o actualicen) de verdad. */
+    if (!project){
+      const fields = { name };
+      if (submitMode === "save"){
+        fields.project_type = document.getElementById("save-type").value;
+        fields.location = document.getElementById("save-location").value.trim();
+        fields.client_name = document.getElementById("save-client").value.trim();
+        fields.description = document.getElementById("save-description").value.trim();
+      } else {
+        fields.project_type = document.getElementById("send-type").value;
+        fields.location = document.getElementById("send-location").value.trim();
+      }
+      const { data, error } = await MobauProjects.getOrCreateActiveProject(fields, session.user.id);
+      if (error){
+        errorEl.textContent = error.message;
+        errorEl.style.display = "block";
+        setButtonsDisabled(false);
+        activeBtn.textContent = originalText;
+        return;
+      }
+      project = data;
+    }
 
-  document.getElementById("edit-quote-btn").addEventListener("click", () => {
-    document.getElementById("quote-review").style.display = "none";
-    document.getElementById("quote-form").style.display = "block";
-  });
+    /* Paso 2: asociar los productos de la selección local — solo si
+       llegamos desde Mi selección. Si veníamos de proyectos-detalle.html
+       (?id=), los productos ya están asociados. */
+    if (!arrivedWithProjectId){
+      const selectionItems = getSelection();
+      const { failedCount, totalCount } = await MobauProjects.transferSelectionToProject(project.id, selectionItems, "sum");
+      if (failedCount > 0){
+        errorEl.innerHTML = `Se asociaron ${totalCount - failedCount} de ${totalCount} productos. Tu selección no se modificó. <a href="proyectos-detalle.html?id=${project.id}" style="color:var(--danger); text-decoration:underline;">Ver el proyecto</a> para continuar manualmente.`;
+        errorEl.style.display = "block";
+        setButtonsDisabled(false);
+        activeBtn.textContent = originalText;
+        return;
+      }
 
-  document.getElementById("confirm-quote-btn").addEventListener("click", () => {
-    showToast("El envío real a los distribuidores se habilitará en un próximo paso.");
-  });
+      /* Se refresca desde project_products — fuente única de verdad tras
+         la transferencia (lo ya guardado + lo recién añadido, sin
+         duplicados) — para validar cantidades sobre el estado real. */
+      if (submitMode === "send"){
+        productRows = await MobauProjects.listProductsInProject(project.id);
+      }
+    }
+
+    if (submitMode === "send" && !productRows.every(row => isValidQuantity(row.quantity))){
+      errorEl.textContent = "Indica la cantidad de todos los productos antes de solicitar la cotización.";
+      errorEl.style.display = "block";
+      setButtonsDisabled(false);
+      activeBtn.textContent = originalText;
+      return;
+    }
+
+    if (submitMode === "save"){
+      if (!arrivedWithProjectId) clearSelection();
+      window.location.href = `proyectos-detalle.html?id=${project.id}`;
+      return;
+    }
+
+    /* submitMode === "send": registrar la solicitud real. */
+    const { error: rfqError } = await MobauProjects.createRfq({
+      project_id: project.id,
+      requester_user_id: session.user.id,
+      requester_name: contactName,
+      requester_email: contactEmail,
+      requester_company: document.getElementById("send-contact-company").value.trim(),
+      project_location: document.getElementById("send-location").value.trim(),
+      estimated_purchase_date: document.getElementById("send-purchase-date").value || null,
+      message: document.getElementById("send-notes").value.trim()
+    });
+
+    if (rfqError){
+      errorEl.innerHTML = `No pudimos registrar tu solicitud: ${rfqError.message} Tu proyecto y tus productos se conservaron — puedes reintentar. <a href="proyectos-detalle.html?id=${project.id}" style="color:var(--danger); text-decoration:underline;">Ver el proyecto</a>.`;
+      errorEl.style.display = "block";
+      setButtonsDisabled(false);
+      activeBtn.textContent = originalText;
+      return;
+    }
+
+    const { error: statusError } = await MobauProjects.setStatus(project.id, "archived");
+    if (statusError){
+      errorEl.innerHTML = `Tu solicitud se registró correctamente, pero no pudimos actualizar el estado del proyecto: ${statusError.message} <a href="proyectos-detalle.html?id=${project.id}" style="color:var(--danger); text-decoration:underline;">Ver el proyecto</a>.`;
+      errorEl.style.display = "block";
+      setButtonsDisabled(false);
+      activeBtn.textContent = originalText;
+      return;
+    }
+
+    if (!arrivedWithProjectId) clearSelection();
+    window.location.href = `proyectos-detalle.html?id=${project.id}`;
+  }
+
+  document.getElementById("save-project-btn").addEventListener("click", () => handleSubmit("save"));
+  document.getElementById("send-request-btn").addEventListener("click", () => handleSubmit("send"));
 
   (async () => {
     session = await MobauAuth.requireSession();
     if (!session) return;
 
-    if (!projectId){
-      document.getElementById("not-found").style.display = "block";
-      return;
+    arrivedWithProjectId = !!projectIdParam;
+
+    if (arrivedWithProjectId){
+      /* Camino desde proyectos-detalle.html: siempre es una solicitud de
+         cotización sobre un proyecto que ya existe con sus productos. */
+      mode = "send";
+      const backLink = `proyectos-detalle.html?id=${projectIdParam}`;
+      document.getElementById("archived-back-link").href = backLink;
+      document.getElementById("no-products-back-link").href = backLink;
+
+      project = await MobauProjects.get(projectIdParam);
+      if (!project){ document.getElementById("not-found").style.display = "block"; return; }
+      if (project.status === "archived"){ document.getElementById("is-archived").style.display = "block"; return; }
+
+      productRows = await MobauProjects.listProductsInProject(project.id);
+      if (!productRows.length){ document.getElementById("no-products").style.display = "block"; return; }
+
+      document.getElementById("bc-project").textContent = project.name;
+      document.getElementById("send-name-field").style.display = "none";
+      document.getElementById("send-existing-label").textContent = `Proyecto: ${project.name}`;
+      document.getElementById("send-existing-label").style.display = "block";
+      document.getElementById("send-type").value = project.project_type || "";
+      document.getElementById("send-location").value = project.location || "";
+
+    } else {
+      const selectionItems = getSelection();
+      if (!selectionItems.length){ document.getElementById("empty-selection").style.display = "block"; return; }
+
+      const activeProjects = await MobauProjects.list("active");
+      if (activeProjects.length) project = activeProjects[0];
+
+      productRows = selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit }));
+
+      if (project){
+        const nameField = mode === "save" ? "save-name-field" : "send-name-field";
+        const labelField = mode === "save" ? "save-existing-label" : "send-existing-label";
+        document.getElementById(nameField).style.display = "none";
+        document.getElementById(labelField).textContent = `Proyecto: ${project.name}`;
+        document.getElementById(labelField).style.display = "block";
+
+        /* Muestra lo que ya está guardado, para no perderlo si el
+           campo se deja igual al reutilizar el proyecto activo. */
+        if (mode === "save"){
+          document.getElementById("save-type").value = project.project_type || "";
+          document.getElementById("save-location").value = project.location || "";
+          document.getElementById("save-client").value = project.client_name || "";
+          document.getElementById("save-description").value = project.description || "";
+        } else {
+          document.getElementById("send-type").value = project.project_type || "";
+          document.getElementById("send-location").value = project.location || "";
+        }
+      }
+
+      if (mode === "send"){
+        document.getElementById("send-contact-email").value = session.user.email || "";
+        const { data: profile } = await supabaseClient
+          .from("professional_profiles")
+          .select("professional_name, studio_name")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        if (profile){
+          if (profile.professional_name) document.getElementById("send-contact-name").value = profile.professional_name;
+          if (profile.studio_name) document.getElementById("send-contact-company").value = profile.studio_name;
+        }
+      }
     }
 
-    const backLink = `proyectos-detalle.html?id=${projectId}`;
-    document.getElementById("archived-back-link").href = backLink;
-    document.getElementById("no-products-back-link").href = backLink;
-    document.getElementById("back-to-project-link").href = backLink;
-
-    project = await MobauProjects.get(projectId);
-
-    if (!project){
-      document.getElementById("not-found").style.display = "block";
-      return;
+    if (mode === "save"){
+      document.getElementById("page-eyebrow").textContent = "Proyecto";
+      document.getElementById("page-title").textContent = "Guarda tu proyecto";
+      document.getElementById("page-subtitle").textContent = "Guarda tus piezas en un proyecto para retomarlo cuando quieras — sin enviar nada todavía.";
+      renderPiecesList("save-products-list", "save-products-count");
+      document.getElementById("view-save").style.display = "block";
+    } else {
+      document.getElementById("page-eyebrow").textContent = "Una solicitud por proyecto";
+      document.getElementById("page-title").textContent = "Solicitud de cotización";
+      document.getElementById("page-subtitle").textContent = project ? `Para el proyecto "${project.name}".` : "";
+      renderPiecesList("send-products-list", "send-products-count");
+      renderSummarySidebar();
+      document.getElementById("view-send").style.display = "grid";
     }
-
-    document.getElementById("bc-project").textContent = project.name;
-    document.getElementById("page-subtitle").textContent = `Para el proyecto "${project.name}".`;
-
-    if (project.status === "archived"){
-      document.getElementById("is-archived").style.display = "block";
-      return;
-    }
-
-    productRows = await MobauProjects.listProductsInProject(project.id);
-
-    if (!productRows.length){
-      document.getElementById("no-products").style.display = "block";
-      return;
-    }
-
-    renderProductList("quote-products-list", "quote-products-count");
-    document.getElementById("quote-view").style.display = "block";
   })();
 </script>
 </body>
