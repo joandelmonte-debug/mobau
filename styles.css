@@ -58,6 +58,11 @@ p{ margin: 0 0 1em 0; color: var(--ink-soft); max-width: 62ch; }
 ul{ margin:0; padding:0; list-style:none; }
 button{ font-family: inherit; }
 
+/* El atributo hidden debe ganar siempre, incluso sobre clases con su
+   propio display (p.ej. .btn usa inline-flex) — evita el parpadeo de
+   elementos que deben empezar ocultos desde el primer render. */
+[hidden]{ display:none !important; }
+
 :focus-visible{
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -572,6 +577,50 @@ button{ font-family: inherit; }
 }
 .cart-empty .btn{ margin-top: 18px; }
 
+/* Estado vacío de Mi selección — se sobrescribe por ID (no se toca
+   .cart-empty, que reutilizan otras páginas). El <p> global tiene
+   max-width:62ch sin margin:auto (ver regla "p" arriba), así que en un
+   recuadro ancho quedaba pegado a la izquierda en vez de centrado —
+   esta es la causa real, no un problema del recuadro en sí. */
+#selection-empty{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  width:100%;
+  min-height:270px;
+  box-sizing:border-box;
+  padding:32px 24px;
+}
+#selection-empty .empty-state-content{
+  width:100%;
+  max-width:none;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+#selection-empty .empty-state-content p:first-of-type{
+  width:100%;
+  margin:0 0 12px;
+  text-align:center;
+}
+#selection-empty .empty-state-content p:last-of-type{
+  width:100%;
+  max-width:620px;
+  margin:0 auto 20px;
+  text-align:center;
+}
+#selection-empty .empty-state-content .btn{
+  display:inline-flex;
+  align-self:center;
+  margin-left:auto;
+  margin-right:auto;
+}
+
 /* ============================================================
    COTIZACIÓN (form)
    ============================================================ */
@@ -689,6 +738,33 @@ fieldset legend{
   background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft);
 }
 .provider-card .btn{ align-self:flex-start; margin-top: 6px; }
+.provider-card .icon-btn-muted{ align-self:flex-start; margin-top: 6px; }
+
+/* "Abrir" + "Archivar" en la tarjeta de un proyecto activo: misma
+   altura exacta pase lo que pase con el largo del texto — height fijo
+   en vez de depender solo del padding, box-sizing:border-box para que
+   borde y padding no la aumenten, sin permitir que el texto envuelva. */
+.project-action-btn{
+  height:40px;
+  box-sizing:border-box;
+  line-height:1;
+  white-space:nowrap;
+}
+
+/* ============================================================
+   Botón de icono pequeño y neutro (p.ej. "Eliminar proyecto" en
+   proyectos archivados) — mismo patrón que .selection-item__icon-button
+   pero sin depender de esa clase, para no acoplar Mi selección con
+   Mis proyectos. Nunca usa rojo: la confirmación ya avisa del riesgo.
+   ============================================================ */
+.icon-btn-muted{
+  width:38px; height:38px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--surface); border:1px solid var(--line-strong); border-radius: var(--radius);
+  color: var(--ink-soft); cursor:pointer;
+}
+.icon-btn-muted:hover{ background: var(--line-strong); }
+.icon-btn-muted:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
 /* ============================================================
    CUENTA / LOGIN / REGISTRO
@@ -801,6 +877,26 @@ fieldset legend{
   }
 }
 
+/* Mi selección en escritorio: productos a la izquierda (columna
+   flexible), resumen + acciones en una barra lateral estable a la
+   derecha — dentro del mismo .wrap ancho que ya usan el encabezado y
+   el resto de la página (sin un límite propio más estrecho). */
+.selection-layout{
+  display:grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 36px;
+  align-items:start;
+}
+.selection-layout__side{
+  position: sticky;
+  top: 96px; /* debajo del header sticky (76px) + margen */
+}
+
+@media (max-width: 900px){
+  .selection-layout{ grid-template-columns: 1fr; }
+  .selection-layout__side{ position: static; top: auto; width:100%; }
+}
+
 .selection-summary{
   display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
   background: var(--surface); border-radius: var(--radius-lg);
@@ -810,11 +906,15 @@ fieldset legend{
 .selection-summary__count{ font-family:var(--f-head); font-size:17px; font-weight:600; margin:0; }
 .selection-summary__actions{ display:flex; gap:12px; flex-wrap:wrap; }
 
-@media (max-width: 640px){
-  .selection-summary{ flex-direction:column; align-items:stretch; }
-  .selection-summary__actions{ width:100%; }
-  .selection-summary__actions .btn{ flex:1; }
+/* En la barra lateral (angosta por diseño) el resumen se apila en
+   vertical en vez de repartirse en una fila horizontal — igual que ya
+   hacía en móvil, reutilizado aquí porque el ancho es comparable. */
+.selection-layout__side .selection-summary{
+  flex-direction:column; align-items:stretch; margin-top:0;
 }
+.selection-layout__side .selection-summary__actions{ width:100%; }
+.selection-layout__side .selection-summary__actions .btn{ width:100%; }
+
 .status-chip{ font-size:12px; font-weight:600; padding:5px 10px; border-radius:2px; white-space:nowrap; }
 .status-chip.sent{ background:var(--accent-soft); color:var(--accent-ink); }
 .status-chip.progress{ background:var(--brass-soft); color:#6E4E22; }

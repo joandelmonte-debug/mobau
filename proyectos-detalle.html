@@ -17,22 +17,101 @@
     .project-layout{ grid-template-columns: 1fr; gap: 40px; }
   }
 
-  /* Acciones del proyecto — fila compacta, misma escala, sin verde principal */
-  .project-actions{
+  /* Acciones del proyecto — "Archivar" y "Volver a mis proyectos" como
+     botones secundarios del mismo sistema visual: misma altura exacta
+     pase lo que pase con el line-height por defecto de <button> frente
+     al de <a> (esa diferencia de navegador era la causa real del
+     desalineado — box-sizing + height explícitos la cancelan). */
+  .project-detail-actions{
     display:flex;
     align-items:center;
-    gap:12px;
     flex-wrap:wrap;
+    gap:12px;
     margin-bottom:36px;
   }
-  #archive-btn.btn-outline{
-    color: var(--brass);
-    border-color: var(--brass);
+  .project-detail-actions .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    height:40px;
+    min-height:40px;
+    box-sizing:border-box;
+    padding:0 18px;
+    line-height:1;
   }
-  #archive-btn.btn-outline:hover{
-    border-color: var(--brass);
-    background: var(--brass-soft);
+
+  /* Estado vacío de productos — el recuadro (#products-empty) solo
+     reserva la altura mínima y anula el padding heredado de .cart-empty
+     (esa clase la usan otras páginas sin tocarla); el grupo de contenido
+     (.empty-state-content) es quien realmente centra título, texto y
+     botón, horizontal y verticalmente, dentro de ese recuadro. */
+  #products-empty{
+    display:flex;
+    min-height:270px;
+    box-sizing:border-box;
+    padding:0;
   }
+  #products-empty .empty-state-content{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    width:100%;
+    min-height:100%;
+    box-sizing:border-box;
+    padding:32px 24px;
+  }
+  #products-empty .empty-state-content p{
+    max-width:520px;
+    margin-left:auto;
+    margin-right:auto;
+  }
+
+  /* Miniatura de producto en "Productos de mi proyecto" — reutiliza
+     el mismo sprite de íconos placeholder (iconMarkup/ICON_SPRITE en
+     script.js) que ya usan catálogo.html, producto.html y seleccion.html;
+     este catálogo de demo no tiene fotografía real por producto. Sin
+     icono (fila "Producto no disponible"), queda como recuadro neutro
+     vacío en vez de un <img> roto. */
+  .project-product-thumb{
+    width:72px; height:72px; flex:0 0 72px;
+    border:1px solid var(--line-strong); border-radius:4px;
+    background: var(--surface);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; color: var(--ink-faint);
+  }
+  .project-product-thumb svg{ width:60%; height:60%; }
+
+  /* Control de cantidad por producto guardado — reutiliza el mismo
+     widget .quantity-control de styles.css que ya usa Mi selección
+     (input + unidad + botones +/- discretos), dentro de una fila
+     compacta propia de esta página, con su etiqueta accesible y un
+     mensaje de error puntual si la cantidad no es válida. */
+  .dp-quantity{ display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+  .dp-quantity__label{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  .dp-quantity__error{ margin:0; font-size:12px; color:var(--danger); }
+
+  /* Grupo "Activo [lápiz]" / "Activo [check] [cancelar]" — reutiliza
+     .icon-btn-muted (mismo patrón neutro ya usado para "Eliminar
+     proyecto" en Mis proyectos), pero más pequeño (28px) porque aquí
+     va junto a un chip de texto, no como acción principal de tarjeta. */
+  .project-status-group{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  .project-status-group .icon-btn-muted{ width:28px; height:28px; }
+  .project-status-group .icon-btn-muted svg{ width:14px; height:14px; }
+  .icon-btn-save{ color: var(--accent); border-color: var(--accent); }
+  .icon-btn-save:hover{ background: var(--accent-soft); }
+
+  /* Campos de edición inline dentro del nombre y de spec-table — se
+     apoyan en .field de styles.css (mismo ancho/estilo que cualquier
+     otro formulario), pero sin el margin-bottom de 18px, que aquí
+     sobraría dentro de una fila ya compacta. */
+  .inline-edit-field{ margin:0; }
 </style>
 </head>
 <body>
@@ -72,22 +151,78 @@
 
       <div>
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:8px;">
-          <h1 id="p-name" style="margin:0;">—</h1>
-          <span class="status-chip" id="p-status"></span>
+          <div style="flex:1; min-width:0;">
+            <h1 id="p-name" style="margin:0;">—</h1>
+            <div class="field inline-edit-field" id="edit-name-field" style="display:none; margin-top:8px;">
+              <input id="edit-name" type="text" placeholder="Nombre del proyecto" aria-label="Nombre del proyecto">
+            </div>
+          </div>
+          <div class="project-status-group">
+            <span class="status-chip" id="p-status"></span>
+            <button type="button" class="icon-btn-muted" id="edit-project-btn" title="Editar información del proyecto" aria-label="Editar información del proyecto">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+            </button>
+            <button type="button" class="icon-btn-muted icon-btn-save" id="save-project-btn" title="Guardar cambios" aria-label="Guardar cambios" style="display:none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <button type="button" class="icon-btn-muted" id="cancel-project-btn" title="Cancelar edición" aria-label="Cancelar edición" style="display:none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
         </div>
+        <p id="edit-project-error" style="display:none; color:var(--danger); font-size:13px; margin:0 0 14px;"></p>
         <p class="card-meta" id="p-meta" style="margin-bottom:28px;"></p>
 
         <dl class="spec-table">
-          <div class="spec-row"><dt>Cliente</dt><dd id="p-client">—</dd></div>
-          <div class="spec-row"><dt>Tipo de proyecto</dt><dd id="p-type">—</dd></div>
-          <div class="spec-row"><dt>Ubicación</dt><dd id="p-location">—</dd></div>
-          <div class="spec-row"><dt>Descripción</dt><dd id="p-description">—</dd></div>
+          <div class="spec-row">
+            <dt>Cliente</dt>
+            <dd>
+              <span id="p-client">—</span>
+              <div class="field inline-edit-field" id="edit-client-field" style="display:none;">
+                <input id="edit-client" type="text" placeholder="Ej. Familia Rosario" aria-label="Cliente o estudio">
+              </div>
+            </dd>
+          </div>
+          <div class="spec-row">
+            <dt>Tipo de proyecto</dt>
+            <dd>
+              <span id="p-type">—</span>
+              <div class="field inline-edit-field" id="edit-type-field" style="display:none;">
+                <select id="edit-type" aria-label="Tipo de proyecto">
+                  <option value="">Selecciona una opción</option>
+                  <option value="residencial">Residencial</option>
+                  <option value="comercial">Comercial</option>
+                  <option value="hospitalidad">Hospitalidad</option>
+                  <option value="oficina">Oficina</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+            </dd>
+          </div>
+          <div class="spec-row">
+            <dt>Ubicación</dt>
+            <dd>
+              <span id="p-location">—</span>
+              <div class="field inline-edit-field" id="edit-location-field" style="display:none;">
+                <input id="edit-location" type="text" placeholder="Ej. Santo Domingo, Piantini" aria-label="Ubicación">
+              </div>
+            </dd>
+          </div>
+          <div class="spec-row">
+            <dt>Descripción</dt>
+            <dd>
+              <span id="p-description">—</span>
+              <div class="field inline-edit-field" id="edit-description-field" style="display:none;">
+                <textarea id="edit-description" placeholder="Notas breves sobre el proyecto…" aria-label="Descripción"></textarea>
+              </div>
+            </dd>
+          </div>
           <div class="spec-row"><dt>Creado</dt><dd id="p-created">—</dd></div>
           <div class="spec-row"><dt>Actualizado</dt><dd id="p-updated">—</dd></div>
         </dl>
 
-        <div class="project-actions">
-          <button type="button" class="btn btn-outline btn-sm" id="archive-btn">Archivar proyecto</button>
+        <div class="project-detail-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="archive-btn">Archivar</button>
           <a href="proyectos.html" class="btn btn-outline btn-sm">Volver a mis proyectos</a>
         </div>
       </div>
@@ -100,9 +235,11 @@
         <p id="quote-hint" class="card-meta" style="display:none; margin-top:-4px;">Añade productos para poder solicitar una cotización.</p>
         <p id="products-counter" class="card-meta"></p>
         <div id="products-empty" style="display:none;" class="cart-empty">
-          <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
-          <p style="margin:0;">Explora el catálogo y usa "Añadir a la selección" en lo que necesites.</p>
-          <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+          <div class="empty-state-content">
+            <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
+            <p style="margin:0;">Explora el catálogo y usa "Añadir a la selección" en lo que necesites.</p>
+            <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+          </div>
         </div>
         <div id="products-list"></div>
       </div>
@@ -156,6 +293,7 @@
   let session = null;
   let project = null;
   let currentPlan = null;
+  let isProjectInfoEditing = false;
 
   async function renderProject(){
     const isActive = project.status === "active";
@@ -187,7 +325,7 @@
     if (isActive){
       archiveBtn.style.display = "inline-flex";
       archiveBtn.disabled = false;
-      archiveBtn.textContent = "Archivar proyecto";
+      archiveBtn.textContent = "Archivar";
     } else if (isStudioPlan){
       const activeCount = await MobauProjects.countActive();
       const hasCupo = activeCount < currentPlan.max_active_projects;
@@ -198,13 +336,170 @@
       /* Individual/prueba + archivado: no hay reactivación posible. */
       archiveBtn.style.display = "none";
     }
+
+    /* El lápiz de edición solo existe para proyectos activos — uno
+       archivado es solo de consulta y no admite edición. Pero mientras
+       el formulario inline está abierto (isProjectInfoEditing), este
+       render NUNCA toca lápiz/check/cancelar: si lo hiciera, el lápiz
+       podría reaparecer junto al check y cancelar cuando algo externo
+       (quitar producto, cambiar cantidad, archivar) dispara un
+       renderProject() de por medio, y el formulario sigue con lo que
+       el usuario ya escribió, sin releerlo de "project". */
+    if (!isProjectInfoEditing){
+      document.getElementById("edit-project-btn").style.display = isActive ? "inline-flex" : "none";
+    }
   }
+
+  /* Edición inline de la información del proyecto (nombre, tipo,
+     ubicación, cliente, descripción) — mismo sitio de "Activo",
+     alternando lápiz <-> check/cancelar. Precarga los valores reales
+     de "project", guarda con el mismo project.id de la URL (nunca crea
+     uno nuevo) y jamás toca project_products. */
+  const EDIT_FIELD_KEYS = ["client", "type", "location", "description"];
+
+  function enterProjectEditMode(){
+    if (isProjectInfoEditing) return; // ya está abierto — no releer "project" encima de lo que se esté escribiendo
+    isProjectInfoEditing = true;
+
+    document.getElementById("edit-name").value = project.name || "";
+    document.getElementById("edit-type").value = project.project_type || "";
+    document.getElementById("edit-location").value = project.location || "";
+    document.getElementById("edit-client").value = project.client_name || "";
+    document.getElementById("edit-description").value = project.description || "";
+    document.getElementById("edit-project-error").style.display = "none";
+
+    document.getElementById("p-name").style.display = "none";
+    document.getElementById("edit-name-field").style.display = "block";
+    EDIT_FIELD_KEYS.forEach(key => {
+      document.getElementById(`p-${key}`).style.display = "none";
+      document.getElementById(`edit-${key}-field`).style.display = "block";
+    });
+
+    document.getElementById("edit-project-btn").style.display = "none";
+    document.getElementById("save-project-btn").style.display = "inline-flex";
+    document.getElementById("cancel-project-btn").style.display = "inline-flex";
+  }
+
+  /* No escribe nada — solo restaura la vista de texto con los valores
+     que ya estaban en "project" (los inputs se descartan sin guardar). */
+  function exitProjectEditMode(){
+    isProjectInfoEditing = false;
+
+    document.getElementById("p-name").style.display = "";
+    document.getElementById("edit-name-field").style.display = "none";
+    EDIT_FIELD_KEYS.forEach(key => {
+      document.getElementById(`p-${key}`).style.display = "";
+      document.getElementById(`edit-${key}-field`).style.display = "none";
+    });
+
+    document.getElementById("edit-project-btn").style.display = "inline-flex";
+    document.getElementById("save-project-btn").style.display = "none";
+    document.getElementById("cancel-project-btn").style.display = "none";
+    document.getElementById("edit-project-error").style.display = "none";
+  }
+
+  document.getElementById("edit-project-btn").addEventListener("click", enterProjectEditMode);
+  document.getElementById("cancel-project-btn").addEventListener("click", exitProjectEditMode);
+
+  document.getElementById("save-project-btn").addEventListener("click", async () => {
+    const errorEl = document.getElementById("edit-project-error");
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    const name = document.getElementById("edit-name").value.trim();
+    if (!name){
+      errorEl.textContent = "Escribe un nombre para el proyecto.";
+      errorEl.style.display = "block";
+      return; // sigue en modo edición, sin perder lo escrito
+    }
+
+    const saveBtn = document.getElementById("save-project-btn");
+    saveBtn.disabled = true;
+
+    const { data, error } = await MobauProjects.updateProjectInfo(project.id, {
+      name,
+      project_type: document.getElementById("edit-type").value,
+      location: document.getElementById("edit-location").value.trim(),
+      client_name: document.getElementById("edit-client").value.trim(),
+      description: document.getElementById("edit-description").value.trim()
+    });
+
+    saveBtn.disabled = false;
+
+    if (error){
+      errorEl.textContent = error.message;
+      errorEl.style.display = "block";
+      return; // sigue en modo edición; no se tocaron los productos
+    }
+
+    project = data;
+    exitProjectEditMode();
+    showToast("Información del proyecto guardada.");
+    await renderProject();
+  });
 
   document.getElementById("archive-btn").addEventListener("click", async () => {
     const btn = document.getElementById("archive-btn");
-    const nextStatus = project.status === "active" ? "archived" : "active";
+    const goingToArchived = project.status === "active";
+
+    if (goingToArchived){
+      /* Decisión basada en el conteo real de project_products (recién
+         consultado), nunca en lo que ya está pintado en pantalla. */
+      const rows = await MobauProjects.listProductsInProject(project.id);
+
+      if (!rows.length){
+        const confirmDelete = confirm("Este proyecto no tiene productos seleccionados. Si continúas, el proyecto se eliminará de forma permanente. ¿Quieres eliminarlo?");
+        if (!confirmDelete) return; // no se toca nada: sigue en esta página, activo
+
+        btn.disabled = true;
+
+        /* deleteProject() solo permite eliminar proyectos con status
+           "archived" (política RLS existente, no se toca aquí) — un
+           proyecto activo simplemente no cumple esa condición y la fila
+           no se borra (sin lanzar error: RLS filtra la fila y Postgres
+           no falla al borrar 0 filas). Por eso se archiva primero con
+           el mismo project.id y, solo si eso funciona de verdad, se
+           llama a deleteProject() — nunca se usa setStatus() como
+           sustituto del borrado real. */
+        const { error: archiveError } = await MobauProjects.setStatus(project.id, "archived");
+        if (archiveError){
+          alert(archiveError.message);
+          btn.disabled = false;
+          return;
+        }
+
+        const { error: deleteError } = await MobauProjects.deleteProject(project.id);
+        if (deleteError){
+          alert(`El proyecto se archivó, pero no pudimos eliminarlo: ${deleteError.message}`);
+          project = { ...project, status: "archived" };
+          await renderProject();
+          loadSavedProducts();
+          return;
+        }
+
+        window.location.href = "proyectos.html";
+        return;
+      }
+
+      /* Con uno o más productos: archivar de verdad, con su
+         confirmación normal — nunca se elimina nada aquí. */
+      const confirmArchive = confirm(`¿Archivar "${project.name}"?`);
+      if (!confirmArchive) return;
+
+      btn.disabled = true;
+      const { error } = await MobauProjects.setStatus(project.id, "archived");
+      if (error){
+        alert(error.message);
+        btn.disabled = false;
+        return;
+      }
+      window.location.href = "proyectos.html";
+      return;
+    }
+
+    /* Reactivar: sin cambios de comportamiento. */
     btn.disabled = true;
-    const { data, error } = await MobauProjects.setStatus(project.id, nextStatus);
+    const { data, error } = await MobauProjects.setStatus(project.id, "active");
     if (error){
       alert(error.message);
       btn.disabled = false;
@@ -248,6 +543,16 @@
 
     if (!rows.length){
       listEl.innerHTML = "";
+      emptyEl.innerHTML = isArchived
+        ? `<div class="empty-state-content">
+             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto no tiene productos guardados.</p>
+             <p style="margin:0;">Está archivado y es solo de consulta — no se pueden añadir productos.</p>
+           </div>`
+        : `<div class="empty-state-content">
+             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
+             <p style="margin:0;">Explora el catálogo y usa "Añadir a la selección" en lo que necesites.</p>
+             <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+           </div>`;
       emptyEl.style.display = "block";
       return;
     }
@@ -259,7 +564,8 @@
       if (!p){
         return `
           <div class="saved-project">
-            <div>
+            <div class="project-product-thumb" aria-hidden="true"></div>
+            <div style="flex:1; min-width:0;">
               <div class="sp-name">Producto no disponible</div>
               <div class="sp-meta">ID: ${row.product_id}</div>
             </div>
@@ -268,13 +574,30 @@
       }
       const dist = DISTRIBUTORS[p.distribuidor];
       const unit = row.unit || getProductUnit(p);
-      const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
+      const isUnit = unit === "ud.";
+      const step = isUnit ? "1" : "0.01";
+      const min = isUnit ? "1" : "0.01";
+      const currentQuantity = (typeof row.quantity === "number" && Number.isFinite(row.quantity))
+        ? row.quantity
+        : (isUnit ? 1 : 1);
+      const displayValue = isUnit ? String(Math.round(currentQuantity)) : String(Math.round(currentQuantity * 100) / 100);
+      const inputId = `dp-qty-${row.id}`;
       return `
         <div class="saved-project">
-          <div>
+          <div class="project-product-thumb" role="img" aria-label="${p.nombre}">${iconMarkup(p.icon, 40)}</div>
+          <div style="flex:1; min-width:0;">
             <div class="sp-name">${p.nombre}</div>
             <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
-            <div class="sp-meta">${quantity} ${unit}</div>
+            <div class="dp-quantity">
+              <label for="${inputId}" class="dp-quantity__label">Cantidad</label>
+              <div class="quantity-control">
+                <button type="button" class="quantity-control__button dp-qty-decrement" data-row-id="${row.id}" data-unit="${unit}" aria-label="Reducir cantidad"${isArchived ? " disabled" : ""}>−</button>
+                <button type="button" class="quantity-control__button dp-qty-increment" data-row-id="${row.id}" data-unit="${unit}" aria-label="Aumentar cantidad"${isArchived ? " disabled" : ""}>+</button>
+                <input id="${inputId}" class="quantity-control__input dp-qty-input" type="number" data-row-id="${row.id}" data-unit="${unit}" value="${displayValue}" min="${min}" step="${step}" inputmode="decimal" aria-label="Cantidad de ${p.nombre}"${isArchived ? " disabled" : ""}>
+                <span class="quantity-control__unit">${unit}</span>
+              </div>
+              <p class="dp-quantity__error" id="dp-qty-error-${row.id}" style="display:none;"></p>
+            </div>
           </div>
           <div style="display:flex; gap:10px; align-items:center;">
             <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
@@ -292,8 +615,97 @@
           btn.disabled = false;
           return;
         }
+        /* "Actualizado" debe reflejar quitar un producto, aunque fuera
+           el último — se toca aquí, tras confirmar el borrado real. */
+        const { data: touched } = await MobauProjects.touchProject(project.id);
+        if (touched) project = touched;
         showToast("Producto quitado del proyecto.");
+        await renderProject();
         loadSavedProducts();
+      });
+    });
+
+    /* Guardado de cantidad — validación mínima antes de persistir:
+       mayor que 0 siempre; entera cuando la unidad es "ud.". El foco
+       se restaura sobre el mismo input (mismo id) tras el refresco,
+       ya que loadSavedProducts() reconstruye la lista entera. */
+    async function saveRowQuantity(rowId, unit, rawValue){
+      const errorEl = document.getElementById(`dp-qty-error-${rowId}`);
+      const isUnitBased = unit === "ud.";
+      const rounded = Math.round(Number(rawValue) * 100) / 100;
+
+      if (!Number.isFinite(rounded) || rounded <= 0){
+        errorEl.textContent = "La cantidad debe ser mayor que 0.";
+        errorEl.style.display = "block";
+        return;
+      }
+      if (isUnitBased && !Number.isInteger(rounded)){
+        errorEl.textContent = "Para unidades (ud.) la cantidad debe ser un número entero.";
+        errorEl.style.display = "block";
+        return;
+      }
+      errorEl.style.display = "none";
+      errorEl.textContent = "";
+
+      /* Bloquea solo los controles de ESTA fila (input + − + +) mientras
+         la operación está pendiente — un doble clic rápido en +/- no
+         puede disparar dos updateProductQuantity() concurrentes sobre
+         la misma fila. Otras filas no se tocan. try/finally garantiza
+         que se reactivan tanto si la operación tiene éxito como si falla. */
+      const rowControls = [
+        document.getElementById(`dp-qty-${rowId}`),
+        document.querySelector(`.dp-qty-decrement[data-row-id="${rowId}"]`),
+        document.querySelector(`.dp-qty-increment[data-row-id="${rowId}"]`)
+      ].filter(Boolean);
+      rowControls.forEach(el => { el.disabled = true; });
+
+      try {
+        const { error } = await MobauProjects.updateProductQuantity(rowId, rounded);
+        if (error){
+          errorEl.textContent = error.message;
+          errorEl.style.display = "block";
+          return;
+        }
+
+        const { data: touched } = await MobauProjects.touchProject(project.id);
+        if (touched) project = touched;
+
+        showToast("Cantidad actualizada.");
+        await renderProject();
+        await loadSavedProducts();
+        const restoredInput = document.getElementById(`dp-qty-${rowId}`);
+        if (restoredInput) restoredInput.focus();
+      } finally {
+        /* Tras éxito, loadSavedProducts() ya reconstruyó la fila con
+           elementos nuevos (sin disabled) — estos nodos antiguos pueden
+           haber quedado desconectados; reactivarlos entonces es un
+           no-op inofensivo, nunca un error. */
+        rowControls.forEach(el => { if (el.isConnected) el.disabled = false; });
+      }
+    }
+
+    listEl.querySelectorAll(".dp-qty-input").forEach(input => {
+      input.addEventListener("change", () => {
+        saveRowQuantity(input.dataset.rowId, input.dataset.unit, input.value);
+      });
+    });
+
+    listEl.querySelectorAll(".dp-qty-decrement").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(`dp-qty-${btn.dataset.rowId}`);
+        if (!input) return;
+        const min = Number(input.min) || 0.01;
+        const next = Math.max(min, Number(input.value) - 1);
+        saveRowQuantity(btn.dataset.rowId, btn.dataset.unit, next);
+      });
+    });
+
+    listEl.querySelectorAll(".dp-qty-increment").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(`dp-qty-${btn.dataset.rowId}`);
+        if (!input) return;
+        const next = Number(input.value) + 1;
+        saveRowQuantity(btn.dataset.rowId, btn.dataset.unit, next);
       });
     });
   }

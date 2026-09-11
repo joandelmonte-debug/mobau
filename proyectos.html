@@ -41,7 +41,7 @@
       <button type="button" class="btn btn-primary btn-sm" id="filter-active" data-status="active">Activos</button>
       <button type="button" class="btn btn-outline btn-sm" id="filter-archived" data-status="archived">Archivados</button>
     </div>
-    <a href="proyectos-cotizacion.html?mode=save" class="btn btn-primary" id="create-project-btn-top">Crear proyecto</a>
+    <a href="proyectos-cotizacion.html?mode=save" class="btn btn-primary" id="create-project-btn-top" hidden>Crear proyecto</a>
   </div>
 
   <p id="plan-usage" style="font-size:13px; color:var(--ink-faint); margin-bottom:28px;"></p>
@@ -110,18 +110,22 @@
     const distributorsLabel = `${distributorCount} ${distributorCount === 1 ? "distribuidor" : "distribuidores"}`;
     const isStudioPlan = planAllowsMultipleActive(plan);
 
-    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm"${!isActive ? ' style="flex:1;"' : ""}>Abrir</a>`;
+    /* .project-action-btn corrige la diferencia de line-height entre
+       <a> y <button> — se aplica siempre (activa o archivada), para
+       que "Abrir" quede a la misma altura que "Archivar", "Reactivar
+       proyecto" o "Sin cupo para reactivar" en cualquier tarjeta. */
+    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm project-action-btn"${!isActive ? ' style="flex:1;"' : ""}>Abrir</a>`;
 
     if (isActive){
-      actionsHtml += `<button type="button" class="btn btn-outline btn-sm archive-btn" data-id="${p.id}" data-status="active">Archivar proyecto</button>`;
+      actionsHtml += `<button type="button" class="btn btn-outline btn-sm project-action-btn archive-btn" data-id="${p.id}" data-status="active" data-name="${p.name.replace(/"/g, "&quot;")}">Archivar</button>`;
     } else {
       if (isStudioPlan){
         const hasCupo = activeCount < plan.max_active_projects;
         actionsHtml += hasCupo
-          ? `<button type="button" class="btn btn-outline btn-sm archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
-          : `<button type="button" class="btn btn-outline btn-sm" style="flex:1;" disabled>Sin cupo para reactivar</button>`;
+          ? `<button type="button" class="btn btn-outline btn-sm project-action-btn archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
+          : `<button type="button" class="btn btn-outline btn-sm project-action-btn" style="flex:1;" disabled>Sin cupo para reactivar</button>`;
       }
-      actionsHtml += `<button type="button" class="btn btn-outline btn-sm delete-project-btn" style="flex:1; color:var(--danger); border-color:var(--danger);" data-id="${p.id}" data-name="${p.name.replace(/"/g, "&quot;")}">Eliminar proyecto</button>`;
+      actionsHtml += `<button type="button" class="icon-btn-muted delete-project-btn" aria-label="Eliminar proyecto" title="Eliminar proyecto" data-id="${p.id}" data-name="${p.name.replace(/"/g, "&quot;")}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>`;
     }
 
     return `
@@ -139,7 +143,7 @@
           <span class="chip">${distributorsLabel}</span>
         </div>
         <p style="margin:0; font-size:13px; color:var(--ink-faint);">Actualizado ${relativeDate(p.updated_at)}</p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:auto;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:auto;">
           ${actionsHtml}
         </div>
       </article>`;
@@ -157,7 +161,6 @@
     const grid = document.getElementById("projects-grid");
     const empty = document.getElementById("projects-empty");
     const emptyText = document.getElementById("projects-empty-text");
-    const topCreateBtn = document.getElementById("create-project-btn-top");
 
     const projects = await MobauProjects.list(currentStatus);
     const activeCount = await MobauProjects.countActive();
@@ -184,9 +187,65 @@
       grid.querySelectorAll(".archive-btn").forEach(btn => {
         btn.addEventListener("click", async () => {
           const id = btn.dataset.id;
-          const nextStatus = btn.dataset.status === "active" ? "archived" : "active";
+          const goingToArchived = btn.dataset.status === "active";
+
+          if (goingToArchived){
+            /* Decisión basada en el conteo real de project_products,
+               nunca en el chip visible de la tarjeta. */
+            const rows = await MobauProjects.listProductsInProject(id);
+
+            if (!rows.length){
+              const confirmDelete = confirm("Este proyecto no tiene productos seleccionados. Si continúas, el proyecto se eliminará de forma permanente. ¿Quieres eliminarlo?");
+              if (!confirmDelete) return; // no se toca nada: sigue activo en Activos
+
+              btn.disabled = true;
+
+              /* deleteProject() solo permite eliminar proyectos con
+                 status "archived" (política RLS existente, no se toca
+                 aquí) — se archiva primero y, si eso funciona de verdad,
+                 se elimina justo después. Nunca se llama a setStatus
+                 como sustituto del borrado: el borrado siempre se
+                 completa con deleteProject(). */
+              const { error: archiveError } = await MobauProjects.setStatus(id, "archived");
+              if (archiveError){
+                alert(archiveError.message);
+                btn.disabled = false;
+                return;
+              }
+
+              const { error: deleteError } = await MobauProjects.deleteProject(id);
+              if (deleteError){
+                alert(`El proyecto se archivó, pero no pudimos eliminarlo: ${deleteError.message}`);
+                await setFilter("active");
+                await renderPlanUsage();
+                return;
+              }
+
+              await setFilter("active");
+              await renderPlanUsage();
+              return;
+            }
+
+            /* Con uno o más productos: archivar de verdad, con su
+               confirmación — comportamiento normal, sin eliminar nada. */
+            const confirmArchive = confirm(`¿Archivar "${btn.dataset.name}"?`);
+            if (!confirmArchive) return;
+
+            btn.disabled = true;
+            const { error } = await MobauProjects.setStatus(id, "archived");
+            if (error){
+              alert(error.message);
+              btn.disabled = false;
+              return;
+            }
+            await setFilter("active");
+            await renderPlanUsage();
+            return;
+          }
+
+          /* Reactivar: sin cambios de comportamiento. */
           btn.disabled = true;
-          const { error } = await MobauProjects.setStatus(id, nextStatus);
+          const { error } = await MobauProjects.setStatus(id, "active");
           if (error){
             alert(error.message);
             btn.disabled = false;
@@ -214,19 +273,17 @@
         });
       });
     }
-
-    /* Evita el botón duplicado: el de arriba se oculta solo cuando no
-       hay ningún proyecto activo y además se está viendo el cuadro de
-       estado vacío (p.ej. filtro "Archivados" vacío con un proyecto
-       activo en otro lado no lo oculta). */
-    topCreateBtn.style.display = (activeCount === 0 && isEmpty) ? "none" : "";
+    /* El botón superior ("create-project-btn-top") queda oculto de forma
+       permanente desde el HTML (atributo hidden) — nunca se reactiva
+       aquí ni en ningún otro punto del script, así que no hace falta
+       (ni se debe) tocar su visibilidad en cada carga. */
   }
 
-  function setFilter(status){
+  async function setFilter(status){
     currentStatus = status;
     document.getElementById("filter-active").className = "btn btn-sm " + (status === "active" ? "btn-primary" : "btn-outline");
     document.getElementById("filter-archived").className = "btn btn-sm " + (status === "archived" ? "btn-primary" : "btn-outline");
-    loadProjects();
+    await loadProjects();
   }
 
   document.getElementById("filter-active").addEventListener("click", () => setFilter("active"));

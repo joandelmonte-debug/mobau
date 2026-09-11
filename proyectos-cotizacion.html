@@ -122,7 +122,7 @@
       <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
       <p id="send-products-count" class="card-meta" style="margin-bottom:12px;"></p>
       <div id="send-products-list"></div>
-      <p style="margin-top:12px;"><a href="seleccion.html">Editar piezas del proyecto</a></p>
+      <p style="margin-top:12px; display:none;" id="edit-pieces-row"><a href="#" id="edit-pieces-link" style="color:var(--accent); text-decoration:underline;">Editar piezas del proyecto</a></p>
     </div>
 
     <div class="account-section">
@@ -249,6 +249,28 @@
     mode = params.get("mode");
   }
 
+  /* Total comercial de piezas — nunca productRows.length ni la suma
+     bruta de quantity. Reglas:
+     - unidades por pieza ("ud." y equivalentes): se suma la quantity real.
+     - superficie ("m²") o cualquier otra unidad no claramente unitaria:
+       cada línea cuenta como 1 pieza, sin importar el valor de quantity.
+     Casos:
+       2 ud. + 1 ud. + 12 m²  -> 2 + 1 + 1 = 4
+       1 ud. + 5 m²           -> 1 + 1     = 2
+       12.5 m² sola           -> 1
+       sin productos          -> 0 */
+  const UNIT_PIECE_LABELS = new Set(["ud.", "ud", "unidad", "unidades"]);
+  function getCommercialPieceCount(rows){
+    return rows.reduce((total, row) => {
+      const unit = (row.unit || "").trim().toLowerCase();
+      if (UNIT_PIECE_LABELS.has(unit)){
+        const qty = Number(row.quantity);
+        return total + (Number.isFinite(qty) ? qty : 0);
+      }
+      return total + 1; // m² u otra unidad no unitaria: 1 pieza por línea
+    }, 0);
+  }
+
   function renderPiecesList(containerId, countId){
     const listEl = document.getElementById(containerId);
     listEl.innerHTML = productRows.map(row => {
@@ -261,8 +283,9 @@
       const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
       return `<p style="margin:0 0 6px;">${p.nombre} (${dist.nombre}) × ${quantity} ${unit}</p>`;
     }).join("");
+    const pieceCount = getCommercialPieceCount(productRows);
     document.getElementById(countId).textContent =
-      `${productRows.length} ${productRows.length === 1 ? "pieza" : "piezas"}`;
+      `${pieceCount} ${pieceCount === 1 ? "pieza" : "piezas"}`;
   }
 
   function renderSummarySidebar(){
@@ -271,7 +294,7 @@
       const p = PRODUCTS.find(pp => pp.id === row.product_id);
       if (p) distributorIds.add(p.distribuidor);
     });
-    document.getElementById("sum-piezas").textContent = productRows.length;
+    document.getElementById("sum-piezas").textContent = getCommercialPieceCount(productRows);
     document.getElementById("sum-distribuidores").textContent = distributorIds.size;
   }
 
@@ -529,6 +552,20 @@
       document.getElementById("page-subtitle").textContent = project ? `Para el proyecto "${project.name}".` : "";
       renderPiecesList("send-products-list", "send-products-count");
       renderSummarySidebar();
+
+      /* Nunca a seleccion.html: mobau_seleccion puede estar vacía aquí
+         (los productos ya viven en project_products). Solo se muestra
+         cuando ya existe un proyecto real con id — sin proyecto no hay
+         adónde editar todavía. */
+      const editRow = document.getElementById("edit-pieces-row");
+      const editLink = document.getElementById("edit-pieces-link");
+      if (project){
+        editLink.href = `proyectos-detalle.html?id=${project.id}`;
+        editRow.style.display = "block";
+      } else {
+        editRow.style.display = "none";
+      }
+
       document.getElementById("view-send").style.display = "grid";
     }
   })();

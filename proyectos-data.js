@@ -184,6 +184,20 @@ const MobauProjects = {
     return { error };
   },
 
+  /* Actualiza la quantity de una fila ya guardada, por su propio id de
+     fila (igual que removeProductFromProject) — nunca toca unit ni
+     product_id, así que no puede duplicar ni reasignar la fila a otro
+     producto. */
+  async updateProductQuantity(projectProductId, quantity) {
+    const { data, error } = await supabaseClient
+      .from("project_products")
+      .update({ quantity })
+      .eq("id", projectProductId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
   /* Lista las filas de project_products de un proyecto.
      Los datos del producto (nombre, marca, distribuidor, etc.) se
      completan del lado del cliente con el PRODUCTS de script.js —
@@ -224,6 +238,30 @@ const MobauProjects = {
     return { data, error, created: true };
   },
 
+  /* Actualiza nombre y detalles de un proyecto ya existente, desde el
+     formulario de edición de proyectos-detalle.html. A diferencia de
+     updateProjectDetails() (pensada para no pisar datos al reutilizar
+     un proyecto activo), esta función guarda exactamente lo que el
+     usuario escribió, incluyendo vaciar un campo opcional si lo borra.
+     El nombre se valida antes de llamar aquí (nunca vacío). Nunca toca
+     project_products — no crea ni transfiere nada. */
+  async updateProjectInfo(id, fields) {
+    const { data, error } = await supabaseClient
+      .from("projects")
+      .update({
+        name: fields.name,
+        project_type: fields.project_type || null,
+        location: fields.location || null,
+        client_name: fields.client_name || null,
+        description: fields.description || null,
+        updated_at: new Date().toISOString() // se adopta la opción: editar datos generales también cuenta como "Actualizado"
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    return { data, error };
+  },
+
   /* Actualiza solo los campos de detalle de un proyecto que traigan un
      valor real — un campo vacío en el formulario nunca borra un dato
      que ya existiera guardado. */
@@ -248,14 +286,41 @@ const MobauProjects = {
   /* Asocia cada producto de la selección local al proyecto, con su
      quantity y unit. Reutiliza saveProductToProject (ya evita
      duplicados) — solo cuenta cuántos fallaron, sin detenerse en el
-     primero, para poder informar un resultado parcial con precisión. */
+     primero, para poder informar un resultado parcial con precisión.
+     Al ser una transferencia múltiple, touchProject() se llama una
+     sola vez al final (nunca dentro del bucle), y solo si al menos un
+     producto se guardó de verdad. */
   async transferSelectionToProject(projectId, selectionItems, mode = "replace") {
     let failedCount = 0;
     for (const item of selectionItems) {
       const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode);
       if (error) failedCount++;
     }
+    if (selectionItems.length - failedCount > 0) {
+      await this.touchProject(projectId);
+    }
     return { failedCount, totalCount: selectionItems.length };
+  },
+
+  /* Marca projects.updated_at como "ahora" — el punto único que se
+     llama después de que una operación real sobre project_products
+     (añadir, quitar, cambiar quantity/unit) haya terminado con éxito.
+     Nunca se llama si la operación falló. Solución de aplicación: lo
+     ideal sería un trigger en project_products usando NOW() del propio
+     Postgres, pero este repositorio no tiene sistema de migraciones
+     SQL disponible — mientras no lo tenga, este es el punto central
+     que evita perder o duplicar la actualización de la fecha. */
+  async touchProject(projectId) {
+    const { data, error } = await supabaseClient
+      .from("projects")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", projectId)
+      .select()
+      .single();
+    if (error) {
+      console.error("Error actualizando la fecha del proyecto:", error);
+    }
+    return { data, error };
   },
 
   /* Inserta una solicitud real en rfqs. status se fija en "submitted"
@@ -329,10 +394,20 @@ function relativeDate(isoString) {
 /* ============================================================
    Bloque B — flujo de "Añadir al proyecto" desde el catálogo
    ------------------------------------------------------------
-   Usa las variables globales isLoggedIn / myActiveProjects,
-   definidas en script.js y asignadas por cada página después
-   de comprobar la sesión. Se usan diálogos nativos del navegador
-   (confirm / prompt) a propósito, para no necesitar CSS nuevo. */
+   @deprecated Sin llamadas activas en ninguna página: catalogo.html y
+   producto.html añaden siempre a mobau_seleccion (addToSelection) y
+   nunca escriben directo en project_products — ver bindAddButtons()
+   en script.js y el handler de "add-project-btn" en producto.html.
+   Se conserva sin borrar (no se pidió eliminarla) por si alguien
+   reactiva ese flujo de escritura directa. Si se reactiva:
+   - revisar que la página que la llame siga asignando isLoggedIn /
+     myActiveProjects tras comprobar sesión (script.js ya no lo hace
+     para este flujo);
+   - quantity/unit ya se calculan aquí abajo con getProductUnit(),
+     igual que en cualquier otro punto real de guardado — no debería
+     hacer falta tocar nada más.
+   Se usan diálogos nativos del navegador (confirm / prompt) a
+   propósito, para no necesitar CSS nuevo. */
 async function mobauSaveToProject(productId) {
   if (!myActiveProjects.length) {
     window.location.href = `proyectos-nuevo.html?producto_pendiente=${encodeURIComponent(productId)}`;
@@ -352,11 +427,19 @@ async function mobauSaveToProject(productId) {
     targetProject = myActiveProjects[idx];
   }
 
-  const { error, alreadyExists } = await MobauProjects.saveProductToProject(targetProject.id, productId);
+  /* quantity/unit nunca deben faltar — mismo cálculo que usan
+     catalogo.html/producto.html al añadir a mobau_seleccion, para que
+     una fila insertada desde aquí no quede inconsistente con el resto. */
+  const product = (typeof PRODUCTS !== "undefined") ? PRODUCTS.find(p => p.id === productId) : null;
+  const unit = (typeof getProductUnit === "function") ? getProductUnit(product) : "ud.";
+  const initialQuantity = unit === "ud." ? 1 : 0;
+
+  const { error, alreadyExists } = await MobauProjects.saveProductToProject(targetProject.id, productId, initialQuantity, unit);
   if (error) {
     alert(error.message);
     return { success: false, error };
   }
+  await MobauProjects.touchProject(targetProject.id);
   showToast(alreadyExists ? "Este producto ya estaba en el proyecto." : `Añadido a "${targetProject.name}".`);
   return { success: true, alreadyExists: !!alreadyExists };
 }

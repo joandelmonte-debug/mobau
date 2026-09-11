@@ -34,30 +34,39 @@
   </div>
 </div>
 
-<main class="wrap" style="max-width:760px; padding: 28px 0 100px;">
+<main class="wrap" style="padding: 28px 0 100px;">
 
   <div id="selection-empty" style="display:none;" class="cart-empty">
-    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Tu selección está vacía por ahora.</p>
-    <p style="margin:0;">Explora el catálogo y añade productos a tu selección.</p>
-    <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+    <div class="empty-state-content">
+      <p style="color:var(--ink); font-weight:600;">Tu selección está vacía por ahora.</p>
+      <p>Explora el catálogo y añade productos a tu selección.</p>
+      <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+    </div>
   </div>
 
   <div id="selection-content" style="display:none;">
+    <div class="selection-layout">
 
-    <div id="selection-list"></div>
+      <div class="selection-layout__main">
+        <div id="selection-list"></div>
+      </div>
 
-    <div class="selection-summary">
-      <div>
-        <p class="selection-summary__label" id="selection-summary-label">Resumen del proyecto</p>
-        <p class="selection-summary__count" id="selection-summary-count"></p>
-      </div>
-      <div class="selection-summary__actions">
-        <button type="button" class="btn btn-outline" id="add-to-project-btn" style="display:none;">Añadir al proyecto</button>
-        <a href="proyectos-cotizacion.html?mode=save" class="btn btn-outline" id="create-project-btn">Crear proyecto</a>
-        <a href="proyectos-cotizacion.html?mode=send" class="btn btn-primary" id="request-quote-btn">Solicitar cotización</a>
-      </div>
+      <aside class="selection-layout__side">
+        <div class="selection-summary">
+          <div>
+            <p class="selection-summary__label" id="selection-summary-label">Resumen del proyecto</p>
+            <p class="selection-summary__count" id="selection-summary-count"></p>
+          </div>
+          <div class="selection-summary__actions">
+            <button type="button" class="btn btn-outline" id="add-to-project-btn" style="display:none;">Añadir al proyecto</button>
+            <a href="proyectos-cotizacion.html?mode=save" class="btn btn-outline" id="create-project-btn">Crear proyecto</a>
+            <a href="proyectos-cotizacion.html?mode=send" class="btn btn-primary" id="request-quote-btn">Solicitar cotización</a>
+          </div>
+        </div>
+        <p id="quote-quantity-hint" class="rfq-split-note" style="display:none; margin-top:14px;">Indica la cantidad de todos los productos antes de solicitar una cotización.</p>
+      </aside>
+
     </div>
-    <p id="quote-quantity-hint" class="rfq-split-note" style="display:none; margin-top:14px;">Indica la cantidad de todos los productos antes de solicitar una cotización.</p>
   </div>
 
 </main>
