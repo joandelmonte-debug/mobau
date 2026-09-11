@@ -324,9 +324,9 @@
     setButtonsDisabled(true);
     activeBtn.textContent = submitMode === "save" ? "Guardando…" : "Enviando…";
 
-    /* Paso 1: reutilizar el proyecto activo o crear uno — nunca ambas cosas.
-       Se pasan todos los campos reales que existan en el formulario de
-       este modo, para que se guarden (o actualicen) de verdad. */
+    /* Paso 1: crear el proyecto — nunca reutilizar uno activo en silencio.
+       Se comprueba el límite del plan antes de crear, y se guardan todos
+       los campos reales que existan en el formulario de este modo. */
     if (!project){
       const fields = { name };
       if (submitMode === "save"){
@@ -338,7 +338,20 @@
         fields.project_type = document.getElementById("send-type").value;
         fields.location = document.getElementById("send-location").value.trim();
       }
-      const { data, error } = await MobauProjects.getOrCreateActiveProject(fields, session.user.id);
+
+      const plan = await MobauProjects.myPlan(session.user.id);
+      const activeCount = await MobauProjects.countActive();
+      if (plan && activeCount >= plan.max_active_projects){
+        errorEl.textContent = plan.max_active_projects === 1
+          ? `Tu plan ${plan.name} incluye un proyecto activo. Archiva el proyecto actual antes de crear uno nuevo.`
+          : `Tu plan ${plan.name} permite hasta ${plan.max_active_projects} proyectos activos, y ya los tienes todos en uso. Archiva uno para crear otro.`;
+        errorEl.style.display = "block";
+        setButtonsDisabled(false);
+        activeBtn.textContent = originalText;
+        return;
+      }
+
+      const { data, error } = await MobauProjects.create(fields, session.user.id);
       if (error){
         errorEl.textContent = error.message;
         errorEl.style.display = "block";
@@ -451,10 +464,22 @@
 
     } else {
       const selectionItems = getSelection();
-      if (!selectionItems.length){ document.getElementById("empty-selection").style.display = "block"; return; }
 
-      const activeProjects = await MobauProjects.list("active");
-      if (activeProjects.length) project = activeProjects[0];
+      /* "Solicitar cotización" sin selección no tiene nada que enviar.
+         "Guardar proyecto" sí debe poder crear un proyecto vacío. */
+      if (mode === "send" && !selectionItems.length){
+        document.getElementById("empty-selection").style.display = "block";
+        return;
+      }
+
+      /* Solo "send" reutiliza el proyecto activo existente (no está
+         creando nada). "save" nunca reutiliza aquí — ver Paso 1 en
+         handleSubmit, que siempre crea uno nuevo respetando el límite
+         del plan, para no sustituir en silencio otro proyecto activo. */
+      if (mode === "send"){
+        const activeProjects = await MobauProjects.list("active");
+        if (activeProjects.length) project = activeProjects[0];
+      }
 
       productRows = selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit }));
 

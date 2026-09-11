@@ -41,7 +41,7 @@
       <button type="button" class="btn btn-primary btn-sm" id="filter-active" data-status="active">Activos</button>
       <button type="button" class="btn btn-outline btn-sm" id="filter-archived" data-status="archived">Archivados</button>
     </div>
-    <a href="seleccion.html" class="btn btn-primary">Crear proyecto</a>
+    <a href="proyectos-cotizacion.html?mode=save" class="btn btn-primary" id="create-project-btn-top">Crear proyecto</a>
   </div>
 
   <p id="plan-usage" style="font-size:13px; color:var(--ink-faint); margin-bottom:28px;"></p>
@@ -50,7 +50,7 @@
     <div class="auth-card">
       <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no tienes proyectos aquí.</p>
       <p id="projects-empty-text" style="margin:0;">Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.</p>
-      <a href="seleccion.html" class="btn btn-primary">Crear proyecto</a>
+      <a href="proyectos-cotizacion.html?mode=save" class="btn btn-primary" id="create-project-btn-empty">Crear proyecto</a>
     </div>
   </div>
 
@@ -157,11 +157,13 @@
     const grid = document.getElementById("projects-grid");
     const empty = document.getElementById("projects-empty");
     const emptyText = document.getElementById("projects-empty-text");
+    const topCreateBtn = document.getElementById("create-project-btn-top");
 
     const projects = await MobauProjects.list(currentStatus);
     const activeCount = await MobauProjects.countActive();
+    const isEmpty = !projects.length;
 
-    if (!projects.length){
+    if (isEmpty){
       grid.innerHTML = "";
       emptyText.textContent = currentStatus === "archived"
         ? "Todavía no has archivado ningún proyecto."
@@ -212,6 +214,12 @@
         });
       });
     }
+
+    /* Evita el botón duplicado: el de arriba se oculta solo cuando no
+       hay ningún proyecto activo y además se está viendo el cuadro de
+       estado vacío (p.ej. filtro "Archivados" vacío con un proyecto
+       activo en otro lado no lo oculta). */
+    topCreateBtn.style.display = (activeCount === 0 && isEmpty) ? "none" : "";
   }
 
   function setFilter(status){
