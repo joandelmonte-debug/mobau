@@ -28,9 +28,9 @@
 
 <div class="page-head">
   <div class="wrap">
-    <div class="eyebrow">Selección</div>
-    <h1>Mi selección</h1>
-    <p style="margin-top:14px; max-width:60ch;">Productos que estás considerando para un proyecto — se guardan en este navegador, todavía no en tu cuenta.</p>
+    <div class="eyebrow">Tu proyecto</div>
+    <h1>Las piezas que has ido sumando</h1>
+    <p style="margin-top:14px; max-width:60ch;">Ajusta cantidades, quita lo que no necesites y continúa cuando estés listo — se guardan en este navegador, todavía no en tu cuenta.</p>
   </div>
 </div>
 
@@ -43,18 +43,21 @@
   </div>
 
   <div id="selection-content" style="display:none;">
+
     <div id="selection-list"></div>
 
-    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:28px;">
-      <button type="button" class="btn btn-primary" id="create-project-btn">Crear proyecto</button>
-      <button type="button" class="btn btn-outline" id="request-quote-btn">Solicitar cotización</button>
+    <div class="selection-summary">
+      <div>
+        <p class="selection-summary__label" id="selection-summary-label">Resumen del proyecto</p>
+        <p class="selection-summary__count" id="selection-summary-count"></p>
+      </div>
+      <div class="selection-summary__actions">
+        <button type="button" class="btn btn-outline" id="add-to-project-btn" style="display:none;">Añadir al proyecto</button>
+        <a href="proyectos-cotizacion.html?mode=save" class="btn btn-outline" id="create-project-btn">Crear proyecto</a>
+        <a href="proyectos-cotizacion.html?mode=send" class="btn btn-primary" id="request-quote-btn">Solicitar cotización</a>
+      </div>
     </div>
-
-    <div id="create-project-result" style="display:none;" class="form-card">
-      <p id="cpr-message" style="margin:0 0 12px; font-weight:600; color:var(--ink);"></p>
-      <a href="#" id="cpr-open-link" class="btn btn-primary">Abrir proyecto</a>
-      <p class="card-meta" style="margin-top:14px;">Los productos que faltan siguen en tu selección — pulsa "Crear proyecto" de nuevo más adelante para reintentar solo con ellos.</p>
-    </div>
+    <p id="quote-quantity-hint" class="rfq-split-note" style="display:none; margin-top:14px;">Indica la cantidad de todos los productos antes de solicitar una cotización.</p>
   </div>
 
 </main>
@@ -100,36 +103,161 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+  let activeProject = null;
+
+  async function initActiveProjectState(){
+    if (typeof MobauProjects === "undefined") return;
+    const status = await MobauProjects.getActiveProjectStatus();
+    activeProject = status.hasActiveProject ? status.project : null;
+    updateActionButtons();
+  }
+
+  /* Alterna "Crear proyecto" <-> "Añadir al proyecto" según haya o no
+     un proyecto active, y refleja su nombre en el resumen. "Solicitar
+     cotización" no depende de este estado — se mantiene siempre. */
+  function updateActionButtons(){
+    const createBtn = document.getElementById("create-project-btn");
+    const addBtn = document.getElementById("add-to-project-btn");
+    const labelEl = document.getElementById("selection-summary-label");
+    if (!createBtn || !addBtn || !labelEl) return;
+
+    if (activeProject){
+      createBtn.style.display = "none";
+      addBtn.style.display = "inline-flex";
+      labelEl.textContent = `Proyecto activo: ${activeProject.name}`;
+    } else {
+      createBtn.style.display = "inline-flex";
+      addBtn.style.display = "none";
+      labelEl.textContent = "Resumen del proyecto";
+    }
+  }
+
+  document.getElementById("add-to-project-btn").addEventListener("click", async () => {
+    if (!activeProject) return;
+    const items = getSelection();
+    if (!items.length) return;
+
+    const ok = confirm("¿Añadir estos productos al proyecto activo?");
+    if (!ok) return;
+
+    const btn = document.getElementById("add-to-project-btn");
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = "Añadiendo…";
+
+    const { failedCount, totalCount } = await MobauProjects.transferSelectionToProject(activeProject.id, items, "sum");
+
+    if (failedCount > 0){
+      alert(`Se transfirieron ${totalCount - failedCount} de ${totalCount} productos. Tu selección no se modificó — vuelve a intentarlo.`);
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
+
+    clearSelection();
+    showToast("Productos añadidos al proyecto activo.");
+    window.location.href = `proyectos-detalle.html?id=${activeProject.id}`;
+  });
+
+  /* "Solicitar cotización": si hay proyecto activo, primero transfiere
+     (suma) la selección local a project_products y navega al mismo
+     proyecto — el formulario carga desde ahí, no desde mobau_seleccion.
+     Sin proyecto activo, conserva el enlace normal a ?mode=send. */
+  document.getElementById("request-quote-btn").addEventListener("click", async (e) => {
+    if (!activeProject) return;
+    e.preventDefault();
+
+    const btn = e.currentTarget;
+    const originalText = btn.textContent;
+    btn.style.pointerEvents = "none";
+    btn.textContent = "Preparando…";
+
+    const items = getSelection();
+    if (items.length){
+      const { failedCount, totalCount } = await MobauProjects.transferSelectionToProject(activeProject.id, items, "sum");
+      if (failedCount > 0){
+        alert(`Se transfirieron ${totalCount - failedCount} de ${totalCount} productos. Tu selección no se modificó — vuelve a intentarlo.`);
+        btn.style.pointerEvents = "";
+        btn.textContent = originalText;
+        return;
+      }
+      clearSelection();
+      updateSelectionBadge();
+    }
+
+    window.location.href = `proyectos-cotizacion.html?id=${activeProject.id}`;
+  });
+
   function renderSelection(){
-    const ids = getSelection();
+    const items = getSelection();
     const emptyEl = document.getElementById("selection-empty");
     const contentEl = document.getElementById("selection-content");
 
-    if (!ids.length){
+    if (!items.length){
       contentEl.style.display = "none";
       emptyEl.style.display = "block";
+      updateActionButtons();
       return;
     }
     emptyEl.style.display = "none";
     contentEl.style.display = "block";
 
+    /* Formato "natural" de cantidad: sin ceros decorativos.
+       0 -> "0", 12 -> "12", 12.5 -> "12.5", 12.75 -> "12.75". */
+    function formatQuantityDisplay(unit, quantity){
+      if (unit === "ud.") return String(Math.round(quantity));
+      return String(Math.round(quantity * 100) / 100);
+    }
+
     const listEl = document.getElementById("selection-list");
-    listEl.innerHTML = ids.map(id => {
-      const p = PRODUCTS.find(pp => pp.id === id);
+    const distributorIds = new Set();
+
+    listEl.innerHTML = items.map(item => {
+      const p = PRODUCTS.find(pp => pp.id === item.productId);
       if (!p) return "";
+      distributorIds.add(p.distribuidor);
       const dist = DISTRIBUTORS[p.distribuidor];
+      const isUnit = item.unit === "ud.";
+      const min = isUnit ? 1 : 0;
+      const decrementDisabled = item.quantity <= min ? "disabled" : "";
+      const displayValue = formatQuantityDisplay(item.unit, item.quantity);
+      const inputId = `quantity-${item.productId}`;
       return `
-        <div class="saved-project">
-          <div>
+        <div class="selection-item">
+          <div class="selection-item__thumb">${iconMarkup(p.icon, 26)}</div>
+
+          <div class="selection-item__content">
             <div class="sp-name">${p.nombre}</div>
-            <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+            <div class="selection-item__meta">${dist.nombre} · ${LABELS.marca[p.marca]} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
           </div>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
-            <button type="button" class="btn btn-outline btn-sm remove-selection-btn" data-id="${p.id}">Quitar de la selección</button>
+
+          <div class="selection-item__quantity">
+            <label for="${inputId}" class="selection-item__qty-label">Cantidad</label>
+            <div class="quantity-control">
+              <button type="button" class="quantity-control__button qty-decrement" data-id="${item.productId}" aria-label="Disminuir cantidad" ${decrementDisabled}>−</button>
+              <button type="button" class="quantity-control__button qty-increment" data-id="${item.productId}" aria-label="Aumentar cantidad">+</button>
+              <input id="${inputId}" class="quantity-control__input qty-input" type="number" data-id="${item.productId}" value="${displayValue}" min="${min}" step="0.01" inputmode="decimal" aria-label="Cantidad de ${p.nombre}">
+              <span class="quantity-control__unit">${item.unit}</span>
+            </div>
+          </div>
+
+          <div class="selection-item__actions">
+            <a href="producto.html?id=${p.id}" class="selection-item__icon-button" aria-label="Ver ficha" title="Ver ficha">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </a>
+            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${p.id}" aria-label="Quitar de la selección" title="Quitar de la selección">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
           </div>
         </div>`;
     }).join("");
+
+    /* No se suman cantidades de unidades distintas (ud. + m² no es un
+       total con sentido) — el resumen cuenta piezas y distribuidores,
+       nunca una cifra combinada de unidades. */
+    const countEl = document.getElementById("selection-summary-count");
+    countEl.textContent =
+      `${items.length} ${items.length === 1 ? "producto" : "productos"} · ${distributorIds.size} ${distributorIds.size === 1 ? "distribuidor" : "distribuidores"}`;
 
     listEl.querySelectorAll(".remove-selection-btn").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -139,99 +267,60 @@
         renderSelection();
       });
     });
+
+    listEl.querySelectorAll(".qty-input").forEach(input => {
+      input.addEventListener("change", () => {
+        const result = updateSelectionQuantity(input.dataset.id, input.value);
+        if (!result.success) alert(result.error);
+        renderSelection();
+      });
+    });
+
+    listEl.querySelectorAll(".qty-decrement").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const current = getSelection().find(i => i.productId === btn.dataset.id);
+        if (!current) return;
+        const min = current.unit === "ud." ? 1 : 0;
+        const next = Math.max(min, current.quantity - 1);
+        updateSelectionQuantity(btn.dataset.id, next);
+        renderSelection();
+      });
+    });
+
+    listEl.querySelectorAll(".qty-increment").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const current = getSelection().find(i => i.productId === btn.dataset.id);
+        if (!current) return;
+        updateSelectionQuantity(btn.dataset.id, current.quantity + 1);
+        renderSelection();
+      });
+    });
+
+    renderQuoteGate();
+    updateActionButtons();
   }
 
-  async function startCreateProjectFlow(){
-    const ids = getSelection();
-    if (!ids.length){
-      alert("Tu selección está vacía — añade productos antes de crear un proyecto.");
-      return;
-    }
-
-    const session = await MobauAuth.requireSession();
-    if (!session) return; // ya redirigió a login.html, la selección no se toca
-
-    const { data: profile, error: profileError } = await supabaseClient
-      .from("professional_profiles")
-      .select("id")
-      .eq("user_id", session.user.id)
-      .maybeSingle();
-
-    if (profileError){
-      alert(profileError.message);
-      return;
-    }
-
-    if (!profile){
-      window.location.href = "inscripcion-profesional.html?despues=crear-proyecto";
-      return;
-    }
-
-    // Evita duplicar proyectos: si ya hay uno activo (reintento o preexistente),
-    // se reutiliza en vez de crear otro.
-    let project;
-    const activeProjects = await MobauProjects.list("active");
-
-    if (activeProjects.length){
-      project = activeProjects[0];
+  /* "Solicitar cotización" solo se habilita si TODOS los productos
+     de la selección tienen una cantidad finita mayor que 0. */
+  function renderQuoteGate(){
+    const items = getSelection();
+    const quoteBtn = document.getElementById("request-quote-btn");
+    const hintEl = document.getElementById("quote-quantity-hint");
+    const allValid = items.every(item => isValidQuantity(item.quantity));
+    if (allValid){
+      quoteBtn.href = "proyectos-cotizacion.html?mode=send";
+      quoteBtn.style.opacity = "";
+      quoteBtn.style.pointerEvents = "";
     } else {
-      const name = prompt("¿Cómo quieres llamar a este proyecto?");
-      if (!name || !name.trim()){
-        return; // cancelado o vacío — nada que crear todavía
-      }
-      const { data, error: createError } = await MobauProjects.create({ name: name.trim() }, session.user.id);
-      if (createError){
-        alert(createError.message);
-        return;
-      }
-      project = data;
+      quoteBtn.removeAttribute("href");
+      quoteBtn.style.opacity = "0.5";
+      quoteBtn.style.pointerEvents = "none";
     }
-
-    // Qué falta por añadir: lo que ya está en el proyecto no se repite.
-    const alreadyIn = await MobauProjects.listProductsInProject(project.id);
-    const alreadyIds = new Set(alreadyIn.map(row => row.product_id));
-    const pending = ids.filter(id => !alreadyIds.has(id));
-
-    let addedCount = alreadyIn.length;
-    let failedCount = 0;
-
-    for (const productId of pending){
-      const { error: saveError } = await MobauProjects.saveProductToProject(project.id, productId);
-      if (saveError){
-        failedCount++;
-      } else {
-        addedCount++;
-      }
-    }
-
-    const totalCount = ids.length;
-
-    if (failedCount === 0){
-      clearSelection();
-      updateSelectionBadge();
-      window.location.href = `proyectos-detalle.html?id=${project.id}`;
-      return;
-    }
-
-    // Fallo parcial: la selección se conserva intacta, no se crea nada más.
-    document.getElementById("cpr-message").textContent =
-      `Se creó el proyecto "${project.name}" y se añadieron ${addedCount} de ${totalCount} productos. Algunos no se pudieron añadir todavía.`;
-    document.getElementById("cpr-open-link").href = `proyectos-detalle.html?id=${project.id}`;
-    document.getElementById("create-project-result").style.display = "block";
+    hintEl.style.display = allValid ? "none" : "flex";
   }
-
-  document.getElementById("create-project-btn").addEventListener("click", startCreateProjectFlow);
-
-  document.getElementById("request-quote-btn").addEventListener("click", () => {
-    showToast("Solicitar cotización desde tu selección se habilitará en un próximo paso.");
-  });
 
   renderSelection();
-
-  // Si venimos de inscribir el perfil, continuamos el flujo automáticamente.
-  if (new URLSearchParams(window.location.search).get("despues") === "crear-proyecto"){
-    startCreateProjectFlow();
-  }
+  initActiveProjectState();
 </script>
 </body>
 </html>

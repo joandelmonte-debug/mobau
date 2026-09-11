@@ -66,7 +66,6 @@
 
     <div class="product-actions">
       <button type="button" class="btn btn-primary" id="add-project-btn" data-id="">Añadir a la selección</button>
-      <a href="proyectos.html" class="btn btn-outline">Ver proyecto</a>
     </div>
 
     <div class="supplier-box">
@@ -172,10 +171,17 @@
   function refreshAddButton(){
     const btn = document.getElementById("add-project-btn");
     const already = inSelection(product.id);
-    btn.textContent = already ? "En mi selección" : "Añadir a la selección";
-    btn.classList.toggle("btn-added", already);
-    btn.classList.toggle("btn-primary", !already);
-    btn.disabled = already;
+    if (already){
+      btn.textContent = "En mi selección";
+      btn.classList.add("btn-added");
+      btn.classList.remove("btn-primary");
+      btn.disabled = true;
+      return;
+    }
+    btn.textContent = "Añadir a la selección";
+    btn.classList.add("btn-primary");
+    btn.classList.remove("btn-added");
+    btn.disabled = false;
   }
 
   function renderRelated(){
@@ -187,33 +193,36 @@
     propagateCartLinks();
   }
 
-  document.getElementById("add-project-btn").addEventListener("click", () => {
+  document.getElementById("add-project-btn").addEventListener("click", async () => {
     const btn = document.getElementById("add-project-btn");
+
     btn.disabled = true;
+    const originalLabel = btn.textContent;
     btn.textContent = "Añadiendo…";
 
-    setTimeout(() => {
-      const result = addToSelection(product.id);
+    await new Promise(resolve => setTimeout(resolve, 220));
 
-      if (!result.success){
-        btn.textContent = "Añadir a la selección";
-        btn.disabled = false;
-        if (result.error) alert(result.error);
-        return;
-      }
+    const unit = getProductUnit(product);
+    const initialQuantity = unit === "ud." ? 1 : 0;
 
-      btn.textContent = "En mi selección";
-      btn.classList.remove("btn-primary");
-      btn.classList.add("btn-added");
-      // queda deshabilitado a propósito
-
-      updateSelectionBadge();
-    }, 220);
+    const addResult = addToSelection(product.id, initialQuantity, unit);
+    if (!addResult.success){
+      btn.textContent = originalLabel;
+      btn.disabled = false;
+      if (addResult.error) alert(addResult.error);
+      return;
+    }
+    btn.textContent = "En mi selección";
+    btn.classList.remove("btn-primary");
+    btn.classList.add("btn-added");
+    updateSelectionBadge();
   });
 
-  refreshAddButton();
-  renderRelated();
-  injectIconSprite();
+  (async () => {
+    refreshAddButton();
+    renderRelated();
+    injectIconSprite();
+  })();
 </script>
 </body>
 </html>

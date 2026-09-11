@@ -124,22 +124,50 @@ const MobauProjects = {
   /* ---------- Bloque B: productos guardados dentro de un proyecto ---------- */
 
   /* Guarda un producto real del catálogo dentro de un proyecto.
-     Si ya estaba guardado, no lo duplica — devuelve alreadyExists: true. */
-  async saveProductToProject(projectId, productId) {
+     Si ya estaba guardado, nunca duplica la fila:
+     - mode "replace" (por defecto): reemplaza quantity/unit con el valor recibido.
+     - mode "sum": newQuantity = existingQuantity + quantity, y actualiza unit. */
+  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace") {
     const { data: existing } = await supabaseClient
       .from("project_products")
-      .select("id")
+      .select("id, quantity, unit")
       .eq("project_id", projectId)
       .eq("product_id", productId)
       .maybeSingle();
 
     if (existing) {
-      return { data: existing, error: null, alreadyExists: true };
+      const updateRow = {};
+      if (mode === "sum") {
+        const base = (typeof existing.quantity === "number" && Number.isFinite(existing.quantity)) ? existing.quantity : 0;
+        const add = (typeof quantity === "number" && Number.isFinite(quantity)) ? quantity : 0;
+        updateRow.quantity = Math.round((base + add) * 100) / 100;
+        if (typeof unit === "string" && unit) updateRow.unit = unit;
+      } else {
+        if (typeof quantity === "number" && Number.isFinite(quantity)) updateRow.quantity = quantity;
+        if (typeof unit === "string" && unit) updateRow.unit = unit;
+      }
+
+      if (Object.keys(updateRow).length === 0) {
+        return { data: existing, error: null, alreadyExists: true };
+      }
+
+      const { data, error } = await supabaseClient
+        .from("project_products")
+        .update(updateRow)
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      return { data: data || existing, error, alreadyExists: true };
     }
+
+    const insertRow = { project_id: projectId, product_id: productId };
+    if (typeof quantity === "number" && Number.isFinite(quantity)) insertRow.quantity = quantity;
+    if (typeof unit === "string" && unit) insertRow.unit = unit;
 
     const { data, error } = await supabaseClient
       .from("project_products")
-      .insert({ project_id: projectId, product_id: productId })
+      .insert(insertRow)
       .select()
       .single();
 
@@ -173,6 +201,97 @@ const MobauProjects = {
       return [];
     }
     return data;
+  },
+
+  /* Reutiliza el proyecto activo del usuario si ya existe, o crea uno
+     nuevo con ese nombre — nunca ambas cosas. Punto único compartido
+     por "Guardar proyecto" y "Enviar solicitud" para no duplicar
+     proyectos entre los dos caminos. */
+  /* Reutiliza el proyecto activo del usuario si ya existe, o crea uno
+     nuevo con estos campos — nunca ambas cosas. Punto único compartido
+     por "Guardar proyecto" y "Enviar solicitud" para no duplicar
+     proyectos entre los dos caminos. Si se reutiliza uno existente,
+     también actualiza sus datos con lo que el usuario acaba de escribir
+     — solo los campos con valor real, nunca sobrescribe con vacío. */
+  async getOrCreateActiveProject(fields, userId) {
+    const activeProjects = await this.list("active");
+    if (activeProjects.length) {
+      const existing = activeProjects[0];
+      const { data: updated, error } = await this.updateProjectDetails(existing.id, fields);
+      return { data: updated || existing, error, created: false };
+    }
+    const { data, error } = await this.create(fields, userId);
+    return { data, error, created: true };
+  },
+
+  /* Actualiza solo los campos de detalle de un proyecto que traigan un
+     valor real — un campo vacío en el formulario nunca borra un dato
+     que ya existiera guardado. */
+  async updateProjectDetails(id, fields) {
+    const updates = {};
+    if (fields.client_name) updates.client_name = fields.client_name;
+    if (fields.project_type) updates.project_type = fields.project_type;
+    if (fields.location) updates.location = fields.location;
+    if (fields.description) updates.description = fields.description;
+    if (Object.keys(updates).length === 0) {
+      return { data: null, error: null };
+    }
+    const { data, error } = await supabaseClient
+      .from("projects")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  /* Asocia cada producto de la selección local al proyecto, con su
+     quantity y unit. Reutiliza saveProductToProject (ya evita
+     duplicados) — solo cuenta cuántos fallaron, sin detenerse en el
+     primero, para poder informar un resultado parcial con precisión. */
+  async transferSelectionToProject(projectId, selectionItems, mode = "replace") {
+    let failedCount = 0;
+    for (const item of selectionItems) {
+      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode);
+      if (error) failedCount++;
+    }
+    return { failedCount, totalCount: selectionItems.length };
+  },
+
+  /* Inserta una solicitud real en rfqs. status se fija en "submitted"
+     directamente porque esa tabla no tiene política de UPDATE — una
+     vez insertada, no se puede corregir después desde la web.
+     No toca rfq_distributors (sin política de usuario, a propósito). */
+  async createRfq(fields) {
+    const { data, error } = await supabaseClient
+      .from("rfqs")
+      .insert({
+        project_id: fields.project_id,
+        requester_user_id: fields.requester_user_id,
+        requester_name: fields.requester_name,
+        requester_email: fields.requester_email,
+        requester_company: fields.requester_company || null,
+        project_location: fields.project_location || null,
+        estimated_purchase_date: fields.estimated_purchase_date || null,
+        message: fields.message || null,
+        status: "submitted",
+        consent_to_share_contact: true
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  /* Única fuente de verdad para "¿tiene el usuario un proyecto activo
+     ahora mismo?" — reutilizada por el catálogo, la ficha de producto
+     y el indicador del CTA. No usa requireSession(): un visitante sin
+     sesión simplemente no tiene proyecto activo, sin redirigir a nadie. */
+  async getActiveProjectStatus() {
+    const session = await MobauAuth.getSession();
+    if (!session) return { hasActiveProject: false, project: null };
+    const activeProjects = await this.list("active");
+    if (!activeProjects.length) return { hasActiveProject: false, project: null };
+    return { hasActiveProject: true, project: activeProjects[0] };
   }
 };
 

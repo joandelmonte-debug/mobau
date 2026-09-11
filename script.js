@@ -532,6 +532,34 @@ function matchesSearch(product, query){
   return haystack.includes(q);
 }
 
+/* ---------- unidades de medida (Bloque cantidades) ---------- */
+
+/* Única fuente de verdad para determinar la unidad de un producto.
+   Prioridad: 1) campo explícito del producto (measurement_unit, si
+   algún día existe en el catálogo) 2) mapa por categoría 3) "ud."
+   por defecto, documentado. No repetir esta lógica en ningún otro
+   archivo — todo debe llamar a esta función. */
+const CATEGORY_UNITS = {
+  iluminacion: "ud.",
+  mobiliario: "ud.",
+  revestimientos: "m²",
+  bano: "ud.",
+  cocina: "ud.",
+  "accesorios-decorativos": "ud."
+};
+
+function getProductUnit(product){
+  if (product && product.measurement_unit) return product.measurement_unit;
+  if (product && CATEGORY_UNITS[product.categoria]) return CATEGORY_UNITS[product.categoria];
+  return "ud.";
+}
+
+/* Única fuente de verdad para "¿esta cantidad es cotizable?".
+   Cubre 0, null, undefined, "", NaN y negativos con una sola condición. */
+function isValidQuantity(q){
+  return Number.isFinite(Number(q)) && Number(q) > 0;
+}
+
 /* ---------- tarjeta de producto reutilizable (catálogo + relacionados) ---------- */
 
 /* Estado de sesión, para decidir qué hace el botón de guardar.
@@ -579,28 +607,31 @@ function updateSelectionBadge(){
 
 function bindAddButtons(container, onChange){
   container.querySelectorAll(".btn-add-selection").forEach(btn => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       btn.disabled = true;
+      const originalLabel = btn.textContent;
       btn.textContent = "Añadiendo…";
 
-      setTimeout(() => {
-        const result = addToSelection(btn.dataset.id);
+      await new Promise(resolve => setTimeout(resolve, 220));
 
-        if (!result.success){
-          btn.textContent = "Añadir a la selección";
-          btn.disabled = false;
-          if (result.error) alert(result.error);
-          return;
-        }
+      const productId = btn.dataset.id;
+      const product = PRODUCTS.find(p => p.id === productId);
+      const unit = getProductUnit(product);
+      const initialQuantity = unit === "ud." ? 1 : 0;
 
-        btn.textContent = "En mi selección";
-        btn.classList.remove("btn-primary");
-        btn.classList.add("btn-added");
-        // queda deshabilitado a propósito
-
-        updateSelectionBadge();
-        if (onChange) onChange();
-      }, 220);
+      const addResult = addToSelection(productId, initialQuantity, unit);
+      if (!addResult.success){
+        btn.textContent = originalLabel;
+        btn.disabled = false;
+        if (addResult.error) alert(addResult.error);
+        return;
+      }
+      btn.textContent = "En mi selección";
+      btn.classList.remove("btn-primary");
+      btn.classList.add("btn-added");
+      // queda deshabilitado a propósito — comportamiento sin cambios
+      updateSelectionBadge();
+      if (onChange) onChange();
     });
   });
 }
