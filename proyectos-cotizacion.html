@@ -305,6 +305,36 @@
     if (sendBtn) sendBtn.disabled = disabled;
   }
 
+  /* Punto 13 (Fase 1) — actualiza el nombre de contacto y el
+     estudio/empresa en professional_profiles, para precargarlos en
+     futuras solicitudes. Solo UPDATE, nunca INSERT: professional_type
+     y city son NOT NULL ahí (auditado en Supabase) y este formulario
+     no los pide, así que crear un perfil nuevo desde aquí exigiría
+     inventar esos valores — en vez de eso, si no existe perfil el
+     guardado simplemente se omite. Se llama solo después de que
+     createRfq() ya insertó la solicitud con éxito; nunca toca projects
+     ni rfqs — rfqs ya quedó guardada con los datos exactos de este
+     envío, inmutable desde la web (sin política de UPDATE), y no
+     depende de lo que pase aquí. */
+  async function saveProfessionalProfileFromRfq(userId, professionalName, studioName){
+    const { data: existing, error: readError } = await supabaseClient
+      .from("professional_profiles")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (readError || !existing) return { saved: false };
+
+    const { error } = await supabaseClient
+      .from("professional_profiles")
+      .update({
+        professional_name: professionalName,
+        studio_name: studioName || null
+      })
+      .eq("user_id", userId);
+
+    return { saved: !error };
+  }
+
   async function handleSubmit(submitMode){
     const errorEl = document.getElementById(submitMode === "save" ? "save-form-error" : "send-form-error");
     errorEl.style.display = "none";
@@ -422,12 +452,13 @@
     }
 
     /* submitMode === "send": registrar la solicitud real. */
+    const contactCompany = document.getElementById("send-contact-company").value.trim();
     const { error: rfqError } = await MobauProjects.createRfq({
       project_id: project.id,
       requester_user_id: session.user.id,
       requester_name: contactName,
       requester_email: contactEmail,
-      requester_company: document.getElementById("send-contact-company").value.trim(),
+      requester_company: contactCompany,
       project_location: document.getElementById("send-location").value.trim(),
       estimated_purchase_date: document.getElementById("send-purchase-date").value || null,
       message: document.getElementById("send-notes").value.trim()
@@ -439,6 +470,16 @@
       setButtonsDisabled(false);
       activeBtn.textContent = originalText;
       return;
+    }
+
+    /* La RFQ ya quedó registrada con los datos exactos de este envío.
+       Actualizar el perfil es solo para precargar solicitudes futuras;
+       si no existe perfil o el UPDATE falla, no se deshace ni se
+       duplica la RFQ — solo se avisa sin bloquear el resto del flujo
+       (archivar + redirigir sigue exactamente igual). */
+    const { saved: profileSaved } = await saveProfessionalProfileFromRfq(session.user.id, contactName, contactCompany);
+    if (!profileSaved){
+      alert("La solicitud se ha enviado, pero no hemos podido guardar los datos del perfil. Completa tu perfil profesional desde Mi cuenta para reutilizarlos en futuras solicitudes.");
     }
 
     const { error: statusError } = await MobauProjects.setStatus(project.id, "archived");
