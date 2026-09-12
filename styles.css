@@ -520,6 +520,27 @@ button{ font-family: inherit; }
 
 .product-actions{ display:flex; gap:14px; margin-bottom: 36px; }
 
+/* Fila compacta de "Cantidad" + "Añadir a la selección" en la ficha de
+   producto — clase específica (no toca .product-actions, compartida)
+   para que el grupo quede alineado a la derecha, sin space-between,
+   y la etiqueta "Cantidad" quede en la misma fila que los controles en
+   vez de apilada encima. width:100% es explícito (no solo heredado de
+   ser un <div> de bloque) para que justify-content:flex-end siga
+   funcionando aunque cambie el display del elemento en el futuro. */
+.product-selection-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+  flex-wrap:wrap;
+  width:100%;
+}
+.product-selection-actions .product-qty-field{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
 .supplier-box{
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);

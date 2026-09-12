@@ -60,13 +60,21 @@
       <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
     </dl>
 
+    <div class="product-actions product-selection-actions">
+      <div class="product-qty-field">
+        <label for="product-qty-input">Cantidad</label>
+        <div class="quantity-control">
+          <button type="button" class="quantity-control__button" id="product-qty-decrement" aria-label="Reducir cantidad">−</button>
+          <input type="number" id="product-qty-input" class="quantity-control__input" min="1" step="1" inputmode="numeric" value="1">
+          <button type="button" class="quantity-control__button" id="product-qty-increment" aria-label="Aumentar cantidad">+</button>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary" id="add-project-btn" data-id="">Añadir a la selección</button>
+    </div>
+
     <p class="section-note">Archivos descargables — para incorporar el producto directamente en tu proyecto:</p>
     <div class="resource-list" id="resource-list"></div>
     <p class="resource-note">Descargas de demostración. En la versión completa, cada archivo se sirve directamente desde el distribuidor.</p>
-
-    <div class="product-actions">
-      <button type="button" class="btn btn-primary" id="add-project-btn" data-id="">Añadir a la selección</button>
-    </div>
 
     <div class="supplier-box">
       <div>
@@ -168,9 +176,44 @@
     btn.addEventListener("click", () => showToast(`Descarga simulada — ${btn.dataset.download}`));
   });
 
+  const qtyInput = document.getElementById("product-qty-input");
+  const qtyDecrementBtn = document.getElementById("product-qty-decrement");
+  const qtyIncrementBtn = document.getElementById("product-qty-increment");
+  let selectedQuantity = 1;
+
+  /* Única cantidad válida para este selector: entero positivo (1, 2, 3…).
+     Cualquier otro valor (vacío, 0, negativo, decimal, texto) se corrige
+     a 1 al confirmar — nunca se guarda una cantidad inválida. */
+  function parseValidQuantity(raw){
+    const str = String(raw).trim();
+    return /^[1-9]\d*$/.test(str) ? Number(str) : null;
+  }
+
+  function setSelectedQuantity(value){
+    selectedQuantity = value;
+    qtyInput.value = String(value);
+    qtyDecrementBtn.disabled = value <= 1;
+  }
+
+  qtyDecrementBtn.addEventListener("click", () => {
+    setSelectedQuantity(Math.max(1, selectedQuantity - 1));
+  });
+
+  qtyIncrementBtn.addEventListener("click", () => {
+    setSelectedQuantity(selectedQuantity + 1);
+  });
+
+  qtyInput.addEventListener("change", () => {
+    const parsed = parseValidQuantity(qtyInput.value);
+    setSelectedQuantity(parsed !== null ? parsed : 1);
+  });
+
   function refreshAddButton(){
     const btn = document.getElementById("add-project-btn");
     const already = inSelection(product.id);
+    qtyInput.disabled = already;
+    qtyIncrementBtn.disabled = already;
+    qtyDecrementBtn.disabled = already || selectedQuantity <= 1;
     if (already){
       btn.textContent = "En mi selección";
       btn.classList.add("btn-added");
@@ -197,18 +240,23 @@
     const btn = document.getElementById("add-project-btn");
 
     btn.disabled = true;
+    qtyInput.disabled = true;
+    qtyDecrementBtn.disabled = true;
+    qtyIncrementBtn.disabled = true;
     const originalLabel = btn.textContent;
     btn.textContent = "Añadiendo…";
 
     await new Promise(resolve => setTimeout(resolve, 220));
 
     const unit = getProductUnit(product);
-    const initialQuantity = unit === "ud." ? 1 : 0;
 
-    const addResult = addToSelection(product.id, initialQuantity, unit);
+    const addResult = addToSelection(product.id, selectedQuantity, unit);
     if (!addResult.success){
       btn.textContent = originalLabel;
       btn.disabled = false;
+      qtyInput.disabled = false;
+      qtyIncrementBtn.disabled = false;
+      qtyDecrementBtn.disabled = selectedQuantity <= 1;
       if (addResult.error) alert(addResult.error);
       return;
     }
