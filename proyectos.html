@@ -168,6 +168,7 @@
     const grid = document.getElementById("projects-grid");
     const empty = document.getElementById("projects-empty");
     const emptyText = document.getElementById("projects-empty-text");
+    const createBtnEmpty = document.getElementById("create-project-btn-empty");
 
     /* "Solicitados" nunca es un valor real de projects.status — solo
        existe "active"/"archived" en la base de datos. Para "archived" y
@@ -198,6 +199,13 @@
         : currentStatus === "requested"
           ? "Todavía no has enviado ninguna solicitud de cotización."
           : "Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.";
+      /* En "Solicitados" vacío, "Crear proyecto" solo tiene sentido si
+         tampoco hay un proyecto activo — si ya existe uno, la acción
+         correcta no es crear otro (chocaría con el límite del plan),
+         así que se muestra solo el mensaje informativo. activeCount ya
+         viene calculado una vez por refresco (refreshProjectsView),
+         sin ninguna consulta nueva. */
+      createBtnEmpty.hidden = (currentStatus === "requested" && activeCount > 0);
       empty.style.display = "block";
     } else {
       empty.style.display = "none";
