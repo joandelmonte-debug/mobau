@@ -384,6 +384,27 @@ const MobauProjects = {
     return { data, error };
   },
 
+  /* Lista las RFQs del usuario autenticado, más recientes primero.
+     Filtra explícitamente por requester_user_id además de la RLS ya
+     confirmada en Supabase (rfqs_select: requester_user_id = auth.uid()),
+     mismo criterio que ya usa el resto del código con otras tablas
+     protegidas por RLS — nunca puede devolver solicitudes de otro
+     usuario. Solo trae las columnas que "Mi cuenta" necesita; el
+     nombre del proyecto no vive en rfqs (solo project_id), se resuelve
+     aparte con MobauProjects.list(). */
+  async listMyRfqs(userId) {
+    const { data, error } = await supabaseClient
+      .from("rfqs")
+      .select("id, project_id, requester_company, status, created_at")
+      .eq("requester_user_id", userId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Error listando tus solicitudes:", error);
+      return [];
+    }
+    return data;
+  },
+
   /* Única fuente de verdad para "¿tiene el usuario un proyecto activo
      ahora mismo?" — reutilizada por el catálogo, la ficha de producto
      y el indicador del CTA. No usa requireSession(): un visitante sin

@@ -39,6 +39,22 @@
 <main class="wrap" style="padding: 40px 0 100px;">
 
   <div class="account-section">
+    <h2>Tu perfil profesional</h2>
+    <div id="profile-empty" style="display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:160px;" class="cart-empty">
+      <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has completado tu perfil profesional.</p>
+      <p style="margin:0;">Complétalo para que tus solicitudes de cotización se precarguen automáticamente.</p>
+      <a href="inscripcion-profesional.html" class="btn btn-primary">Completar perfil</a>
+    </div>
+    <div id="profile-box" style="display:none;" class="current-project-box">
+      <div>
+        <div class="cp-label" id="profile-name">—</div>
+        <div class="cp-value" id="profile-meta">—</div>
+      </div>
+      <a href="inscripcion-profesional.html" class="btn btn-outline">Editar perfil</a>
+    </div>
+  </div>
+
+  <div class="account-section">
     <h2>Proyecto activo</h2>
     <div id="current-project-empty" style="display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:220px;" class="cart-empty">
       <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No tienes un proyecto activo</p>
@@ -56,9 +72,10 @@
 
   <div class="account-section">
     <h2>Tus solicitudes</h2>
-    <div class="cart-empty">
+    <div id="rfqs-empty" style="display:none;" class="cart-empty">
       <p style="margin:0;">Aquí aparecerán las solicitudes que prepares desde tus proyectos.</p>
     </div>
+    <div id="rfqs-list"></div>
   </div>
 
   <div class="account-section">
@@ -133,6 +150,81 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+  /* rfqs.status solo puede llegar como "submitted" desde esta app (sin
+     política de UPDATE, createRfq() siempre inserta ese valor) — se
+     deja la puerta abierta a otros valores futuros mostrándolos tal
+     cual si no están en este mapa. */
+  const RFQ_STATUS_LABELS = { submitted: "Enviada" };
+
+  /* Solo lectura — nunca INSERT ni UPDATE desde esta página. Si no hay
+     perfil (o falla la lectura), se trata igual: estado vacío con
+     enlace a inscripcion-profesional.html para completarlo. */
+  async function renderProfessionalProfile(userId){
+    const { data: profile, error } = await supabaseClient
+      .from("professional_profiles")
+      .select("professional_name, studio_name, professional_type, city")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const emptyEl = document.getElementById("profile-empty");
+    const boxEl = document.getElementById("profile-box");
+
+    if (error || !profile){
+      boxEl.style.display = "none";
+      emptyEl.style.display = "flex";
+      return;
+    }
+
+    const metaParts = [];
+    if (profile.studio_name) metaParts.push(profile.studio_name);
+
+    document.getElementById("profile-name").textContent = profile.professional_name;
+    document.getElementById("profile-meta").textContent = metaParts.join(" · ") || "—";
+    emptyEl.style.display = "none";
+    boxEl.style.display = "flex";
+  }
+
+  /* Lista real de solicitudes del usuario (MobauProjects.listMyRfqs(),
+     ya filtrada por requester_user_id y protegida por RLS — nunca trae
+     datos de otro usuario). El nombre de cada proyecto se resuelve con
+     una sola consulta a MobauProjects.list() (todas las categorías, no
+     solo "active"), agrupada en memoria por id — mismo principio que
+     ya se usó al optimizar proyectos.html, evita una consulta por RFQ.
+     Si una RFQ apunta a un proyecto que ya no aparece en ese resultado,
+     se muestra "Proyecto no disponible" en vez de romper la página. */
+  async function renderMyRfqs(userId){
+    const rfqs = await MobauProjects.listMyRfqs(userId);
+    const emptyEl = document.getElementById("rfqs-empty");
+    const listEl = document.getElementById("rfqs-list");
+
+    if (!rfqs.length){
+      listEl.innerHTML = "";
+      emptyEl.style.display = "block";
+      return;
+    }
+    emptyEl.style.display = "none";
+
+    const allProjects = await MobauProjects.list();
+    const projectsById = new Map(allProjects.map(p => [p.id, p]));
+
+    listEl.innerHTML = rfqs.map(rfq => {
+      const projectName = projectsById.get(rfq.project_id)?.name || "Proyecto no disponible";
+      const statusLabel = RFQ_STATUS_LABELS[rfq.status] || rfq.status;
+      const statusClass = rfq.status === "submitted" ? "sent" : "draft";
+      const metaParts = [];
+      if (rfq.requester_company) metaParts.push(rfq.requester_company);
+      metaParts.push(`Enviada ${relativeDate(rfq.created_at)}`);
+      return `
+        <div class="saved-project">
+          <div>
+            <div class="sp-name">${projectName}</div>
+            <div class="sp-meta">${metaParts.join(" · ")}</div>
+          </div>
+          <span class="status-chip ${statusClass}">${statusLabel}</span>
+        </div>`;
+    }).join("");
+  }
+
   (async () => {
     const session = await MobauAuth.requireSession();
     if (!session) return; // ya redirigió a login.html
@@ -155,6 +247,9 @@
     } else {
       empty.style.display = "flex";
     }
+
+    await renderProfessionalProfile(session.user.id);
+    await renderMyRfqs(session.user.id);
   })();
 
   document.getElementById("logout-btn").addEventListener("click", () => {
