@@ -149,21 +149,19 @@
       </article>`;
   }
 
-  async function renderPlanUsage(){
-    const activeCount = await MobauProjects.countActive();
+  async function renderPlanUsage(activeCount){
     const el = document.getElementById("plan-usage");
     if (!currentPlan) { el.textContent = ""; return; }
     const label = currentPlan.max_active_projects === 1 ? "proyecto activo" : "proyectos activos";
     el.textContent = `${activeCount} de ${currentPlan.max_active_projects} ${label} en tu plan.`;
   }
 
-  async function loadProjects(){
+  async function loadProjects(activeCount){
     const grid = document.getElementById("projects-grid");
     const empty = document.getElementById("projects-empty");
     const emptyText = document.getElementById("projects-empty-text");
 
     const projects = await MobauProjects.list(currentStatus);
-    const activeCount = await MobauProjects.countActive();
     const isEmpty = !projects.length;
 
     if (isEmpty){
@@ -174,16 +172,20 @@
       empty.style.display = "block";
     } else {
       empty.style.display = "none";
-      const cardsHtml = await Promise.all(projects.map(async (p) => {
-        const rows = await MobauProjects.listProductsInProject(p.id);
+      /* Una sola consulta para los productos de TODOS los proyectos de
+         esta página (antes: una por proyecto, todas en paralelo pero
+         igual N consultas) — se agrupan por project_id en memoria. */
+      const productsByProject = await MobauProjects.listProductsInProjects(projects.map(p => p.id));
+      const cardsHtml = projects.map(p => {
+        const rows = productsByProject.get(p.id) || [];
         const distributorIds = new Set();
         rows.forEach(row => {
           const prod = PRODUCTS.find(pp => pp.id === row.product_id);
           if (prod) distributorIds.add(prod.distribuidor);
         });
         return renderCard(p, rows.length, distributorIds.size, currentPlan, activeCount);
-      }));
-      grid.innerHTML = cardsHtml.join("");
+      }).join("");
+      grid.innerHTML = cardsHtml;
       grid.querySelectorAll(".archive-btn").forEach(btn => {
         btn.addEventListener("click", async () => {
           const id = btn.dataset.id;
@@ -217,12 +219,10 @@
               if (deleteError){
                 alert(`El proyecto se archivó, pero no pudimos eliminarlo: ${deleteError.message}`);
                 await setFilter("active");
-                await renderPlanUsage();
                 return;
               }
 
               await setFilter("active");
-              await renderPlanUsage();
               return;
             }
 
@@ -239,7 +239,6 @@
               return;
             }
             await setFilter("active");
-            await renderPlanUsage();
             return;
           }
 
@@ -251,8 +250,7 @@
             btn.disabled = false;
             return;
           }
-          await loadProjects();
-          await renderPlanUsage();
+          await refreshProjectsView();
         });
       });
 
@@ -268,8 +266,7 @@
             btn.disabled = false;
             return;
           }
-          await loadProjects();
-          await renderPlanUsage();
+          await refreshProjectsView();
         });
       });
     }
@@ -279,22 +276,39 @@
        (ni se debe) tocar su visibilidad en cada carga. */
   }
 
+  /* Punto único de refresco: countActive() se pide una sola vez aquí y
+     se reutiliza tanto para el texto de uso del plan (renderPlanUsage)
+     como para decidir "Reactivar"/"Sin cupo" en las tarjetas
+     archivadas (loadProjects) — antes cada función lo pedía por su
+     cuenta, duplicando la misma consulta en cada refresco. */
+  async function refreshProjectsView(){
+    const activeCount = await MobauProjects.countActive();
+    await loadProjects(activeCount);
+    await renderPlanUsage(activeCount);
+  }
+
   async function setFilter(status){
     currentStatus = status;
     document.getElementById("filter-active").className = "btn btn-sm " + (status === "active" ? "btn-primary" : "btn-outline");
     document.getElementById("filter-archived").className = "btn btn-sm " + (status === "archived" ? "btn-primary" : "btn-outline");
-    await loadProjects();
+    await refreshProjectsView();
   }
 
   document.getElementById("filter-active").addEventListener("click", () => setFilter("active"));
   document.getElementById("filter-archived").addEventListener("click", () => setFilter("archived"));
 
   (async () => {
+    /* Estado de carga sencillo: solo texto, sin depender de ninguna
+       librería, y se sustituye por completo en cuanto loadProjects()
+       escribe el contenido real — nunca se muestra información de
+       proyectos antes de confirmar la sesión (requireSession sigue
+       ejecutándose primero, sin debilitar). */
+    document.getElementById("projects-grid").innerHTML = `<p class="card-meta" style="margin:0;">Cargando proyectos…</p>`;
+
     session = await MobauAuth.requireSession();
     if (!session) return;
     currentPlan = await MobauProjects.myPlan(session.user.id);
-    await renderPlanUsage();
-    await loadProjects();
+    await refreshProjectsView();
   })();
 </script>
 </body>

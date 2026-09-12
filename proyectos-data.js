@@ -11,9 +11,13 @@ const MobauProjects = {
   /* Lista los proyectos del usuario actual.
      status: "active" | "archived" | undefined (todos) */
   async list(status) {
+    /* Columnas exactas que consumen proyectos.html, cuenta.html y
+       proyectos-cotizacion.html desde el resultado de list() — ninguna
+       de las tres lee owner_user_id ni created_at de aquí (created_at
+       solo se usa vía get(), que sigue con select("*") sin tocar). */
     let query = supabaseClient
       .from("projects")
-      .select("*")
+      .select("id, name, client_name, project_type, location, description, status, updated_at")
       .order("updated_at", { ascending: false });
     if (status) query = query.eq("status", status);
 
@@ -109,9 +113,11 @@ const MobauProjects = {
       return null;
     }
 
+    /* Únicos campos de "plans" que lee algún archivo del sitio (grep
+       confirmado): name y max_active_projects. */
     const { data: plan, error: planError } = await supabaseClient
       .from("plans")
-      .select("*")
+      .select("name, max_active_projects")
       .eq("id", profile.plan)
       .single();
     if (planError || !plan) {
@@ -204,9 +210,14 @@ const MobauProjects = {
      esta consulta solo trae qué productos están guardados y con
      qué id de fila, para poder quitarlos. */
   async listProductsInProject(projectId) {
+    /* id, product_id, quantity, unit son los únicos campos que lee
+       cualquier página (proyectos.html, proyectos-detalle.html,
+       cuenta.html, proyectos-cotizacion.html) del resultado de esta
+       función — order_position y created_at solo se usan para
+       ordenar, no hace falta traerlos de vuelta. */
     const { data, error } = await supabaseClient
       .from("project_products")
-      .select("*")
+      .select("id, product_id, quantity, unit")
       .eq("project_id", projectId)
       .order("order_position", { ascending: true })
       .order("created_at", { ascending: true });
@@ -215,6 +226,32 @@ const MobauProjects = {
       return [];
     }
     return data;
+  },
+
+  /* Trae los productos guardados de VARIOS proyectos en una sola
+     consulta (evita pedir uno por proyecto — el N+1 de "Mis
+     proyectos") y los agrupa por project_id en memoria. Devuelve un
+     Map<project_id, row[]>; un proyecto sin productos guardados
+     simplemente no aparece como clave, así que hay que leerlo con
+     `.get(id) || []`. Mismos campos que listProductsInProject() más
+     project_id, imprescindible aquí para poder agrupar. Sin proyectos
+     no se hace ninguna consulta. */
+  async listProductsInProjects(projectIds) {
+    if (!projectIds.length) return new Map();
+    const { data, error } = await supabaseClient
+      .from("project_products")
+      .select("id, project_id, product_id, quantity, unit")
+      .in("project_id", projectIds);
+    if (error) {
+      console.error("Error listando productos de varios proyectos:", error);
+      return new Map();
+    }
+    const grouped = new Map();
+    data.forEach(row => {
+      if (!grouped.has(row.project_id)) grouped.set(row.project_id, []);
+      grouped.get(row.project_id).push(row);
+    });
+    return grouped;
   },
 
   /* Reutiliza el proyecto activo del usuario si ya existe, o crea uno
