@@ -18,16 +18,6 @@
 const SUPABASE_URL = "https://skcoxtdppdcietgojdal.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_NCxP_LqiNJCKv3yrpi33fg_osKCmQIL"; // clave publicable ("anon" / "public")
 
-/* Calcula el origen + carpeta de la página actual (sin el nombre del
-   archivo), para que el enlace mágico funcione igual en local y en
-   cualquier despliegue (GitHub Pages, dominio propio, etc.) sin tocar
-   nada a mano cada vez que cambie el entorno. Ejemplos:
-     http://127.0.0.1:5500/login.html            -> http://127.0.0.1:5500/
-     https://usuario.github.io/mobau/login.html  -> https://usuario.github.io/mobau/ */
-function getSiteBaseUrl() {
-  return window.location.origin + window.location.pathname.replace(/[^/]+$/, "");
-}
-
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,     // guarda la sesión en localStorage del navegador
@@ -52,9 +42,17 @@ const MobauAuth = {
 
   /* Envía el enlace mágico al correo indicado.
      extraData es opcional (por ejemplo { name: "Ana Rosario" })
-     y queda disponible luego como raw_user_meta_data en Supabase. */
+     y queda disponible luego como raw_user_meta_data en Supabase.
+
+     redirectTo lleva a index.html (no a cuenta.html) y calcula la
+     ruta base a mano para GitHub Pages, que publica el sitio dentro
+     de /mobau/ — en local (o cualquier otro host) basePath queda
+     vacío y el enlace resuelve igual en la raíz. */
   async sendMagicLink(email, extraData) {
-    const redirectTo = getSiteBaseUrl() + "cuenta.html";
+    const basePath = window.location.hostname === "joandelmonte-debug.github.io"
+      ? "/mobau"
+      : "";
+    const redirectTo = `${window.location.origin}${basePath}/index.html`;
     return supabaseClient.auth.signInWithOtp({
       email,
       options: {
