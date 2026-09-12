@@ -18,6 +18,17 @@
 const SUPABASE_URL = "https://skcoxtdppdcietgojdal.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_NCxP_LqiNJCKv3yrpi33fg_osKCmQIL"; // clave publicable ("anon" / "public")
 
+/* Clave que usa @supabase/supabase-js v2 por defecto para guardar la
+   sesión en localStorage (persistSession:true, sin storageKey propio
+   aquí abajo) — se calcula a partir de SUPABASE_URL para no repetirla
+   a mano. Sirve solo para una comprobación síncrona (MobauAuth.
+   hasStoredSession(), más abajo): si el formato de esta clave cambiara
+   en una versión futura de la librería, el peor caso es tratar a un
+   usuario autenticado como anónimo para la selección temporal (se
+   perdería al cerrar la pestaña) — nunca pérdida de datos de su cuenta
+   real, que sigue viviendo en Supabase. */
+const SUPABASE_SESSION_STORAGE_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
+
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,     // guarda la sesión en localStorage del navegador
@@ -38,6 +49,20 @@ const MobauAuth = {
       return null;
     }
     return data.session;
+  },
+
+  /* Comprobación síncrona (sin await) de si hay una sesión guardada en
+     este navegador — para código que necesita decidir de inmediato
+     (p.ej. qué storage usar para mobau_seleccion, en seleccion-data.js)
+     sin poder esperar una consulta async a Supabase. No protege
+     páginas ni sustituye a getSession()/requireSession(): es solo una
+     señal rápida. */
+  hasStoredSession() {
+    try {
+      return !!localStorage.getItem(SUPABASE_SESSION_STORAGE_KEY);
+    } catch (e) {
+      return false;
+    }
   },
 
   /* Envía el enlace mágico al correo indicado.
@@ -99,3 +124,22 @@ const MobauAuth = {
     return session;
   }
 };
+
+/* Migra o limpia la selección temporal (mobau_seleccion) cuando cambia
+   la sesión real de Supabase — las funciones viven en seleccion-data.js
+   (puede no estar cargado en alguna página futura; por eso se
+   comprueba typeof antes de llamarlas). Nunca toca localStorage.clear()
+   ni sessionStorage.clear(): cada función de seleccion-data.js solo
+   lee/escribe la clave "mobau_seleccion", nunca ningún otro dato.
+   - SIGNED_IN / INITIAL_SESSION: une la selección anónima (sessionStorage)
+     a la de la cuenta (localStorage), sin duplicar productos.
+   - SIGNED_OUT: la selección temporal del usuario, ya anónimo de
+     nuevo, queda vacía. */
+supabaseClient.auth.onAuthStateChange((event) => {
+  if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && typeof migrateAnonymousSelectionToAccount === "function") {
+    migrateAnonymousSelectionToAccount();
+  }
+  if (event === "SIGNED_OUT" && typeof clearAnonymousSelection === "function") {
+    clearAnonymousSelection();
+  }
+});

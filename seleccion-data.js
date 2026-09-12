@@ -1,9 +1,16 @@
 /* ============================================================
    MOBAU — Selección local (con cantidades y unidades)
    ------------------------------------------------------------
-   Selección temporal de productos guardada en localStorage del
-   navegador. No requiere sesión, no toca Supabase, no sustituye
-   el flujo real de proyectos ya construido.
+   Selección temporal de productos. El storage real depende de si hay
+   sesión guardada en este navegador (MobauAuth.hasStoredSession(),
+   comprobación síncrona definida en supabase-client.js):
+     - CON sesión  -> localStorage (comportamiento de siempre: sobrevive
+       a cerrar la pestaña o el navegador).
+     - SIN sesión  -> sessionStorage (sobrevive a navegar o recargar en
+       la misma pestaña, pero desaparece al cerrarla, y nunca reaparece
+       en una pestaña o visita nueva sin haber iniciado sesión).
+   No toca Supabase directamente, no sustituye el flujo real de
+   proyectos ya construido.
 
    Cada elemento tiene la forma:
      { productId: "p1", quantity: 1, unit: "ud." }
@@ -17,6 +24,17 @@
    ============================================================ */
 
 const SELECCION_KEY = "mobau_seleccion";
+
+/* Storage real a usar ahora mismo. Solo se lee/escribe SELECCION_KEY
+   dentro de él — nunca localStorage.clear() ni sessionStorage.clear(),
+   para no arrastrar ni borrar ningún otro dato de la app (la sesión de
+   Supabase incluida, que también vive en localStorage). */
+function getSelectionStorage(){
+  const hasSession = (typeof MobauAuth !== "undefined" && typeof MobauAuth.hasStoredSession === "function")
+    ? MobauAuth.hasStoredSession()
+    : false;
+  return hasSession ? localStorage : sessionStorage;
+}
 
 /* Normaliza un único elemento, sea del formato antiguo (string) o
    ya del formato nuevo (objeto). Nunca descarta un productId válido;
@@ -63,7 +81,7 @@ function normalizeSelection(raw){
 function getSelection(){
   let raw;
   try {
-    raw = JSON.parse(localStorage.getItem(SELECCION_KEY) || "[]");
+    raw = JSON.parse(getSelectionStorage().getItem(SELECCION_KEY) || "[]");
   } catch (e) {
     console.error("Error leyendo la selección:", e);
     raw = [];
@@ -75,7 +93,7 @@ function getSelection(){
 
 function saveSelection(items){
   try {
-    localStorage.setItem(SELECCION_KEY, JSON.stringify(items));
+    getSelectionStorage().setItem(SELECCION_KEY, JSON.stringify(items));
     return { success: true };
   } catch (e) {
     console.error("Error guardando la selección:", e);
@@ -140,4 +158,57 @@ function clearSelection(){
 
 function getSelectionCount(){
   return getSelection().length;
+}
+
+/* Al iniciar sesión (SIGNED_IN/INITIAL_SESSION, ver supabase-client.js):
+   une la selección anónima (sessionStorage) a la de la cuenta
+   (localStorage). Nunca duplica productId ni sobrescribe una cantidad
+   que la cuenta ya tuviera guardada — un producto que ya estaba ahí se
+   deja tal cual, solo se añaden los que faltaban. */
+function migrateAnonymousSelectionToAccount(){
+  let anonymousRaw;
+  try {
+    anonymousRaw = JSON.parse(sessionStorage.getItem(SELECCION_KEY) || "[]");
+  } catch (e) {
+    anonymousRaw = [];
+  }
+  const anonymousItems = normalizeSelection(anonymousRaw);
+  if (!anonymousItems.length) return { migratedCount: 0 };
+
+  let accountRaw;
+  try {
+    accountRaw = JSON.parse(localStorage.getItem(SELECCION_KEY) || "[]");
+  } catch (e) {
+    accountRaw = [];
+  }
+  const accountItems = normalizeSelection(accountRaw);
+  const accountIds = new Set(accountItems.map(item => item.productId));
+
+  let migratedCount = 0;
+  anonymousItems.forEach(item => {
+    if (accountIds.has(item.productId)) return; // ya está en la cuenta: no se sobrescribe ni se duplica
+    accountItems.push(item);
+    accountIds.add(item.productId);
+    migratedCount++;
+  });
+
+  try {
+    localStorage.setItem(SELECCION_KEY, JSON.stringify(accountItems));
+    sessionStorage.removeItem(SELECCION_KEY);
+  } catch (e) {
+    console.error("Error migrando la selección anónima a la cuenta:", e);
+  }
+  return { migratedCount };
+}
+
+/* Al cerrar sesión (SIGNED_OUT, ver supabase-client.js): la selección
+   temporal del usuario, ya anónimo de nuevo, debe quedar vacía. Solo
+   borra esta clave concreta de sessionStorage — nunca localStorage ni
+   ningún otro dato de la app. */
+function clearAnonymousSelection(){
+  try {
+    sessionStorage.removeItem(SELECCION_KEY);
+  } catch (e) {
+    console.error("Error limpiando la selección anónima:", e);
+  }
 }
