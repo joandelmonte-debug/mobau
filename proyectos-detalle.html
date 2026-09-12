@@ -95,6 +95,15 @@
   }
   .dp-quantity__error{ margin:0; font-size:12px; color:var(--danger); }
 
+  /* Punto 17 — encabezado ligero de cada grupo de categoría en
+     "Productos de mi proyecto" (sin pestañas ni acordeones: solo un
+     h3 pequeño antes de las tarjetas .saved-project de esa categoría). */
+  .saved-project-group + .saved-project-group{ margin-top: 20px; }
+  .saved-project-group__title{
+    font-size: 13px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.03em; color: var(--ink-faint); margin: 0 0 10px;
+  }
+
   /* Grupo "Activo [lápiz]" / "Activo [check] [cancelar]" — reutiliza
      .icon-btn-muted (mismo patrón neutro ya usado para "Eliminar
      proyecto" en Mis proyectos), pero más pequeño (28px) porque aquí
@@ -575,7 +584,7 @@
     }
     emptyEl.style.display = "none";
 
-    listEl.innerHTML = rows.map(row => {
+    function renderProductRow(row){
       const removeBtn = `<button type="button" class="btn btn-outline btn-sm remove-product-btn" data-row-id="${row.id}"${isArchived ? " disabled" : ""}>Quitar</button>`;
       const p = PRODUCTS.find(pp => pp.id === row.product_id);
       if (!p){
@@ -621,7 +630,32 @@
             ${removeBtn}
           </div>
         </div>`;
-    }).join("");
+    }
+
+    /* Punto 17 — agrupa por la categoría real del catálogo
+       (product.categoria vía LABELS.categoria, misma fuente de verdad
+       que usa el resto del sitio) conservando el orden de primera
+       aparición de cada categoría y el orden de las filas dentro de
+       ella — sin ordenar alfabéticamente. Cada row entra en un único
+       grupo (Map por etiqueta), así que ningún producto se duplica; sin
+       categoría reconocida o sin coincidencia en PRODUCTS cae en "Otros". */
+    const groups = [];
+    const groupsByLabel = new Map();
+    rows.forEach(row => {
+      const p = PRODUCTS.find(pp => pp.id === row.product_id);
+      const label = (p && LABELS.categoria[p.categoria]) || "Otros";
+      if (!groupsByLabel.has(label)){
+        groupsByLabel.set(label, { label, rows: [] });
+        groups.push(groupsByLabel.get(label));
+      }
+      groupsByLabel.get(label).rows.push(row);
+    });
+
+    listEl.innerHTML = groups.map(group => `
+      <div class="saved-project-group">
+        <h3 class="saved-project-group__title">${group.label}</h3>
+        ${group.rows.map(renderProductRow).join("")}
+      </div>`).join("");
 
     listEl.querySelectorAll(".remove-product-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
