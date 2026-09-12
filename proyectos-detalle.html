@@ -230,7 +230,7 @@
       <div class="account-section" style="margin-bottom:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
           <h2 style="margin:0;">Productos de mi proyecto</h2>
-          <button type="button" class="btn btn-primary btn-sm" id="request-quote-btn" disabled>Solicitar cotización</button>
+          <button type="button" class="btn btn-primary btn-sm" id="request-quote-btn" hidden disabled>Solicitar cotización</button>
         </div>
         <p id="quote-hint" class="card-meta" style="display:none; margin-top:-4px;">Añade productos para poder solicitar una cotización.</p>
         <p id="products-counter" class="card-meta"></p>
@@ -294,6 +294,11 @@
   let project = null;
   let currentPlan = null;
   let isProjectInfoEditing = false;
+
+  /* Nunca ambiguo: "Solicitar cotización" nace oculto (atributo hidden
+     en el HTML) y solo puede mostrarse después de que esto sea true —
+     nunca se trata el proyecto como activo mientras se está cargando. */
+  let isProjectLoaded = false;
 
   async function renderProject(){
     const isActive = project.status === "active";
@@ -526,11 +531,23 @@
     const quoteHint = document.getElementById("quote-hint");
     const allValid = rows.length > 0 && rows.every(row => isValidQuantity(row.quantity));
     quoteBtn.dataset.projectId = project.id;
-    quoteBtn.disabled = !allValid;
-    quoteHint.textContent = rows.length === 0
-      ? "Añade productos para poder solicitar una cotización."
-      : "Indica la cantidad de todos los productos antes de solicitar una cotización.";
-    quoteHint.style.display = allValid ? "none" : "block";
+
+    if (!isProjectLoaded || isArchived){
+      /* Nunca visible antes de confirmar que el proyecto cargó de verdad,
+         y un proyecto archivado no admite nuevas solicitudes de
+         cotización — se usa el atributo hidden (igual que en el HTML
+         inicial), nunca style.display, para que sea la misma regla
+         [hidden] la que lo oculte siempre sin dejar hueco. */
+      quoteBtn.hidden = true;
+      quoteHint.style.display = "none";
+    } else {
+      quoteBtn.hidden = false;
+      quoteBtn.disabled = !allValid;
+      quoteHint.textContent = rows.length === 0
+        ? "Añade productos para poder solicitar una cotización."
+        : "Indica la cantidad de todos los productos antes de solicitar una cotización.";
+      quoteHint.style.display = allValid ? "none" : "block";
+    }
 
     const distributorIds = new Set();
     rows.forEach(row => {
@@ -724,6 +741,7 @@
       return;
     }
 
+    isProjectLoaded = true;
     document.getElementById("project-view").style.display = "block";
     await renderProject();
     loadSavedProducts();

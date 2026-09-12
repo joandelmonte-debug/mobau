@@ -114,7 +114,7 @@
        <a> y <button> — se aplica siempre (activa o archivada), para
        que "Abrir" quede a la misma altura que "Archivar", "Reactivar
        proyecto" o "Sin cupo para reactivar" en cualquier tarjeta. */
-    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm project-action-btn"${!isActive ? ' style="flex:1;"' : ""}>Abrir</a>`;
+    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm project-action-btn"${!isActive ? ' style="flex:1;"' : ""}>${isActive ? "Abrir" : "Consultar"}</a>`;
 
     if (isActive){
       actionsHtml += `<button type="button" class="btn btn-outline btn-sm project-action-btn archive-btn" data-id="${p.id}" data-status="active" data-name="${p.name.replace(/"/g, "&quot;")}">Archivar</button>`;
