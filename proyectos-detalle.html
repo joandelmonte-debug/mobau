@@ -315,9 +315,20 @@
     document.getElementById("bc-name").textContent = project.name;
     document.getElementById("p-name").textContent = project.name;
 
+    /* "Solicitud enviada" es puramente derivado (archived + RFQ propia
+       con este project_id) — nunca un valor de projects.status. Se
+       reutiliza listMyRfqs() (ya existente desde "Mi cuenta") en vez de
+       añadir una función nueva: aquí solo hay un proyecto a la vez, no
+       una lista, así que no hace falta una consulta más especializada. */
+    let isRequested = false;
+    if (!isActive){
+      const myRfqs = await MobauProjects.listMyRfqs(session.user.id);
+      isRequested = myRfqs.some(rfq => rfq.project_id === project.id);
+    }
+
     const statusEl = document.getElementById("p-status");
-    statusEl.textContent = isActive ? "Activo" : "Archivado";
-    statusEl.className = "status-chip " + (isActive ? "sent" : "closed");
+    statusEl.textContent = isActive ? "Activo" : (isRequested ? "Solicitud enviada" : "Archivado");
+    statusEl.className = "status-chip " + (isActive ? "sent" : (isRequested ? "quoted" : "closed"));
 
     const isStudioPlan = planAllowsMultipleActive(currentPlan);
     document.getElementById("p-meta").textContent = isActive

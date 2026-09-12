@@ -39,6 +39,7 @@
   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:22px;">
     <div style="display:flex; gap:10px;">
       <button type="button" class="btn btn-primary btn-sm" id="filter-active" data-status="active">Activos</button>
+      <button type="button" class="btn btn-outline btn-sm" id="filter-requested" data-status="requested">Solicitados</button>
       <button type="button" class="btn btn-outline btn-sm" id="filter-archived" data-status="archived">Archivados</button>
     </div>
     <a href="proyectos-cotizacion.html?mode=save" class="btn btn-primary" id="create-project-btn-top" hidden>Crear proyecto</a>
@@ -103,7 +104,7 @@
   let session = null;
   let currentPlan = null;
 
-  function renderCard(p, productCount, distributorCount, plan, activeCount){
+  function renderCard(p, productCount, distributorCount, plan, activeCount, isRequested){
     const isActive = p.status === "active";
     const typeLabel = p.project_type ? (PROJECT_TYPE_LABELS[p.project_type] || p.project_type) : "Tipo no definido";
     const productsLabel = `${productCount} ${productCount === 1 ? "producto guardado" : "productos guardados"}`;
@@ -125,7 +126,14 @@
           ? `<button type="button" class="btn btn-outline btn-sm project-action-btn archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
           : `<button type="button" class="btn btn-outline btn-sm project-action-btn" style="flex:1;" disabled>Sin cupo para reactivar</button>`;
       }
-      actionsHtml += `<button type="button" class="icon-btn-muted delete-project-btn" aria-label="Eliminar proyecto" title="Eliminar proyecto" data-id="${p.id}" data-name="${p.name.replace(/"/g, "&quot;")}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>`;
+      /* Un proyecto solicitado nunca puede borrarse de verdad —
+         rfqs.project_id referencia projects.id sin ON DELETE CASCADE,
+         así que deleteProject() fallaría por integridad referencial.
+         En vez de mostrar un botón que siempre va a fallar, se oculta
+         directamente para los proyectos con RFQ propia. */
+      if (!isRequested){
+        actionsHtml += `<button type="button" class="icon-btn-muted delete-project-btn" aria-label="Eliminar proyecto" title="Eliminar proyecto" data-id="${p.id}" data-name="${p.name.replace(/"/g, "&quot;")}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>`;
+      }
     }
 
     return `
@@ -135,7 +143,7 @@
             <div class="provider-mark">${p.name}</div>
             <div class="provider-loc">${p.client_name ? "Cliente: " + p.client_name : "Sin cliente asignado"}</div>
           </div>
-          <span class="status-chip ${isActive ? "sent" : "closed"}">${isActive ? "Activo" : "Archivado"}</span>
+          <span class="status-chip ${isActive ? "sent" : (isRequested ? "quoted" : "closed")}">${isActive ? "Activo" : (isRequested ? "Solicitud enviada" : "Archivado")}</span>
         </div>
         <div class="provider-cats">
           <span class="chip">${typeLabel}</span>
@@ -161,14 +169,35 @@
     const empty = document.getElementById("projects-empty");
     const emptyText = document.getElementById("projects-empty-text");
 
-    const projects = await MobauProjects.list(currentStatus);
+    /* "Solicitados" nunca es un valor real de projects.status — solo
+       existe "active"/"archived" en la base de datos. Para "archived" y
+       "requested" se pide siempre list("archived") (el valor real) y la
+       distinción se hace en memoria con el Set de project_id que ya
+       tienen una RFQ propia (listMyRfqs, una sola llamada por refresco,
+       en paralelo con list() — nunca una consulta por proyecto). */
+    let projects;
+    let requestedIds = new Set();
+    if (currentStatus === "active"){
+      projects = await MobauProjects.list("active");
+    } else {
+      const [archivedProjects, myRfqs] = await Promise.all([
+        MobauProjects.list("archived"),
+        MobauProjects.listMyRfqs(session.user.id)
+      ]);
+      requestedIds = new Set(myRfqs.map(rfq => rfq.project_id));
+      projects = currentStatus === "requested"
+        ? archivedProjects.filter(p => requestedIds.has(p.id))
+        : archivedProjects.filter(p => !requestedIds.has(p.id));
+    }
     const isEmpty = !projects.length;
 
     if (isEmpty){
       grid.innerHTML = "";
       emptyText.textContent = currentStatus === "archived"
         ? "Todavía no has archivado ningún proyecto."
-        : "Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.";
+        : currentStatus === "requested"
+          ? "Todavía no has enviado ninguna solicitud de cotización."
+          : "Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.";
       empty.style.display = "block";
     } else {
       empty.style.display = "none";
@@ -183,7 +212,7 @@
           const prod = PRODUCTS.find(pp => pp.id === row.product_id);
           if (prod) distributorIds.add(prod.distribuidor);
         });
-        return renderCard(p, rows.length, distributorIds.size, currentPlan, activeCount);
+        return renderCard(p, rows.length, distributorIds.size, currentPlan, activeCount, requestedIds.has(p.id));
       }).join("");
       grid.innerHTML = cardsHtml;
       grid.querySelectorAll(".archive-btn").forEach(btn => {
@@ -290,11 +319,13 @@
   async function setFilter(status){
     currentStatus = status;
     document.getElementById("filter-active").className = "btn btn-sm " + (status === "active" ? "btn-primary" : "btn-outline");
+    document.getElementById("filter-requested").className = "btn btn-sm " + (status === "requested" ? "btn-primary" : "btn-outline");
     document.getElementById("filter-archived").className = "btn btn-sm " + (status === "archived" ? "btn-primary" : "btn-outline");
     await refreshProjectsView();
   }
 
   document.getElementById("filter-active").addEventListener("click", () => setFilter("active"));
+  document.getElementById("filter-requested").addEventListener("click", () => setFilter("requested"));
   document.getElementById("filter-archived").addEventListener("click", () => setFilter("archived"));
 
   (async () => {
