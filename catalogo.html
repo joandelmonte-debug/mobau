@@ -137,6 +137,8 @@
       </select>
     </div>
 
+    <p class="card-meta" id="search-fuzzy-note" style="display:none; margin:0 0 12px;"></p>
+
     <div class="product-grid" id="product-grid"></div>
     <div class="empty-state" id="empty-state" style="display:none;">
       No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.
@@ -210,29 +212,58 @@
     }
   });
 
-  function matches(product){
+  /* Filtros de la barra lateral — la búsqueda (texto) se resuelve
+     aparte, con searchProducts() (script.js), antes de aplicar esto. */
+  function matchesFilters(product){
     return (state.categoria.size === 0 || state.categoria.has(product.categoria)) &&
            (state.subcategoria.size === 0 || state.subcategoria.has(product.subcategoria)) &&
            (state.distribuidor.size === 0 || state.distribuidor.has(product.distribuidor)) &&
            (state.marca.size === 0 || state.marca.has(product.marca)) &&
            (state.uso.size === 0 || state.uso.has(product.uso)) &&
            (state.espacio.size === 0 || state.espacio.has(product.espacio)) &&
-           (state.disponibilidad.size === 0 || state.disponibilidad.has(product.disponibilidad)) &&
-           matchesSearch(product, state.search);
+           (state.disponibilidad.size === 0 || state.disponibilidad.has(product.disponibilidad));
   }
 
-  function sortList(list){
+  /* "Ordenar por relevancia" solo tiene sentido con una búsqueda
+     activa (usa el _score que añade searchProducts()) — sin búsqueda
+     se mantiene el orden original del catálogo, igual que antes. */
+  function sortList(list, hasActiveSearch){
     const sorted = [...list];
-    if(state.sort === "nombre") sorted.sort((a,b) => a.nombre.localeCompare(b.nombre));
-    if(state.sort === "marca") sorted.sort((a,b) => LABELS.marca[a.marca].localeCompare(LABELS.marca[b.marca]));
+    if (state.sort === "nombre") sorted.sort((a,b) => a.nombre.localeCompare(b.nombre));
+    else if (state.sort === "marca") sorted.sort((a,b) => LABELS.marca[a.marca].localeCompare(LABELS.marca[b.marca]));
+    else if (hasActiveSearch) sorted.sort((a,b) => (b._score || 0) - (a._score || 0));
     return sorted;
   }
 
   function render(){
-    const filtered = sortList(PRODUCTS.filter(matches));
+    const { results: searched, fuzzyTerm } = searchProducts(PRODUCTS, state.search);
+    const hasActiveSearch = normalizeSearchText(state.search).length >= 2;
+    const filtered = sortList(searched.filter(matchesFilters), hasActiveSearch);
+
     const grid = document.getElementById("product-grid");
     grid.innerHTML = filtered.map(renderProductCard).join("");
-    document.getElementById("empty-state").style.display = filtered.length ? "none" : "block";
+
+    /* "Resultados similares a: ..." solo cuando la búsqueda no tuvo
+       ninguna coincidencia literal y se usó el fallback aproximado —
+       nunca se reescribe lo que el usuario escribió en el input. */
+    const fuzzyNote = document.getElementById("search-fuzzy-note");
+    if (hasActiveSearch && fuzzyTerm && filtered.length){
+      fuzzyNote.textContent = `Resultados similares a: ${fuzzyTerm}`;
+      fuzzyNote.style.display = "block";
+    } else {
+      fuzzyNote.style.display = "none";
+    }
+
+    const emptyState = document.getElementById("empty-state");
+    if (!filtered.length){
+      emptyState.textContent = hasActiveSearch
+        ? "No encontramos productos relacionados. Prueba con otra palabra o categoría."
+        : "No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.";
+      emptyState.style.display = "block";
+    } else {
+      emptyState.style.display = "none";
+    }
+
     document.getElementById("result-count").textContent =
       filtered.length === 1 ? "1 producto" : `${filtered.length} productos`;
     injectIconSprite();
@@ -248,9 +279,13 @@
     });
   });
 
+  /* Debounce: solo se vuelve a filtrar 200ms después de la última
+     tecla, no en cada pulsación. */
+  let searchDebounceTimer = null;
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.search = e.target.value;
-    render();
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(render, 200);
   });
 
   document.getElementById("sort-select").addEventListener("change", (e) => {
@@ -259,6 +294,7 @@
   });
 
   document.getElementById("clear-filters").addEventListener("click", () => {
+    clearTimeout(searchDebounceTimer);
     document.querySelectorAll(".filter-group input[type=checkbox]").forEach(i => i.checked = false);
     GROUPS.forEach(k => state[k].clear());
     document.getElementById("search-input").value = "";

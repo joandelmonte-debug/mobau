@@ -519,17 +519,140 @@ function showToast(message){
   toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
 }
 
-/* ---------- búsqueda: nombre de producto, marca o categoría ---------- */
-function matchesSearch(product, query){
-  if(!query) return true;
-  const q = query.trim().toLowerCase();
-  if(!q) return true;
-  const haystack = [
-    product.nombre,
-    LABELS.marca[product.marca],
-    LABELS.categoria[product.categoria]
-  ].join(" ").toLowerCase();
-  return haystack.includes(q);
+/* ---------- búsqueda: nombre, categoría, marca y descripción ----------
+   Punto 15. El catálogo (PRODUCTS, arriba en este mismo archivo) es un
+   array estático de 20 productos incrustado en el JS de la página —
+   no existe tabla "products" en Supabase, ni RPC, ni índices, así que
+   no hay SQL que asegurar ni unaccent/pg_trgm que instalar: la
+   tolerancia a acentos/mayúsculas/erratas se resuelve aquí, en JS,
+   sobre el array ya cargado (no hay otra fuente de datos posible con
+   esta arquitectura). searchProducts() es el único punto de entrada;
+   catalogo.html no vuelve a tocar el texto de la búsqueda. */
+
+function normalizeSearchText(str){
+  return (str || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function searchTokens(str){
+  return normalizeSearchText(str).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/* Similitud aproximada por bigramas (coeficiente de Dice) — el
+   equivalente que se puede calcular en JS sin pg_trgm (que aquí no
+   aplica: no hay tabla que consultar). Solo se usa como último
+   recurso para erratas pequeñas, nunca como primer criterio, y con
+   umbral: por debajo de FUZZY_SIMILARITY_THRESHOLD no cuenta como
+   coincidencia. */
+function bigramSet(str){
+  const set = new Map();
+  for (let i = 0; i < str.length - 1; i++){
+    const bg = str.slice(i, i + 2);
+    set.set(bg, (set.get(bg) || 0) + 1);
+  }
+  return set;
+}
+function bigramSimilarity(a, b){
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const ba = bigramSet(a), bb = bigramSet(b);
+  if (ba.size === 0 || bb.size === 0) return 0;
+  let common = 0;
+  ba.forEach((count, bg) => { if (bb.has(bg)) common += Math.min(count, bb.get(bg)); });
+  let totalA = 0, totalB = 0;
+  ba.forEach(v => totalA += v);
+  bb.forEach(v => totalB += v);
+  return (2 * common) / (totalA + totalB);
+}
+const FUZZY_SIMILARITY_THRESHOLD = 0.35;
+
+/* Un producto es "relevante" si TODAS las palabras de la consulta
+   aparecen (como substring, en cualquier orden) en el campo — nunca
+   basta con que aparezca una sola palabra de varias. El score decide
+   el orden de prioridad pedido: nombre exacto > nombre por prefijo >
+   todas las palabras en el nombre > categoría > marca > descripción >
+   (distribuido entre varios campos, sin concentrarse en ninguno). */
+function scoreProductBySubstring(product, queryWords, normalizedQuery){
+  const nombre = normalizeSearchText(product.nombre);
+  const categoria = normalizeSearchText(LABELS.categoria[product.categoria] || "");
+  const marca = normalizeSearchText(LABELS.marca[product.marca] || "");
+  const descripcion = normalizeSearchText(product.descripcion || "");
+  const allWordsIn = (text) => queryWords.every(w => text.includes(w));
+
+  if (normalizedQuery && nombre === normalizedQuery) return 100;
+  if (normalizedQuery && nombre.startsWith(normalizedQuery)) return 90;
+  if (allWordsIn(nombre)) return 80;
+  if (allWordsIn(categoria)) return 70;
+  if (allWordsIn(marca)) return 60;
+  if (allWordsIn(descripcion)) return 50;
+  if (allWordsIn(`${nombre} ${categoria} ${marca} ${descripcion}`)) return 40;
+  return null; // ninguna palabra encaja de forma literal
+}
+
+/* Fallback aproximado — solo se prueba cuando NINGÚN producto pasó
+   scoreProductBySubstring() para toda la consulta. Cada palabra de la
+   búsqueda debe tener al menos una palabra del nombre del producto
+   por encima del umbral de similitud; si una palabra no encuentra
+   ninguna coincidencia razonable, el producto se descarta entero (no
+   se muestran productos sin relación solo porque una palabra sí
+   aproxima). */
+function fuzzyScoreProduct(product, queryWords){
+  const nombreTokens = searchTokens(product.nombre);
+  if (!nombreTokens.length) return null;
+  let totalSim = 0;
+  const matchedTokens = [];
+  for (const w of queryWords){
+    let best = 0, bestTok = null;
+    for (const tok of nombreTokens){
+      const sim = bigramSimilarity(w, tok);
+      if (sim > best){ best = sim; bestTok = tok; }
+    }
+    if (best < FUZZY_SIMILARITY_THRESHOLD) return null;
+    totalSim += best;
+    matchedTokens.push(bestTok);
+  }
+  const avgSim = totalSim / queryWords.length;
+  return { score: 10 + avgSim * 20, matchedTerm: matchedTokens.join(" ") };
+}
+
+/* Punto de entrada único. Devuelve:
+   - results: productos relevantes, cada uno con "_score" (mayor =
+     más relevante) añadido para que sortList() pueda usarlo cuando
+     el orden elegido sea "relevancia".
+   - fuzzyTerm: solo viene relleno si se usó el fallback aproximado
+     (para mostrar "Resultados similares a: ..."), null en cualquier
+     otro caso. Nunca modifica el texto que escribió el usuario.
+   Consultas de menos de 2 caracteres no filtran nada — se tratan
+   igual que una búsqueda vacía. */
+function searchProducts(products, rawQuery){
+  const normalizedQuery = normalizeSearchText(rawQuery);
+  if (normalizedQuery.length < 2){
+    return { results: products.map(p => Object.assign({ _score: 0 }, p)), fuzzyTerm: null };
+  }
+
+  const queryWords = searchTokens(rawQuery);
+  const scored = [];
+  products.forEach(product => {
+    const score = scoreProductBySubstring(product, queryWords, normalizedQuery);
+    if (score !== null) scored.push(Object.assign({ _score: score }, product));
+  });
+  if (scored.length) return { results: scored, fuzzyTerm: null };
+
+  /* Sin ninguna coincidencia literal: único momento en que se intenta
+     la similitud aproximada, y solo por encima del umbral. */
+  const fuzzy = [];
+  let fuzzyTerm = null;
+  products.forEach(product => {
+    const match = fuzzyScoreProduct(product, queryWords);
+    if (match){
+      fuzzy.push(Object.assign({ _score: match.score }, product));
+      if (!fuzzyTerm) fuzzyTerm = match.matchedTerm;
+    }
+  });
+  return { results: fuzzy, fuzzyTerm: fuzzy.length ? fuzzyTerm : null };
 }
 
 /* ---------- unidades de medida (Bloque cantidades) ---------- */
