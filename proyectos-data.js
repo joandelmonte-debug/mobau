@@ -377,6 +377,7 @@ const MobauProjects = {
         estimated_purchase_date: fields.estimated_purchase_date || null,
         message: fields.message || null,
         budget_range: fields.budget_range || null,
+        project_stage: fields.project_stage || null,
         status: "submitted",
         consent_to_share_contact: true
       })

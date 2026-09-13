@@ -5,6 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Proyecto y cotización — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+  /* Punto 13 — "Tus datos de contacto" como información guardada:
+     los inputs siguen siendo reales (handleSubmit()/validación/
+     saveProfessionalProfileFromRfq() los leen igual), solo se les
+     quita la caja cuando están readonly para que se vean como los
+     pares etiqueta/valor de "Tu proyecto". Selector por #id[readonly]
+     (no por clase) a propósito: ".field input" en styles.css tiene
+     más especificidad que una clase sola, así que una clase sola no
+     le ganaba y el input seguía viéndose con borde/fondo. El atributo
+     readonly ya se refleja solo cuando setupContactEmailField() hace
+     emailInput.readOnly = true/false, así que en el fallback de email
+     (sin session.user.email) el input recupera el estilo normal de
+     .field input en cuanto deja de tener el atributo, sin JS extra. */
+  #send-contact-name[readonly],
+  #send-contact-company[readonly],
+  #send-contact-email[readonly],
+  #send-contact-phone[readonly]{
+    border:none;
+    background:transparent;
+    border-radius:0;
+    padding:0;
+    box-shadow:none;
+    -webkit-appearance:none;
+    appearance:none;
+    font-size:16px;
+    color:var(--ink);
+    cursor:default;
+  }
+  #send-contact-name[readonly]:focus,
+  #send-contact-company[readonly]:focus,
+  #send-contact-email[readonly]:focus,
+  #send-contact-phone[readonly]:focus{
+    outline:none;
+    border-color:transparent;
+  }
+</style>
 </head>
 <body>
 
@@ -119,6 +155,13 @@
   <form class="form-card" id="send-form">
 
     <div class="account-section">
+      <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
+      <p id="send-products-count" class="card-meta" style="margin-bottom:12px;"></p>
+      <div id="send-products-list"></div>
+      <p style="margin-top:12px; display:none;" id="edit-pieces-row"><a href="#" id="edit-pieces-link" style="color:var(--accent); text-decoration:underline;">Editar piezas del proyecto</a></p>
+    </div>
+
+    <div class="account-section">
       <h2 style="margin-bottom:16px;">Tu proyecto</h2>
       <div class="field full" id="send-name-field">
         <label for="send-name">Nombre del proyecto</label>
@@ -178,36 +221,47 @@
         <p id="send-description-value" style="margin:0;"></p>
       </div>
 
-      <div class="field full">
-        <label for="send-purchase-date">Fecha estimada de compra <span class="hint">(opcional)</span></label>
-        <input id="send-purchase-date" type="date">
-      </div>
+      <p style="margin-top:4px; display:none;" id="edit-project-row"><a href="#" id="edit-project-link" style="color:var(--accent); text-decoration:underline;">Editar proyecto</a></p>
     </div>
 
     <div class="account-section">
       <h2 style="margin-bottom:16px;">Tus datos de contacto</h2>
-      <div class="field full">
-        <label for="send-contact-name">Nombre completo</label>
-        <input id="send-contact-name" type="text" placeholder="Ej. Ana María Rosario">
-      </div>
-      <div class="field full">
-        <label for="send-contact-company">Estudio / empresa <span class="hint">(opcional)</span></label>
-        <input id="send-contact-company" type="text" placeholder="Ej. Rosario Arquitectos">
-        <p class="card-meta" style="margin:7px 0 0;">Nombre de tu estudio o empresa, si trabajas con uno.</p>
-      </div>
-      <div class="field full">
-        <label for="send-contact-email">Email</label>
-        <input id="send-contact-email" type="email" placeholder="nombre@estudio.com" readonly>
-        <p class="card-meta" id="send-contact-email-help" hidden style="margin:7px 0 0;">No pudimos completar tu email automáticamente. Escríbelo para que podamos contactarte sobre esta solicitud.</p>
-      </div>
-      <div class="field full">
-        <label for="send-contact-phone">Teléfono <span class="hint">(obligatorio)</span></label>
-        <input type="tel" id="send-contact-phone" autocomplete="tel" inputmode="tel" placeholder="+34 600 000 000">
+      <p class="card-meta" style="margin:0 0 16px;">Estos datos vienen de tu perfil. Para corregirlos, ve a <a href="cuenta.html" style="color:var(--accent); text-decoration:underline;">Mi cuenta</a>.</p>
+      <div class="field-grid">
+        <div class="field" style="margin-bottom:0;">
+          <label for="send-contact-name">Nombre</label>
+          <input id="send-contact-name" type="text" readonly>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="send-contact-company">Estudio/Empresa</label>
+          <input id="send-contact-company" type="text" readonly>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="send-contact-email">Email</label>
+          <input id="send-contact-email" type="email" readonly>
+          <p class="card-meta" id="send-contact-email-help" hidden style="margin:7px 0 0;">No pudimos completar tu email automáticamente. Escríbelo para que podamos contactarte sobre esta solicitud.</p>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="send-contact-phone">Teléfono</label>
+          <input type="tel" id="send-contact-phone" autocomplete="tel" inputmode="tel" readonly>
+          <p class="card-meta" id="send-contact-phone-help" hidden style="margin:7px 0 0;">Añade tu teléfono desde <a href="cuenta.html" style="color:var(--accent); text-decoration:underline;">Mi cuenta</a> para poder enviar esta solicitud.</p>
+        </div>
       </div>
     </div>
 
     <div class="account-section">
       <h2 style="margin-bottom:6px;">Sobre tu solicitud</h2>
+      <div class="field full">
+        <label for="send-stage">Etapa del proyecto <span class="hint">(opcional)</span></label>
+        <select id="send-stage">
+          <option value="">Sin etapa definida</option>
+          <option value="concepto">Concepto / anteproyecto</option>
+          <option value="desarrollo_diseno">Desarrollo de diseño</option>
+          <option value="documentacion">Documentación técnica</option>
+          <option value="construccion">En construcción</option>
+          <option value="acabados">Acabados y mobiliario</option>
+        </select>
+      </div>
       <div class="field full">
         <label for="send-budget">Presupuesto orientativo <span class="hint">(opcional)</span></label>
         <select id="send-budget">
@@ -225,13 +279,6 @@
         <textarea id="send-notes" placeholder="Ej. dudas concretas, restricciones técnicas, si tienes planos o documentación que puedas compartir…"></textarea>
         <p class="card-meta">Cuéntales lo que sea útil: dudas puntuales, restricciones técnicas relevantes, o si dispones de planos u otra documentación que puedas compartir más adelante.</p>
       </div>
-    </div>
-
-    <div class="account-section">
-      <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
-      <p id="send-products-count" class="card-meta" style="margin-bottom:12px;"></p>
-      <div id="send-products-list"></div>
-      <p style="margin-top:12px; display:none;" id="edit-pieces-row"><a href="#" id="edit-pieces-link" style="color:var(--accent); text-decoration:underline;">Editar piezas del proyecto</a></p>
     </div>
 
     <div class="account-section" style="margin-bottom:0;">
@@ -471,10 +518,14 @@
      init — evita la duplicación (y el riesgo de que diverjan) que
      causó el bug ya corregido de la rama ?id= sin precarga. */
   function applyProfessionalProfileToContactFields(profile){
-    if (!profile) return;
-    if (profile.professional_name) document.getElementById("send-contact-name").value = profile.professional_name;
-    if (profile.studio_name) document.getElementById("send-contact-company").value = profile.studio_name;
-    if (profile.phone) document.getElementById("send-contact-phone").value = profile.phone;
+    if (profile && profile.professional_name) document.getElementById("send-contact-name").value = profile.professional_name;
+    if (profile && profile.studio_name) document.getElementById("send-contact-company").value = profile.studio_name;
+
+    /* El teléfono es de solo lectura aquí (se edita desde Mi cuenta) —
+       si el perfil no lo trae, se avisa en vez de dejar escribirlo. */
+    const phone = profile && profile.phone;
+    document.getElementById("send-contact-phone").value = phone || "";
+    document.getElementById("send-contact-phone-help").hidden = !!phone;
   }
 
   async function handleSubmit(submitMode){
@@ -514,7 +565,7 @@
       }
       contactPhone = document.getElementById("send-contact-phone").value.trim();
       if (!isValidContactPhone(contactPhone)){
-        errorEl.textContent = "Indica un teléfono de contacto para poder enviar la solicitud.";
+        errorEl.textContent = "Añade tu teléfono desde Mi cuenta para poder enviar esta solicitud.";
         errorEl.style.display = "block";
         return;
       }
@@ -607,6 +658,7 @@
     /* submitMode === "send": registrar la solicitud real. */
     const contactCompany = document.getElementById("send-contact-company").value.trim();
     const budgetRange = document.getElementById("send-budget").value || null;
+    const projectStage = document.getElementById("send-stage").value || null;
     const { error: rfqError } = await MobauProjects.createRfq({
       project_id: project.id,
       requester_user_id: session.user.id,
@@ -614,9 +666,9 @@
       requester_email: contactEmail,
       requester_company: contactCompany,
       project_location: document.getElementById("send-location").value.trim(),
-      estimated_purchase_date: document.getElementById("send-purchase-date").value || null,
       message: document.getElementById("send-notes").value.trim(),
-      budget_range: budgetRange
+      budget_range: budgetRange,
+      project_stage: projectStage
     });
 
     if (rfqError){
@@ -771,6 +823,17 @@
         editRow.style.display = "block";
       } else {
         editRow.style.display = "none";
+      }
+
+      /* Mismo patrón que edit-pieces-row: solo hay adónde ir a editar el
+         proyecto si ya existe un "project" real con id. */
+      const editProjectRow = document.getElementById("edit-project-row");
+      const editProjectLink = document.getElementById("edit-project-link");
+      if (project){
+        editProjectLink.href = `proyectos-detalle.html?id=${project.id}`;
+        editProjectRow.style.display = "block";
+      } else {
+        editProjectRow.style.display = "none";
       }
 
       document.getElementById("view-send").style.display = "grid";
