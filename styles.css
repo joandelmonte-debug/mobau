@@ -304,6 +304,7 @@ button{ font-family: inherit; }
 .hero-inner{ width:100%; }
 .hero-content{
   position:relative; z-index:2;
+  width: fit-content;
   max-width: 640px;
   padding: 64px 0 80px;
 }
@@ -1168,7 +1169,7 @@ fieldset legend{
      el ancho, con márgenes; object-position recalculado por foto porque el
      recorte vertical (retrato) no despeja las mismas zonas que en horizontal. */
   .hero{ min-height: 560px; align-items:flex-end; }
-  .hero-content{ max-width:none; padding: 40px 0 72px; }
+  .hero-content{ width:auto; max-width:none; padding: 40px 0 72px; }
   .hero h1{ font-size: 27px; }
   .hero .lede{ font-size: 15.5px; }
   .hero-scrim{
