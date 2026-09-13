@@ -264,8 +264,17 @@
             }
 
             /* Con uno o más productos: archivar de verdad, con su
-               confirmación — comportamiento normal, sin eliminar nada. */
-            const confirmArchive = confirm(`¿Archivar "${btn.dataset.name}"?`);
+               confirmación — comportamiento normal, sin eliminar nada.
+               El aviso explica la consecuencia real antes de pulsar
+               (deja de poder trabajarse, queda solo para consulta) y si
+               el plan actual permite reactivarlo después o no — mismo
+               texto que proyectos-detalle.html, para no sorprender al
+               usuario con un archivado que en su plan es irreversible. */
+            const canReactivateLater = planAllowsMultipleActive(currentPlan);
+            const archiveWarning = canReactivateLater
+              ? `Vas a archivar "${btn.dataset.name}". Quedará solo para consulta y no podrás seguir trabajando en él hasta que lo reactives (podrás hacerlo más adelante si tienes cupo disponible en tu plan). ¿Quieres continuar?`
+              : `Vas a archivar "${btn.dataset.name}". Quedará solo para consulta: no podrás seguir trabajando en él, y tu plan actual no permite reactivar proyectos archivados — tendrías que crear uno nuevo. Si necesitas varios proyectos activos a la vez, puedes suscribirte al plan Estudio Fundador. ¿Quieres continuar y archivar el proyecto?`;
+            const confirmArchive = confirm(archiveWarning);
             if (!confirmArchive) return;
 
             btn.disabled = true;
