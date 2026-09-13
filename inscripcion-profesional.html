@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Completa tu perfil profesional — Mobau</title>
+<title>Mi perfil — Mobau</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -29,13 +29,37 @@
 <div class="page-head">
   <div class="wrap">
     <div class="eyebrow">Perfil</div>
-    <h1>Completa tu perfil profesional</h1>
-    <p style="margin-top:14px; max-width:60ch;">Estos datos nos ayudan a identificarte ante los distribuidores cuando solicites una cotización.</p>
+    <h1 id="page-title">Completa tu perfil profesional</h1>
+    <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Estos datos nos ayudan a identificarte ante los distribuidores cuando solicites una cotización.</p>
   </div>
 </div>
 
 <main class="wrap" style="max-width:640px; padding: 28px 0 100px;">
 
+  <!-- Punto 14 (ajuste) — mientras se resuelve la sesión y se consulta
+       professional_profiles, no se muestra ni el formulario de alta ni
+       la vista de consulta: evita el falso "no tienes perfil" que se
+       veía antes si la consulta tardaba o fallaba. -->
+  <p id="pp-loading" class="card-meta">Cargando tu perfil…</p>
+
+  <!-- Estado de error real de la consulta — distinto del formulario de
+       alta a propósito: antes, si supabaseClient.from("professional_profiles")
+       fallaba, el código caía al mismo "else" que "no existe perfil" y
+       mostraba el formulario vacío, como si el usuario no tuviera perfil
+       aunque sí lo tuviera. Ahora un error de verdad nunca muestra el
+       formulario de alta. -->
+  <div id="pp-load-error" class="cart-empty" style="display:none;">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar tu perfil.</p>
+    <p id="pp-load-error-detail" style="margin:0 0 14px;">Ocurrió un error al consultar tus datos. Intenta de nuevo.</p>
+    <button type="button" class="btn btn-primary" id="pp-retry-btn">Reintentar</button>
+  </div>
+
+  <!-- Punto 14 — primera vez, sin perfil todavía: formulario único de
+       creación, sin cambios respecto al original (professional_type y
+       city son NOT NULL, así que la creación siempre pide los tres
+       campos obligatorios juntos; la vista de consulta + edición por
+       grupos de abajo solo tiene sentido una vez que la fila ya
+       existe). -->
   <form class="form-card" id="pp-form" style="display:none;">
     <div class="field full">
       <label for="pp-name">Nombre profesional</label>
@@ -75,6 +99,124 @@
     <p id="pp-error" style="display:none; color:var(--danger); font-size:13px; margin:-8px 0 14px;"></p>
     <button type="submit" class="btn btn-primary btn-block" id="pp-submit-btn">Guardar perfil</button>
   </form>
+
+  <!-- Punto 14 — ya existe un perfil: consulta por defecto, edición
+       solo del grupo que se abre con el lápiz. Reutiliza exactamente
+       la misma tabla/columnas que el formulario de arriba — nunca
+       INSERT aquí, solo UPDATE de las columnas de cada grupo. -->
+  <div id="pp-profile-view" style="display:none;">
+
+    <div class="account-section">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px;">
+        <h2 style="margin:0;">Información personal</h2>
+        <button type="button" class="icon-btn-muted" id="personal-edit-btn" aria-label="Editar información personal" title="Editar información personal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+        </button>
+      </div>
+
+      <div class="field-grid" id="personal-view">
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Nombre</p>
+          <p id="personal-view-name" style="margin:0;">—</p>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Email</p>
+          <p id="personal-view-email" style="margin:0;">—</p>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Teléfono</p>
+          <p id="personal-view-phone" style="margin:0;">—</p>
+        </div>
+      </div>
+
+      <div class="field-grid" id="personal-edit" style="display:none;">
+        <div class="field" style="margin-bottom:0;">
+          <label for="personal-edit-name">Nombre</label>
+          <input id="personal-edit-name" type="text" required>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Email</p>
+          <p id="personal-edit-email-display" style="margin:0;">—</p>
+          <p class="card-meta" style="margin:7px 0 0;">Para cambiar tu email de acceso, escríbenos a hola@mobau.do.</p>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="personal-edit-phone">Teléfono <span class="hint">(opcional)</span></label>
+          <input id="personal-edit-phone" type="tel">
+        </div>
+      </div>
+      <p id="personal-edit-error" style="display:none; color:var(--danger); font-size:13px; margin:14px 0 0;"></p>
+      <div id="personal-edit-actions" style="display:none; gap:10px; margin-top:16px;">
+        <button type="button" class="btn btn-primary btn-sm" id="personal-save-btn">Guardar</button>
+        <button type="button" class="btn btn-outline btn-sm" id="personal-cancel-btn">Cancelar</button>
+      </div>
+    </div>
+
+    <div class="account-section" style="margin-bottom:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px;">
+        <h2 style="margin:0;">Información profesional</h2>
+        <button type="button" class="icon-btn-muted" id="professional-edit-btn" aria-label="Editar información profesional" title="Editar información profesional">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+        </button>
+      </div>
+
+      <div class="field-grid" id="professional-view">
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Empresa o estudio</p>
+          <p id="professional-view-studio" style="margin:0;">—</p>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Cargo o función</p>
+          <p id="professional-view-type" style="margin:0;">—</p>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Ciudad</p>
+          <p id="professional-view-city" style="margin:0;">—</p>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Sitio web</p>
+          <p id="professional-view-website" style="margin:0;">—</p>
+        </div>
+        <div>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Instagram</p>
+          <p id="professional-view-instagram" style="margin:0;">—</p>
+        </div>
+      </div>
+
+      <div class="field-grid" id="professional-edit" style="display:none;">
+        <div class="field" style="margin-bottom:0;">
+          <label for="professional-edit-studio">Empresa o estudio <span class="hint">(opcional)</span></label>
+          <input id="professional-edit-studio" type="text">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="professional-edit-type">Cargo o función</label>
+          <select id="professional-edit-type" required>
+            <option value="arquitecto">Arquitecto/a</option>
+            <option value="interiorista">Interiorista</option>
+            <option value="disenador">Diseñador/a</option>
+            <option value="estudio">Estudio</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="professional-edit-city">Ciudad</label>
+          <input id="professional-edit-city" type="text" required>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="professional-edit-website">Sitio web <span class="hint">(opcional)</span></label>
+          <input id="professional-edit-website" type="text">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="professional-edit-instagram">Instagram <span class="hint">(opcional)</span></label>
+          <input id="professional-edit-instagram" type="text">
+        </div>
+      </div>
+      <p id="professional-edit-error" style="display:none; color:var(--danger); font-size:13px; margin:14px 0 0;"></p>
+      <div id="professional-edit-actions" style="display:none; gap:10px; margin-top:16px;">
+        <button type="button" class="btn btn-primary btn-sm" id="professional-save-btn">Guardar</button>
+        <button type="button" class="btn btn-outline btn-sm" id="professional-cancel-btn">Cancelar</button>
+      </div>
+    </div>
+  </div>
 
 </main>
 
@@ -120,11 +262,21 @@
 <script>
   let session = null;
   let isUpdate = false;
+  let profile = null; // última fila real de professional_profiles, se mantiene al día tras cada guardado
+
+  const PROFESSIONAL_TYPE_LABELS = {
+    arquitecto: "Arquitecto/a",
+    interiorista: "Interiorista",
+    disenador: "Diseñador/a",
+    estudio: "Estudio",
+    otro: "Otro"
+  };
 
   function fieldValue(id){
     return document.getElementById(id).value.trim();
   }
 
+  /* ---------- primera vez: crear el perfil (sin cambios de lógica) ---------- */
   document.getElementById("pp-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const errorEl = document.getElementById("pp-error");
@@ -154,17 +306,9 @@
       instagram: fieldValue("pp-instagram") || null
     };
 
-    let error;
-    if (isUpdate){
-      ({ error } = await supabaseClient
-        .from("professional_profiles")
-        .update(record)
-        .eq("user_id", session.user.id));
-    } else {
-      ({ error } = await supabaseClient
-        .from("professional_profiles")
-        .insert({ ...record, user_id: session.user.id }));
-    }
+    const { error } = await supabaseClient
+      .from("professional_profiles")
+      .insert({ ...record, user_id: session.user.id });
 
     if (error){
       errorEl.textContent = error.message || "No pudimos guardar tu perfil. Intenta de nuevo.";
@@ -183,13 +327,160 @@
     }
 
     showToast("Perfil guardado correctamente.");
-    btn.disabled = false;
-    btn.textContent = "Guardar perfil";
+    profile = { ...record, user_id: session.user.id };
+    document.getElementById("pp-form").style.display = "none";
+    renderProfileView();
+    document.getElementById("pp-profile-view").style.display = "block";
+    document.getElementById("page-title").textContent = "Mi perfil";
   });
 
-  (async () => {
-    session = await MobauAuth.requireSession();
-    if (!session) return;
+  /* ---------- ya existe perfil: consulta + edición por grupo ---------- */
+
+  /* Un perfil que existe pero tiene campos opcionales sin rellenar
+     (phone/studio_name/website/instagram, todos NULL-able) no es lo
+     mismo que "no hay perfil" — se sigue mostrando la vista de
+     consulta completa, con "No indicado" solo en el campo vacío.
+     professional_name/professional_type/city son NOT NULL en la tabla:
+     si el perfil existe, esos tres siempre traen valor real. */
+  function renderProfileView(){
+    document.getElementById("personal-view-name").textContent = profile.professional_name || "No indicado";
+    document.getElementById("personal-view-email").textContent = session.user.email || "No indicado";
+    document.getElementById("personal-view-phone").textContent = profile.phone || "No indicado";
+
+    document.getElementById("professional-view-studio").textContent = profile.studio_name || "No indicado";
+    document.getElementById("professional-view-type").textContent = PROFESSIONAL_TYPE_LABELS[profile.professional_type] || profile.professional_type || "No indicado";
+    document.getElementById("professional-view-city").textContent = profile.city || "No indicado";
+    document.getElementById("professional-view-website").textContent = profile.website || "No indicado";
+    document.getElementById("professional-view-instagram").textContent = profile.instagram || "No indicado";
+  }
+
+  /* Un solo helper para los dos grupos: alterna vista/edición, precarga
+     los inputs con los valores reales de "profile" al entrar en modo
+     edición (nunca con lo que ya hubiera escrito antes) y los
+     descarta sin guardar al cancelar — "profile" es la única fuente
+     de verdad, así que cancelar siempre restaura lo real. */
+  function enterEditMode(prefix, prefillFn){
+    document.getElementById(`${prefix}-view`).style.display = "none";
+    document.getElementById(`${prefix}-edit`).style.display = "grid";
+    document.getElementById(`${prefix}-edit-actions`).style.display = "flex";
+    document.getElementById(`${prefix}-edit-error`).style.display = "none";
+    prefillFn();
+  }
+
+  function exitEditMode(prefix){
+    document.getElementById(`${prefix}-view`).style.display = "grid";
+    document.getElementById(`${prefix}-edit`).style.display = "none";
+    document.getElementById(`${prefix}-edit-actions`).style.display = "none";
+    document.getElementById(`${prefix}-edit-error`).style.display = "none";
+  }
+
+  document.getElementById("personal-edit-btn").addEventListener("click", () => {
+    enterEditMode("personal", () => {
+      document.getElementById("personal-edit-name").value = profile.professional_name || "";
+      document.getElementById("personal-edit-email-display").textContent = session.user.email || "—";
+      document.getElementById("personal-edit-phone").value = profile.phone || "";
+    });
+  });
+  document.getElementById("personal-cancel-btn").addEventListener("click", () => exitEditMode("personal"));
+
+  document.getElementById("personal-save-btn").addEventListener("click", async () => {
+    const errorEl = document.getElementById("personal-edit-error");
+    errorEl.style.display = "none";
+
+    const professional_name = fieldValue("personal-edit-name");
+    if (!professional_name){
+      errorEl.textContent = "El nombre no puede quedar vacío.";
+      errorEl.style.display = "block";
+      return;
+    }
+    const phone = fieldValue("personal-edit-phone") || null;
+
+    const btn = document.getElementById("personal-save-btn");
+    btn.disabled = true;
+
+    /* UPDATE parcial: solo estas dos columnas — nunca toca studio_name,
+       professional_type, city, website ni instagram (grupo aparte). */
+    const { error } = await supabaseClient
+      .from("professional_profiles")
+      .update({ professional_name, phone })
+      .eq("user_id", session.user.id);
+
+    btn.disabled = false;
+
+    if (error){
+      errorEl.textContent = error.message || "No pudimos guardar. Intenta de nuevo.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    profile = { ...profile, professional_name, phone };
+    renderProfileView();
+    exitEditMode("personal");
+    showToast("Información personal guardada.");
+  });
+
+  document.getElementById("professional-edit-btn").addEventListener("click", () => {
+    enterEditMode("professional", () => {
+      document.getElementById("professional-edit-studio").value = profile.studio_name || "";
+      document.getElementById("professional-edit-type").value = profile.professional_type || "";
+      document.getElementById("professional-edit-city").value = profile.city || "";
+      document.getElementById("professional-edit-website").value = profile.website || "";
+      document.getElementById("professional-edit-instagram").value = profile.instagram || "";
+    });
+  });
+  document.getElementById("professional-cancel-btn").addEventListener("click", () => exitEditMode("professional"));
+
+  document.getElementById("professional-save-btn").addEventListener("click", async () => {
+    const errorEl = document.getElementById("professional-edit-error");
+    errorEl.style.display = "none";
+
+    const professional_type = document.getElementById("professional-edit-type").value;
+    const city = fieldValue("professional-edit-city");
+    if (!professional_type || !city){
+      errorEl.textContent = "Completa el cargo/función y la ciudad para continuar.";
+      errorEl.style.display = "block";
+      return;
+    }
+    const studio_name = fieldValue("professional-edit-studio") || null;
+    const website = fieldValue("professional-edit-website") || null;
+    const instagram = fieldValue("professional-edit-instagram") || null;
+
+    const btn = document.getElementById("professional-save-btn");
+    btn.disabled = true;
+
+    /* UPDATE parcial: solo estas columnas — nunca toca professional_name
+       ni phone (grupo "Información personal"). */
+    const { error } = await supabaseClient
+      .from("professional_profiles")
+      .update({ professional_type, city, studio_name, website, instagram })
+      .eq("user_id", session.user.id);
+
+    btn.disabled = false;
+
+    if (error){
+      errorEl.textContent = error.message || "No pudimos guardar. Intenta de nuevo.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    profile = { ...profile, professional_type, city, studio_name, website, instagram };
+    renderProfileView();
+    exitEditMode("professional");
+    showToast("Información profesional guardada.");
+  });
+
+  /* Único punto que decide qué se muestra. Separado en una función (en
+     vez de vivir solo dentro del IIFE) para que "Reintentar" pueda
+     volver a llamarlo exactamente igual que la carga inicial — nunca
+     una segunda lógica de carga. Los cuatro estados (cargando, error,
+     consulta, alta) son mutuamente excluyentes: un error de la
+     consulta NUNCA cae en el formulario de alta (antes sí lo hacía,
+     que es la causa real del perfil "vacío" reportado). */
+  async function loadProfile(){
+    document.getElementById("pp-loading").style.display = "block";
+    document.getElementById("pp-load-error").style.display = "none";
+    document.getElementById("pp-form").style.display = "none";
+    document.getElementById("pp-profile-view").style.display = "none";
 
     const { data: existing, error } = await supabaseClient
       .from("professional_profiles")
@@ -197,24 +488,43 @@
       .eq("user_id", session.user.id)
       .maybeSingle();
 
+    document.getElementById("pp-loading").style.display = "none";
+
     if (error){
-      const errorEl = document.getElementById("pp-error");
-      errorEl.textContent = "No pudimos cargar tu perfil. Intenta recargar la página.";
-      errorEl.style.display = "block";
+      document.getElementById("pp-load-error-detail").textContent =
+        error.message || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
+      document.getElementById("pp-load-error").style.display = "block";
+      return;
     }
 
     if (existing){
       isUpdate = true;
-      document.getElementById("pp-name").value = existing.professional_name || "";
-      document.getElementById("pp-type").value = existing.professional_type || "";
-      document.getElementById("pp-city").value = existing.city || "";
-      document.getElementById("pp-studio").value = existing.studio_name || "";
-      document.getElementById("pp-phone").value = existing.phone || "";
-      document.getElementById("pp-website").value = existing.website || "";
-      document.getElementById("pp-instagram").value = existing.instagram || "";
+      profile = existing;
+      document.getElementById("page-title").textContent = "Mi perfil";
+      document.getElementById("page-subtitle").textContent = "Consulta tus datos o edita un grupo con el lápiz.";
+      renderProfileView();
+      document.getElementById("pp-profile-view").style.display = "block";
+      return;
     }
 
+    /* Sin perfil de verdad (data === null y error === null) — nunca se
+       crea nada aquí, solo se muestra el formulario de alta de siempre
+       para que el usuario decida completarlo. */
     document.getElementById("pp-form").style.display = "block";
+  }
+
+  document.getElementById("pp-retry-btn").addEventListener("click", loadProfile);
+
+  (async () => {
+    /* requireSession() ya espera (internamente) a que Supabase termine
+       de restaurar la sesión —incluido el caso del enlace mágico con
+       #access_token— antes de devolver o redirigir; loadProfile() solo
+       arranca después de tener "session" resuelta de verdad, nunca
+       antes. */
+    session = await MobauAuth.requireSession();
+    if (!session) return; // ya redirigió a login.html
+
+    await loadProfile();
   })();
 </script>
 </body>

@@ -356,7 +356,18 @@
     session = await MobauAuth.requireSession();
     if (!session) return;
     currentPlan = await MobauProjects.myPlan(session.user.id);
-    await refreshProjectsView();
+
+    /* Punto 14 — el menú de cuenta enlaza aquí con ?status=active o
+       ?status=requested para abrir la pestaña directamente, mismo
+       valor exacto que ya usan los data-status de los botones de
+       filtro. Sin parámetro (o con uno que no sea uno de los tres
+       reales), se comporta exactamente igual que antes: "active". */
+    const statusParam = new URLSearchParams(window.location.search).get("status");
+    if (["active", "requested", "archived"].includes(statusParam)){
+      await setFilter(statusParam);
+    } else {
+      await refreshProjectsView();
+    }
   })();
 </script>
 </body>

@@ -35,7 +35,12 @@
 }
 
 *, *::before, *::after{ box-sizing: border-box; }
-html{ scroll-behavior: smooth; }
+/* scrollbar-gutter:stable reserva siempre el ancho de la barra de
+   scroll vertical, exista o no en un momento dado — evita que el
+   contenido salte horizontalmente cuando una página cambia de alto
+   (por ejemplo, al abrir el menú de cuenta cerca del final de una
+   página corta) y la barra aparece o desaparece. */
+html{ scroll-behavior: smooth; scrollbar-gutter: stable; }
 body{
   margin:0;
   background: var(--bg);
@@ -183,6 +188,46 @@ button{ font-family: inherit; }
 }
 .nav-toggle span::before{ position:absolute; top:-6px; }
 .nav-toggle span::after{ position:absolute; top:6px; }
+
+/* ---------- menú de cuenta (Punto 14) ---------- */
+.account-menu{ position:relative; }
+.account-menu-trigger{
+  display:inline-flex; align-items:center; gap:6px;
+  background:none; border:none; padding:6px 0; margin:0;
+  font-family: var(--f-body); font-size:14px; font-weight:500; color: var(--ink-soft);
+  cursor:pointer; white-space:nowrap;
+}
+.account-menu-trigger:hover{ color: var(--ink); }
+.account-menu-trigger svg{ transition: transform .15s ease; }
+.account-menu-trigger[aria-expanded="true"] svg{ transform: rotate(180deg); }
+.account-menu-panel{
+  position:absolute; top: calc(100% + 10px); right:0;
+  min-width:230px; background: var(--bg);
+  border:1px solid var(--line-strong); border-radius: var(--radius-lg);
+  box-shadow: 0 12px 28px rgba(20,18,12,.12);
+  padding:8px; z-index:50;
+  /* Oculto por opacidad/visibilidad, nunca por display:none: el panel
+     ya está fuera del flujo (position:absolute dentro de .account-menu,
+     que es position:relative), así que abrir/cerrar nunca desplaza el
+     header ni el resto de la página — solo cambia su propia opacidad. */
+  opacity:0; visibility:hidden; pointer-events:none;
+  transform: translateY(-4px);
+  transition: opacity .12s ease, transform .12s ease, visibility .12s;
+}
+.account-menu-panel.is-open{
+  opacity:1; visibility:visible; pointer-events:auto; transform: translateY(0);
+}
+.account-menu-header{ padding:8px 12px 12px; border-bottom:1px solid var(--line); margin-bottom:6px; }
+.account-menu-name{ font-weight:600; font-size:14px; color: var(--ink); }
+.account-menu-email{ font-size:12.5px; color: var(--ink-faint); margin-top:2px; word-break:break-all; }
+.account-menu-panel a, .account-menu-panel .account-menu-item{
+  display:block; width:100%; text-align:left;
+  background:none; border:none; border-radius: var(--radius);
+  font-family: var(--f-body); font-size:14px; color: var(--ink-soft);
+  padding:9px 12px; cursor:pointer;
+}
+.account-menu-panel a:hover, .account-menu-panel .account-menu-item:hover{ background: var(--surface); color: var(--ink); }
+.account-menu-panel a:focus-visible, .account-menu-panel .account-menu-item:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
 
 /* ---------- footer ---------- */
 .site-footer{
@@ -1038,6 +1083,24 @@ fieldset legend{
   body.nav-open .nav-links a{ padding: 10px 0; width:100%; }
   body.nav-open .nav-links .nav-sep{ display:none; }
   .nav-cta #cart-link{ display:inline-flex; }
+
+  /* Menú de cuenta dentro del desplegable móvil: mismo ancho completo
+     que el resto de enlaces, panel en flujo normal (no flotante) en
+     vez de superpuesto, para que no tape nada en una pantalla angosta. */
+  body.nav-open .account-menu{ width:100%; }
+  body.nav-open .account-menu-trigger{ width:100%; justify-content:space-between; padding:10px 0; }
+  body.nav-open .account-menu-panel{
+    position:static; box-shadow:none; border:none;
+    padding:0 0 8px 14px; margin-top:2px; min-width:0;
+    /* Aquí sí colapsa por display: al pasar a position:static (flujo
+       normal) dentro del propio desplegable móvil, opacity/visibility
+       dejarían un hueco vacío del alto del panel mientras está cerrado.
+       Esto vive dentro del overlay del menú móvil (ya position:absolute
+       aparte) — no toca el header real ni la barra de scroll de la
+       página. */
+    display:none;
+  }
+  body.nav-open .account-menu-panel.is-open{ display:block; }
 
   .hero{ grid-template-columns: 1fr; padding-top: 48px; }
   .hero h1{ font-size: 30px; }
