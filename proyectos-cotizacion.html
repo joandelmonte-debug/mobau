@@ -119,14 +119,73 @@
   <form class="form-card" id="send-form">
 
     <div class="account-section">
-      <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
-      <p id="send-products-count" class="card-meta" style="margin-bottom:12px;"></p>
-      <div id="send-products-list"></div>
-      <p style="margin-top:12px; display:none;" id="edit-pieces-row"><a href="#" id="edit-pieces-link" style="color:var(--accent); text-decoration:underline;">Editar piezas del proyecto</a></p>
+      <h2 style="margin-bottom:16px;">Tu proyecto</h2>
+      <div class="field full" id="send-name-field">
+        <label for="send-name">Nombre del proyecto</label>
+        <input id="send-name" type="text" placeholder="Ej. Apartamento Piantini">
+      </div>
+
+      <!-- Punto 13 (Paso B/C) — tarjeta compacta de solo lectura: client_name/
+           project_type/location ya guardados en el proyecto, nunca inputs,
+           nunca parte del envío. Reutiliza .field-grid (ya existente en
+           styles.css: 2 columnas en escritorio, 1 en móvil ≤900px) — sin
+           CSS nuevo. Los controles editables (send-type/send-location)
+           conservan su id de siempre y solo se ocultan cuando ya hay un
+           valor guardado que mostrar en su lugar — handleSubmit() sigue
+           leyéndolos sin cambios tanto si están visibles como ocultos.
+           Cada celda quita el margin-bottom propio de .field para que el
+           único espaciado entre filas sea el gap de .field-grid (evita
+           duplicar el espacio vertical y mantiene el bloque compacto). -->
+      <div class="field-grid" style="margin-bottom:18px;">
+        <div id="send-name-display" hidden style="margin-bottom:0;">
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Nombre</p>
+          <p id="send-existing-label" style="margin:0;"></p>
+        </div>
+
+        <div class="field" id="send-client-field" hidden style="margin-bottom:0;">
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Cliente</p>
+          <p id="send-client-value" style="margin:0;"></p>
+        </div>
+
+        <div class="field" id="send-type-field" style="margin-bottom:0;">
+          <label for="send-type">Tipo de proyecto</label>
+          <select id="send-type">
+            <option value="">Selecciona una opción</option>
+            <option value="residencial">Residencial</option>
+            <option value="comercial">Comercial</option>
+            <option value="hospitalidad">Hospitalidad</option>
+            <option value="oficina">Oficina</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field" id="send-type-display" hidden style="margin-bottom:0;">
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Tipo de proyecto</p>
+          <p id="send-type-value" style="margin:0;"></p>
+        </div>
+
+        <div class="field" id="send-location-field" style="margin-bottom:0;">
+          <label for="send-location">Ubicación del proyecto</label>
+          <input id="send-location" type="text" placeholder="Ej. Santo Domingo, Piantini">
+        </div>
+        <div class="field" id="send-location-display" hidden style="margin-bottom:0;">
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Ubicación</p>
+          <p id="send-location-value" style="margin:0;"></p>
+        </div>
+      </div>
+
+      <div class="field full" id="send-description-field" hidden>
+        <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Descripción</p>
+        <p id="send-description-value" style="margin:0;"></p>
+      </div>
+
+      <div class="field full">
+        <label for="send-purchase-date">Fecha estimada de compra <span class="hint">(opcional)</span></label>
+        <input id="send-purchase-date" type="date">
+      </div>
     </div>
 
     <div class="account-section">
-      <h2 style="margin-bottom:16px;">Datos de contacto</h2>
+      <h2 style="margin-bottom:16px;">Tus datos de contacto</h2>
       <div class="field full">
         <label for="send-contact-name">Nombre completo</label>
         <input id="send-contact-name" type="text" placeholder="Ej. Ana María Rosario">
@@ -134,52 +193,51 @@
       <div class="field full">
         <label for="send-contact-company">Estudio / empresa <span class="hint">(opcional)</span></label>
         <input id="send-contact-company" type="text" placeholder="Ej. Rosario Arquitectos">
+        <p class="card-meta" style="margin:7px 0 0;">Nombre de tu estudio o empresa, si trabajas con uno.</p>
       </div>
       <div class="field full">
         <label for="send-contact-email">Email</label>
-        <input id="send-contact-email" type="email" placeholder="nombre@estudio.com">
+        <input id="send-contact-email" type="email" placeholder="nombre@estudio.com" readonly>
+      </div>
+      <div class="field full">
+        <label for="send-contact-phone">Teléfono <span class="hint">(obligatorio)</span></label>
+        <input type="tel" id="send-contact-phone" autocomplete="tel" inputmode="tel" placeholder="+34 600 000 000">
       </div>
     </div>
 
     <div class="account-section">
-      <h2 style="margin-bottom:16px;">Detalles del proyecto</h2>
-      <div class="field full" id="send-name-field">
-        <label for="send-name">Nombre del proyecto</label>
-        <input id="send-name" type="text" placeholder="Ej. Apartamento Piantini">
-      </div>
-      <p id="send-existing-label" style="display:none; font-weight:600; color:var(--ink); margin:0 0 20px;"></p>
+      <h2 style="margin-bottom:6px;">Sobre tu solicitud</h2>
       <div class="field full">
-        <label for="send-type">Tipo de proyecto</label>
-        <select id="send-type">
-          <option value="">Selecciona una opción</option>
-          <option value="residencial">Residencial</option>
-          <option value="comercial">Comercial</option>
-          <option value="hospitalidad">Hospitalidad</option>
-          <option value="oficina">Oficina</option>
-          <option value="otro">Otro</option>
+        <label for="send-budget">Presupuesto orientativo <span class="hint">(opcional)</span></label>
+        <select id="send-budget">
+          <option value="">Sin presupuesto definido</option>
+          <option value="up_to_5000">Hasta 5.000 €</option>
+          <option value="5000_15000">5.000–15.000 €</option>
+          <option value="15000_30000">15.000–30.000 €</option>
+          <option value="30000_60000">30.000–60.000 €</option>
+          <option value="over_60000">Más de 60.000 €</option>
         </select>
+        <p class="card-meta" style="margin:7px 0 0;">Si lo tienes definido, indica el rango aproximado disponible para este proyecto.</p>
       </div>
       <div class="field full">
-        <label for="send-location">Ubicación del proyecto</label>
-        <input id="send-location" type="text" placeholder="Ej. Santo Domingo, Piantini">
-      </div>
-      <div class="field full">
-        <label for="send-purchase-date">Fecha estimada de compra <span class="hint">(opcional)</span></label>
-        <input id="send-purchase-date" type="date">
+        <label for="send-notes">Información adicional para los distribuidores <span class="hint">(opcional)</span></label>
+        <textarea id="send-notes" placeholder="Ej. dudas concretas, restricciones técnicas, si tienes planos o documentación que puedas compartir…"></textarea>
+        <p class="card-meta">Cuéntales lo que sea útil: dudas puntuales, restricciones técnicas relevantes, o si dispones de planos u otra documentación que puedas compartir más adelante.</p>
       </div>
     </div>
 
+    <div class="account-section">
+      <h2 style="margin-bottom:6px;">Piezas de tu proyecto</h2>
+      <p id="send-products-count" class="card-meta" style="margin-bottom:12px;"></p>
+      <div id="send-products-list"></div>
+      <p style="margin-top:12px; display:none;" id="edit-pieces-row"><a href="#" id="edit-pieces-link" style="color:var(--accent); text-decoration:underline;">Editar piezas del proyecto</a></p>
+    </div>
+
     <div class="account-section" style="margin-bottom:0;">
-      <h2 style="margin-bottom:16px;">Notas</h2>
-      <div class="field full">
-        <label for="send-notes">Comentarios adicionales <span class="hint">(opcional)</span></label>
-        <textarea id="send-notes" placeholder="Contexto del proyecto, plazos, preferencias de estilo…"></textarea>
-      </div>
-      <div class="field full">
-        <label style="display:flex; align-items:flex-start; gap:8px; font-weight:400; cursor:pointer;">
-          <input type="checkbox" id="send-consent" style="margin-top:3px;">
-          <span>Autorizo compartir estos datos con los distribuidores para recibir la cotización.</span>
-        </label>
+      <h2 style="margin-bottom:12px;">Autorización</h2>
+      <div class="consent-field" style="display:flex; align-items:flex-start; gap:8px;">
+        <input type="checkbox" id="send-consent" style="width:auto; padding:0; margin-top:3px;">
+        <label for="send-consent" style="font-weight:400; margin:0; cursor:pointer;">Autorizo compartir estos datos con los distribuidores para recibir la cotización.</label>
       </div>
     </div>
 
@@ -305,6 +363,49 @@
     if (sendBtn) sendBtn.disabled = disabled;
   }
 
+  /* Punto 13 (Paso B/C) — solo lectura de client_name/description/
+     project_type/location ya guardados en el proyecto. Nunca escribe en
+     projects ni en rfqs, no forma parte de handleSubmit() ni de la
+     validación, no toca el id ni el valor de send-type/send-location
+     (handleSubmit() sigue leyéndolos exactamente igual). Solo alterna
+     qué versión se ve: el control editable (si el dato todavía no
+     existe) o el texto de solo lectura (si ya existe). Se llama solo
+     cuando ya existe un "project" real (?id= o proyecto activo
+     reutilizado). */
+  function renderProjectReadOnlyDetails(proj){
+    const clientField = document.getElementById("send-client-field");
+    const clientValue = document.getElementById("send-client-value");
+    if (proj && proj.client_name){
+      clientValue.textContent = proj.client_name;
+      clientField.hidden = false;
+    } else {
+      clientField.hidden = true;
+    }
+
+    const descriptionField = document.getElementById("send-description-field");
+    const descriptionValue = document.getElementById("send-description-value");
+    if (proj && proj.description){
+      descriptionValue.textContent = proj.description;
+      descriptionField.hidden = false;
+    } else {
+      descriptionField.hidden = true;
+    }
+
+    const hasType = !!(proj && proj.project_type);
+    document.getElementById("send-type-field").hidden = hasType;
+    document.getElementById("send-type-display").hidden = !hasType;
+    if (hasType){
+      document.getElementById("send-type-value").textContent = PROJECT_TYPE_LABELS[proj.project_type] || proj.project_type;
+    }
+
+    const hasLocation = !!(proj && proj.location);
+    document.getElementById("send-location-field").hidden = hasLocation;
+    document.getElementById("send-location-display").hidden = !hasLocation;
+    if (hasLocation){
+      document.getElementById("send-location-value").textContent = proj.location;
+    }
+  }
+
   /* Punto 13 (Fase 1) — actualiza el nombre de contacto y el
      estudio/empresa en professional_profiles, para precargarlos en
      futuras solicitudes. Solo UPDATE, nunca INSERT: professional_type
@@ -316,7 +417,7 @@
      ni rfqs — rfqs ya quedó guardada con los datos exactos de este
      envío, inmutable desde la web (sin política de UPDATE), y no
      depende de lo que pase aquí. */
-  async function saveProfessionalProfileFromRfq(userId, professionalName, studioName){
+  async function saveProfessionalProfileFromRfq(userId, professionalName, studioName, phone){
     const { data: existing, error: readError } = await supabaseClient
       .from("professional_profiles")
       .select("user_id")
@@ -328,11 +429,22 @@
       .from("professional_profiles")
       .update({
         professional_name: professionalName,
-        studio_name: studioName || null
+        studio_name: studioName || null,
+        phone: phone || null
       })
       .eq("user_id", userId);
 
     return { saved: !error };
+  }
+
+  /* Validación mínima de teléfono para el envío de RFQ: acepta dígitos,
+     "+", espacios, paréntesis y guiones (números internacionales sin
+     imponer un formato nacional rígido), pero exige al menos 7 dígitos
+     reales para descartar un texto vacío o irrelevante. */
+  function isValidContactPhone(raw){
+    if (!/^[0-9+()\-\s]+$/.test(raw)) return false;
+    const digits = raw.replace(/\D/g, "");
+    return digits.length >= 7;
   }
 
   async function handleSubmit(submitMode){
@@ -349,7 +461,7 @@
       return;
     }
 
-    let contactName = "", contactEmail = "";
+    let contactName = "", contactEmail = "", contactPhone = "";
     if (submitMode === "send"){
       const type = document.getElementById("send-type").value;
       const location = document.getElementById("send-location").value.trim();
@@ -362,6 +474,12 @@
       contactEmail = document.getElementById("send-contact-email").value.trim();
       if (!contactName || !contactEmail){
         errorEl.textContent = "Completa tu nombre de contacto y email para solicitar la cotización.";
+        errorEl.style.display = "block";
+        return;
+      }
+      contactPhone = document.getElementById("send-contact-phone").value.trim();
+      if (!isValidContactPhone(contactPhone)){
+        errorEl.textContent = "Indica un teléfono de contacto para poder enviar la solicitud.";
         errorEl.style.display = "block";
         return;
       }
@@ -453,6 +571,7 @@
 
     /* submitMode === "send": registrar la solicitud real. */
     const contactCompany = document.getElementById("send-contact-company").value.trim();
+    const budgetRange = document.getElementById("send-budget").value || null;
     const { error: rfqError } = await MobauProjects.createRfq({
       project_id: project.id,
       requester_user_id: session.user.id,
@@ -461,7 +580,8 @@
       requester_company: contactCompany,
       project_location: document.getElementById("send-location").value.trim(),
       estimated_purchase_date: document.getElementById("send-purchase-date").value || null,
-      message: document.getElementById("send-notes").value.trim()
+      message: document.getElementById("send-notes").value.trim(),
+      budget_range: budgetRange
     });
 
     if (rfqError){
@@ -477,7 +597,7 @@
        si no existe perfil o el UPDATE falla, no se deshace ni se
        duplica la RFQ — solo se avisa sin bloquear el resto del flujo
        (archivar + redirigir sigue exactamente igual). */
-    const { saved: profileSaved } = await saveProfessionalProfileFromRfq(session.user.id, contactName, contactCompany);
+    const { saved: profileSaved } = await saveProfessionalProfileFromRfq(session.user.id, contactName, contactCompany, contactPhone);
     if (!profileSaved){
       alert("La solicitud se ha enviado, pero no hemos podido guardar los datos del perfil. Completa tu perfil profesional desde Mi cuenta para reutilizarlos en futuras solicitudes.");
     }
@@ -521,10 +641,27 @@
 
       document.getElementById("bc-project").textContent = project.name;
       document.getElementById("send-name-field").style.display = "none";
-      document.getElementById("send-existing-label").textContent = `Proyecto: ${project.name}`;
-      document.getElementById("send-existing-label").style.display = "block";
+      document.getElementById("send-existing-label").textContent = project.name;
+      document.getElementById("send-name-display").hidden = false;
       document.getElementById("send-type").value = project.project_type || "";
       document.getElementById("send-location").value = project.location || "";
+      renderProjectReadOnlyDetails(project);
+
+      /* Mismo precargado de datos de contacto que ya usa la rama de
+         reutilización de proyecto activo (más abajo) — antes esta rama
+         no lo hacía en absoluto, dejando nombre/estudio/email/teléfono
+         vacíos aunque ya existieran en la sesión y en el perfil. */
+      document.getElementById("send-contact-email").value = session.user.email || "";
+      const { data: professionalProfile } = await supabaseClient
+        .from("professional_profiles")
+        .select("professional_name, studio_name, phone")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (professionalProfile){
+        if (professionalProfile.professional_name) document.getElementById("send-contact-name").value = professionalProfile.professional_name;
+        if (professionalProfile.studio_name) document.getElementById("send-contact-company").value = professionalProfile.studio_name;
+        if (professionalProfile.phone) document.getElementById("send-contact-phone").value = professionalProfile.phone;
+      }
 
     } else {
       const selectionItems = getSelection();
@@ -549,21 +686,23 @@
 
       if (project){
         const nameField = mode === "save" ? "save-name-field" : "send-name-field";
-        const labelField = mode === "save" ? "save-existing-label" : "send-existing-label";
         document.getElementById(nameField).style.display = "none";
-        document.getElementById(labelField).textContent = `Proyecto: ${project.name}`;
-        document.getElementById(labelField).style.display = "block";
 
         /* Muestra lo que ya está guardado, para no perderlo si el
            campo se deja igual al reutilizar el proyecto activo. */
         if (mode === "save"){
+          document.getElementById("save-existing-label").textContent = `Proyecto: ${project.name}`;
+          document.getElementById("save-existing-label").style.display = "block";
           document.getElementById("save-type").value = project.project_type || "";
           document.getElementById("save-location").value = project.location || "";
           document.getElementById("save-client").value = project.client_name || "";
           document.getElementById("save-description").value = project.description || "";
         } else {
+          document.getElementById("send-existing-label").textContent = project.name;
+          document.getElementById("send-name-display").hidden = false;
           document.getElementById("send-type").value = project.project_type || "";
           document.getElementById("send-location").value = project.location || "";
+          renderProjectReadOnlyDetails(project);
         }
       }
 
@@ -571,12 +710,13 @@
         document.getElementById("send-contact-email").value = session.user.email || "";
         const { data: profile } = await supabaseClient
           .from("professional_profiles")
-          .select("professional_name, studio_name")
+          .select("professional_name, studio_name, phone")
           .eq("user_id", session.user.id)
           .maybeSingle();
         if (profile){
           if (profile.professional_name) document.getElementById("send-contact-name").value = profile.professional_name;
           if (profile.studio_name) document.getElementById("send-contact-company").value = profile.studio_name;
+          if (profile.phone) document.getElementById("send-contact-phone").value = profile.phone;
         }
       }
     }
