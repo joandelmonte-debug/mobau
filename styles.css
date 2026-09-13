@@ -256,43 +256,101 @@ button{ font-family: inherit; }
 /* ============================================================
    HOME
    ============================================================ */
+/* Hero editorial a pantalla ancha con carrusel de fondo (3 fotos reales,
+   images/hero/). La altura la fija .hero (min-height), nunca la imagen —
+   los slides son position:absolute dentro de .hero-slides, así que cambiar
+   de foto jamás mueve el header ni el resto de la página. El texto es HTML
+   real superpuesto (.hero-content), nunca escrito dentro de las imágenes. */
 .hero{
-  padding: 84px 0 64px;
-  display:grid;
-  grid-template-columns: 1.05fr .95fr;
-  gap: 64px;
-  align-items:center;
+  position:relative;
+  overflow:hidden;
+  min-height: 680px;
+  display:flex;
+  align-items:flex-end;
+  padding:0;
 }
+.hero-slides{ position:absolute; inset:0; }
+.hero-slide{
+  position:absolute; inset:0; margin:0;
+  opacity:0;
+  transition: opacity .9s ease;
+}
+.hero-slide.is-active{ opacity:1; }
+.hero-slide img{
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+}
+/* object-position ajustado por foto: cada una se analizó para dejar la
+   esquina inferior izquierda (donde vive el texto) en su zona más despejada
+   — nunca centrado por defecto encima de lo más cargado de la imagen. */
+.hero-slide:nth-child(1) img{ object-position: 50% 30%; }   /* sala con estantería: lo más cargado queda arriba */
+.hero-slide:nth-child(2) img{ object-position: 30% 50%; }   /* baño: pared lisa junto a la ducha, a la izquierda */
+.hero-slide:nth-child(3) img{ object-position: 20% 55%; }   /* sala/comedor: ventana y planta a la izquierda */
+
+.hero-scrim{
+  position:absolute; inset:0;
+  background:
+    linear-gradient(90deg, rgba(28,31,30,.82) 0%, rgba(28,31,30,.55) 42%, rgba(28,31,30,.15) 68%, rgba(28,31,30,0) 100%),
+    linear-gradient(180deg, rgba(28,31,30,.30) 0%, rgba(28,31,30,.05) 30%, rgba(28,31,30,.15) 75%, rgba(28,31,30,.5) 100%);
+}
+
+/* .hero-inner es el mismo .wrap de siempre (max-width:1180px + el mismo
+   padding lateral que ya usa el header) — así el bloque de texto arranca
+   exactamente en el mismo margen izquierdo que el logo "Mobau", en vez de
+   quedar centrado dentro de una caja angosta como en la primera versión.
+   width:100% porque .hero es flex y .wrap, fuera de aquí, nunca necesitó
+   ocupar todo el ancho de su contenedor. */
+.hero-inner{ width:100%; }
+.hero-content{
+  position:relative; z-index:2;
+  max-width: 640px;
+  padding: 64px 0 80px;
+}
+.hero-content::before{
+  content:"";
+  position:absolute; inset:-24px -20px -20px;
+  background: rgba(28,31,30,.24);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(2px);
+  z-index:-1;
+}
+.hero .eyebrow{ color: var(--brass-soft); }
+.hero .eyebrow::before{ background: var(--brass-soft); }
 .hero h1{
   font-size: 38px;
   max-width: 17ch;
+  color: var(--white);
 }
 .hero .lede{
   font-size: 17px;
   max-width: 48ch;
   margin-bottom: 28px;
+  color: rgba(255,255,255,.88);
 }
 .hero-actions{ display:flex; align-items:center; gap: 22px; }
-.hero-stats{
-  display:flex; gap: 36px; margin-top: 48px; padding-top: 28px; border-top: 1px solid var(--line);
-}
-.hero-stats div strong{ display:block; font-family: var(--f-head); font-size: 26px; }
-.hero-stats div span{ font-size: 13px; color: var(--ink-faint); }
+.hero .btn-ghost{ color: var(--white); }
+.hero .btn-ghost:hover{ color: var(--white); }
+.hero .pill{ background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.35); color: var(--white); }
+.hero :focus-visible{ outline-color: var(--white); }
 
-/* editorial hero visual — ilustración de ambientación, no ficha técnica */
-.hero-visual{
-  position:relative;
-  border-radius: var(--radius-lg);
-  overflow:hidden;
-  background: linear-gradient(160deg, var(--surface-2) 0%, var(--surface) 55%, var(--brass-soft) 100%);
-  aspect-ratio: 4/5;
+.hero-dots{
+  position:absolute; z-index:2; right:32px; bottom:28px;
+  display:flex; gap:10px;
 }
-.hero-visual svg{ width:100%; height:100%; display:block; }
-.hero-visual .caption{
-  position:absolute; left:20px; right:20px; bottom:18px;
-  font-size: 12.5px; font-style: italic; color: var(--ink-soft);
-  background: rgba(247,245,241,.9);
-  padding: 10px 14px; border-radius: 2px;
+.hero-dot{
+  width:10px; height:10px; padding:0; margin:0;
+  border-radius:50%; border:1.5px solid rgba(255,255,255,.7);
+  background:rgba(255,255,255,.25);
+  cursor:pointer;
+}
+.hero-dot.is-active{ background: var(--white); }
+
+/* prefers-reduced-motion: la transición de fade pasa a instantánea (0s) —
+   el cambio manual con los indicadores sigue funcionando igual, el
+   autoplay se detiene aparte desde script.js. */
+@media (prefers-reduced-motion: reduce){
+  .hero-slide{ transition: none; }
 }
 
 .section{ padding: 72px 0; }
@@ -1069,6 +1127,9 @@ fieldset legend{
 @media (max-width: 1080px){
   .nav-links{ gap: 18px; }
   .nav-links a{ font-size: 13.5px; }
+
+  .hero{ min-height: 560px; }
+  .hero h1{ font-size: 32px; }
 }
 @media (max-width: 900px){
   .wrap{ padding: 0 20px; }
@@ -1102,9 +1163,22 @@ fieldset legend{
   }
   body.nav-open .account-menu-panel.is-open{ display:block; }
 
-  .hero{ grid-template-columns: 1fr; padding-top: 48px; }
-  .hero h1{ font-size: 30px; }
-  .hero-visual{ order:-1; aspect-ratio: 16/10; }
+  /* Hero en móvil: altura suficiente para leer todo el contenido sin que
+     el recorte de la foto tape el título o los botones; texto a casi todo
+     el ancho, con márgenes; object-position recalculado por foto porque el
+     recorte vertical (retrato) no despeja las mismas zonas que en horizontal. */
+  .hero{ min-height: 560px; align-items:flex-end; }
+  .hero-content{ max-width:none; padding: 40px 0 72px; }
+  .hero h1{ font-size: 27px; }
+  .hero .lede{ font-size: 15.5px; }
+  .hero-scrim{
+    background:
+      linear-gradient(180deg, rgba(28,31,30,.35) 0%, rgba(28,31,30,.15) 35%, rgba(28,31,30,.55) 70%, rgba(28,31,30,.88) 100%);
+  }
+  .hero-slide:nth-child(1) img{ object-position: 62% 15%; }
+  .hero-slide:nth-child(2) img{ object-position: 38% 40%; }
+  .hero-slide:nth-child(3) img{ object-position: 30% 35%; }
+  .hero-dots{ right:50%; transform:translateX(50%); bottom:16px; }
   .steps{ grid-template-columns: 1fr; }
   .step{ border-right:none; border-bottom: 1px solid var(--line); padding: 24px 0; }
   .step:first-child{ padding-top:0; }

@@ -768,10 +768,70 @@ function initNavToggle(){
   });
 }
 
+/* ---------- carrusel del hero (solo index.html) ----------
+   No hace nada si la página no tiene .hero[data-carousel] — nunca afecta
+   a ninguna otra página. Las 3 fotos son decorativas (alt=""); el cambio
+   de slide nunca altera la altura del hero (todas position:absolute
+   dentro de .hero, cuya altura la fija min-height en CSS). */
+function initHeroCarousel(){
+  const hero = document.querySelector(".hero[data-carousel]");
+  if (!hero) return;
+  const slides = [...hero.querySelectorAll(".hero-slide")];
+  const dots = [...hero.querySelectorAll(".hero-dot")];
+  if (slides.length < 2 || slides.length !== dots.length) return;
+
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let index = slides.findIndex(s => s.classList.contains("is-active"));
+  if (index < 0) index = 0;
+  let timer = null;
+
+  function goTo(next){
+    const to = (next + slides.length) % slides.length;
+    if (to === index) return;
+    slides[index].classList.remove("is-active");
+    dots[index].classList.remove("is-active");
+    dots[index].setAttribute("aria-current", "false");
+    index = to;
+    slides[index].classList.add("is-active");
+    dots[index].classList.add("is-active");
+    dots[index].setAttribute("aria-current", "true");
+  }
+
+  function stop(){
+    if (timer){ clearInterval(timer); timer = null; }
+  }
+  /* Con prefers-reduced-motion nunca arranca el autoplay — el CSS ya
+     deja la transición en 0s, y aquí además no se avanza sola: solo
+     queda disponible el cambio manual con los indicadores. */
+  function start(){
+    if (prefersReducedMotion) return;
+    stop();
+    timer = setInterval(() => goTo(index + 1), 5500);
+  }
+
+  dots.forEach((dot, i) => {
+    dot.addEventListener("click", () => {
+      goTo(i);
+      start(); // reinicia el conteo tras un cambio manual, en vez de saltar a mitad de intervalo
+    });
+  });
+
+  hero.addEventListener("mouseenter", stop);
+  hero.addEventListener("mouseleave", start);
+  hero.addEventListener("focusin", stop);
+  hero.addEventListener("focusout", start);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") start(); else stop();
+  });
+
+  start();
+}
+
 /* ---------- init general ---------- */
 document.addEventListener("DOMContentLoaded", () => {
   injectIconSprite();
   initNavToggle();
+  initHeroCarousel();
   updateCartBadge();
   propagateCartLinks();
   updateSelectionBadge();

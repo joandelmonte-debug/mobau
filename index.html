@@ -28,40 +28,48 @@
 
 <main>
 
-  <!-- HERO -->
-  <section class="wrap hero">
-    <div>
-      <div class="eyebrow">Plataforma de diseño · piloto en preparación</div>
-      <h1>Descubre, organiza y cotiza productos para tus proyectos</h1>
-      <p class="lede">Iluminación, mobiliario, revestimientos, baño, cocina y accesorios decorativos, reunidos en un catálogo curado para arquitectos e interioristas.</p>
-      <div class="hero-actions">
-        <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
-        <a href="distribuidores.html" class="btn btn-ghost">Ver distribuidores</a>
-      </div>
-      <div class="pill-row">
-        <span class="pill">Catálogo inicial curado</span>
-        <span class="pill">Retailers fundadores</span>
-        <span class="pill">Piloto en preparación</span>
+  <!-- HERO — Punto: rediseño editorial con carrusel de fondo (Archiproducts-like).
+       Las 3 fotos son ambientación decorativa (alt="" + role="presentation");
+       toda la información real vive en el HTML de .hero-content, nunca en la
+       imagen. object-position por slide definido tras analizar cada foto (ver
+       CSS): el bloque de texto queda siempre abajo a la izquierda, y es el
+       recorte de cada imagen el que se ajusta para que esa esquina quede
+       despejada. -->
+  <section class="hero" data-carousel aria-roledescription="carousel" aria-label="Presentación de Mobau">
+    <div class="hero-slides">
+      <figure class="hero-slide is-active">
+        <img src="images/hero/hero-sala-principal.jpg" alt="" role="presentation" width="1920" height="1080" loading="eager" fetchpriority="high">
+      </figure>
+      <figure class="hero-slide">
+        <img src="images/hero/hero-bano-spa.jpg" alt="" role="presentation" width="1920" height="1080" loading="lazy">
+      </figure>
+      <figure class="hero-slide">
+        <img src="images/hero/hero-sala-comedor.jpg" alt="" role="presentation" width="1920" height="1080" loading="lazy">
+      </figure>
+    </div>
+    <div class="hero-scrim" aria-hidden="true"></div>
+
+    <div class="wrap hero-inner">
+      <div class="hero-content">
+        <div class="eyebrow">Plataforma de diseño · piloto en preparación</div>
+        <h1>Descubre, organiza y cotiza productos para tus proyectos</h1>
+        <p class="lede">Iluminación, mobiliario, revestimientos, baño, cocina y accesorios decorativos, reunidos en un catálogo curado para arquitectos e interioristas.</p>
+        <div class="hero-actions">
+          <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+          <a href="distribuidores.html" class="btn btn-ghost">Ver distribuidores</a>
+        </div>
+        <div class="pill-row">
+          <span class="pill">Catálogo inicial curado</span>
+          <span class="pill">Retailers fundadores</span>
+          <span class="pill">Piloto en preparación</span>
+        </div>
       </div>
     </div>
 
-    <div class="hero-visual">
-      <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMax slice">
-        <ellipse cx="205" cy="432" rx="150" ry="28" fill="var(--brass-soft)" opacity="0.7"/>
-        <rect x="66" y="176" width="164" height="66" rx="22" fill="var(--accent)"/>
-        <rect x="66" y="230" width="164" height="104" rx="16" fill="var(--accent)" opacity="0.92"/>
-        <rect x="52" y="238" width="26" height="84" rx="13" fill="var(--accent-ink)"/>
-        <rect x="218" y="238" width="26" height="84" rx="13" fill="var(--accent-ink)"/>
-        <rect x="80" y="330" width="14" height="26" fill="var(--ink-soft)"/>
-        <rect x="200" y="330" width="14" height="26" fill="var(--ink-soft)"/>
-        <rect x="250" y="318" width="66" height="10" rx="2" fill="var(--ink-soft)"/>
-        <rect x="256" y="328" width="4" height="46" fill="var(--ink-soft)"/>
-        <rect x="306" y="328" width="4" height="46" fill="var(--ink-soft)"/>
-        <path d="M292 70h48l14 34h-76z" fill="var(--brass)"/>
-        <rect x="313" y="104" width="4" height="150" fill="var(--brass)"/>
-        <ellipse cx="315" cy="258" rx="26" ry="7" fill="var(--ink-soft)"/>
-      </svg>
-      <div class="caption">Ambientación de referencia — productos de distintas categorías para un mismo proyecto.</div>
+    <div class="hero-dots" role="group" aria-label="Seleccionar imagen del hero">
+      <button type="button" class="hero-dot is-active" aria-label="Imagen 1" aria-current="true"></button>
+      <button type="button" class="hero-dot" aria-label="Imagen 2" aria-current="false"></button>
+      <button type="button" class="hero-dot" aria-label="Imagen 3" aria-current="false"></button>
     </div>
   </section>
 
