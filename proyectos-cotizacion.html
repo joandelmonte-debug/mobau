@@ -198,6 +198,7 @@
       <div class="field full">
         <label for="send-contact-email">Email</label>
         <input id="send-contact-email" type="email" placeholder="nombre@estudio.com" readonly>
+        <p class="card-meta" id="send-contact-email-help" hidden style="margin:7px 0 0;">No pudimos completar tu email automáticamente. Escríbelo para que podamos contactarte sobre esta solicitud.</p>
       </div>
       <div class="field full">
         <label for="send-contact-phone">Teléfono <span class="hint">(obligatorio)</span></label>
@@ -438,13 +439,42 @@
   }
 
   /* Validación mínima de teléfono para el envío de RFQ: acepta dígitos,
-     "+", espacios, paréntesis y guiones (números internacionales sin
-     imponer un formato nacional rígido), pero exige al menos 7 dígitos
-     reales para descartar un texto vacío o irrelevante. */
+     "+", espacios, paréntesis, guiones y puntos (números internacionales
+     sin imponer un formato nacional rígido), pero exige al menos 7
+     dígitos reales para descartar un texto vacío o irrelevante. */
   function isValidContactPhone(raw){
-    if (!/^[0-9+()\-\s]+$/.test(raw)) return false;
+    if (!/^[0-9+()\-.\s]+$/.test(raw)) return false;
     const digits = raw.replace(/\D/g, "");
     return digits.length >= 7;
+  }
+
+  /* Corrige el email de contacto según si session.user.email trae valor:
+     con email, se precarga y queda readonly como hasta ahora; sin email
+     (sesión sin email, ej. login por teléfono), se deja editable con una
+     ayuda visible. No toca auth.users ni la sesión — solo el estado del
+     campo en el formulario. */
+  function setupContactEmailField(userEmail){
+    const emailInput = document.getElementById("send-contact-email");
+    const emailHelp = document.getElementById("send-contact-email-help");
+    if (userEmail){
+      emailInput.value = userEmail;
+      emailInput.readOnly = true;
+      emailHelp.hidden = true;
+    } else {
+      emailInput.value = "";
+      emailInput.readOnly = false;
+      emailHelp.hidden = false;
+    }
+  }
+
+  /* Precarga compartida de professional_profiles en ambas ramas del
+     init — evita la duplicación (y el riesgo de que diverjan) que
+     causó el bug ya corregido de la rama ?id= sin precarga. */
+  function applyProfessionalProfileToContactFields(profile){
+    if (!profile) return;
+    if (profile.professional_name) document.getElementById("send-contact-name").value = profile.professional_name;
+    if (profile.studio_name) document.getElementById("send-contact-company").value = profile.studio_name;
+    if (profile.phone) document.getElementById("send-contact-phone").value = profile.phone;
   }
 
   async function handleSubmit(submitMode){
@@ -471,9 +501,14 @@
         return;
       }
       contactName = document.getElementById("send-contact-name").value.trim();
+      if (!contactName){
+        errorEl.textContent = "Completa tu nombre de contacto para solicitar la cotización.";
+        errorEl.style.display = "block";
+        return;
+      }
       contactEmail = document.getElementById("send-contact-email").value.trim();
-      if (!contactName || !contactEmail){
-        errorEl.textContent = "Completa tu nombre de contacto y email para solicitar la cotización.";
+      if (!contactEmail){
+        errorEl.textContent = "Indica un email de contacto para poder enviar la solicitud.";
         errorEl.style.display = "block";
         return;
       }
@@ -624,6 +659,15 @@
 
     arrivedWithProjectId = !!projectIdParam;
 
+    /* Se carga una sola vez, antes de ramificar, y se reutiliza en
+       ambas ramas de abajo — evita la duplicación de esta consulta
+       (y el riesgo de que sus dos copias diverjan) que había antes. */
+    const { data: professionalProfile } = await supabaseClient
+      .from("professional_profiles")
+      .select("professional_name, studio_name, phone")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
     if (arrivedWithProjectId){
       /* Camino desde proyectos-detalle.html: siempre es una solicitud de
          cotización sobre un proyecto que ya existe con sus productos. */
@@ -651,17 +695,8 @@
          reutilización de proyecto activo (más abajo) — antes esta rama
          no lo hacía en absoluto, dejando nombre/estudio/email/teléfono
          vacíos aunque ya existieran en la sesión y en el perfil. */
-      document.getElementById("send-contact-email").value = session.user.email || "";
-      const { data: professionalProfile } = await supabaseClient
-        .from("professional_profiles")
-        .select("professional_name, studio_name, phone")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (professionalProfile){
-        if (professionalProfile.professional_name) document.getElementById("send-contact-name").value = professionalProfile.professional_name;
-        if (professionalProfile.studio_name) document.getElementById("send-contact-company").value = professionalProfile.studio_name;
-        if (professionalProfile.phone) document.getElementById("send-contact-phone").value = professionalProfile.phone;
-      }
+      setupContactEmailField(session.user.email);
+      applyProfessionalProfileToContactFields(professionalProfile);
 
     } else {
       const selectionItems = getSelection();
@@ -707,17 +742,8 @@
       }
 
       if (mode === "send"){
-        document.getElementById("send-contact-email").value = session.user.email || "";
-        const { data: profile } = await supabaseClient
-          .from("professional_profiles")
-          .select("professional_name, studio_name, phone")
-          .eq("user_id", session.user.id)
-          .maybeSingle();
-        if (profile){
-          if (profile.professional_name) document.getElementById("send-contact-name").value = profile.professional_name;
-          if (profile.studio_name) document.getElementById("send-contact-company").value = profile.studio_name;
-          if (profile.phone) document.getElementById("send-contact-phone").value = profile.phone;
-        }
+        setupContactEmailField(session.user.email);
+        applyProfessionalProfileToContactFields(professionalProfile);
       }
     }
 
