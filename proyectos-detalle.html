@@ -73,9 +73,19 @@
      script.js) que ya usan catálogo.html, producto.html y seleccion.html;
      este catálogo de demo no tiene fotografía real por producto. Sin
      icono (fila "Producto no disponible"), queda como recuadro neutro
-     vacío en vez de un <img> roto. */
+     vacío en vez de un <img> roto.
+     48px (antes 72px): con el nombre+marca/distribuidor ocupando ~47px
+     de alto, un contenedor de 72px dejaba ~12px de aire arriba y abajo
+     del texto solo por el tamaño de la miniatura — se leía como
+     "imagen descentrada" y la fila quedaba más alta de lo necesario.
+     Con 48px, align-items:center (en .saved-project__identity, sin
+     cambios) sigue centrando la miniatura contra el texto, pero ahora
+     con espacio real coherente en vez de aire de sobra. El icono
+     interno sigue centrado en su propio recuadro (svg al 60%) y nunca
+     se estira: solo cambia el tamaño del contenedor, no su proporción
+     ni cómo se dibuja el ícono dentro. */
   .project-product-thumb{
-    width:72px; height:72px; flex:0 0 72px;
+    width:48px; height:48px; flex:0 0 48px;
     border:1px solid var(--line-strong); border-radius:4px;
     background: var(--surface);
     display:flex; align-items:center; justify-content:center;
@@ -87,8 +97,13 @@
      widget .quantity-control de styles.css que ya usa Mi selección
      (input + unidad + botones +/- discretos), dentro de una fila
      compacta propia de esta página, con su etiqueta accesible y un
-     mensaje de error puntual si la cantidad no es válida. */
-  .dp-quantity{ display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+     mensaje de error puntual si la cantidad no es válida.
+     Sin margin-top: dp-quantity__label es visualmente oculto (solo
+     para lectores de pantalla, ver más abajo) — ese margen no
+     separaba nada visible, solo empujaba el control de cantidad hacia
+     abajo dentro de .saved-project__bottom y hacía la fila inferior
+     más alta de lo necesario. */
+  .dp-quantity{ display:flex; flex-direction:column; gap:4px; }
   .dp-quantity__label{
     position:absolute; width:1px; height:1px; padding:0; margin:-1px;
     overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
