@@ -246,7 +246,10 @@
       <div class="account-section" style="margin-bottom:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
           <h2 style="margin:0;">Productos de mi proyecto</h2>
-          <button type="button" class="btn btn-primary btn-sm" id="request-quote-btn" hidden disabled>Solicitar cotización</button>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="#" class="btn btn-outline btn-sm" id="summary-link" hidden>Ver resumen preliminar</a>
+            <button type="button" class="btn btn-primary btn-sm" id="request-quote-btn" hidden disabled>Solicitar cotización</button>
+          </div>
         </div>
         <p id="quote-hint" class="card-meta" style="display:none; margin-top:-4px;">Añade productos para poder solicitar una cotización.</p>
         <p id="products-counter" class="card-meta"></p>
@@ -621,6 +624,14 @@
     const quoteHint = document.getElementById("quote-hint");
     const allValid = rows.length > 0 && rows.every(row => isValidQuantity(row.quantity));
     quoteBtn.dataset.projectId = project.id;
+
+    /* El resumen preliminar (Punto 6 — Fase 2) sirve igual para
+       proyectos activos y archivados (ahí se muestra sin precios) —
+       a diferencia de "Solicitar cotización", nunca depende de
+       isArchived. Solo necesita que ya haya al menos un producto. */
+    const summaryLink = document.getElementById("summary-link");
+    summaryLink.href = `proyectos-resumen.html?id=${project.id}`;
+    summaryLink.hidden = !isProjectLoaded || rows.length === 0;
 
     if (!isProjectLoaded || isArchived){
       /* Nunca visible antes de confirmar que el proyecto cargó de verdad,

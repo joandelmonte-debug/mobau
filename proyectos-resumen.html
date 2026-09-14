@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resumen preliminar — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* Punto 6 — Fase 2. Vista imprimible: se apoya en el mismo styles.css
+     de siempre para look&feel, y añade aquí solo lo propio de esta
+     página (tabla + reglas de impresión) — nada de esto toca otras
+     páginas. @media print oculta cabecera/pie/botones y deja solo el
+     documento; nunca genera un PDF ni lo envía a ningún lado, es la
+     función nativa de impresión del navegador (Ctrl+P / el botón). */
+  .ps-actions-row{
+    display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-bottom:20px;
+  }
+  .ps-meta-line{ font-size:13.5px; color:var(--ink-soft); margin:0; }
+
+  /* Vista de pantalla: solo título + proyecto + fecha, sin bloque de
+     contacto — la tabla debe empezar enseguida (ver punto de revisión
+     "no dejar espacio vertical enorme antes de los productos"). */
+  .ps-screen-header{ margin-bottom:20px; }
+  .ps-doc-title{ margin:0 0 6px; font-size:24px; }
+  .ps-project-line{ font-size:14px; color:var(--ink-faint); margin:0; }
+  .ps-project-line strong{ color:var(--ink); font-weight:600; }
+
+  /* Cabecera de contacto: existe solo para impresión (ver @media
+     print más abajo) — en pantalla nunca se muestra. */
+  .print-only{ display:none; }
+
+  /* En pantallas angostas la tabla no se comprime hasta ser
+     ilegible: este contenedor es el único que puede desbordar
+     horizontalmente (con su propio scroll), nunca el body. */
+  .ps-table-wrap{ overflow-x:auto; margin-bottom:24px; }
+  .ps-table{ width:100%; min-width:560px; border-collapse:collapse; margin-bottom:0; }
+  .ps-table th{
+    text-align:left; font-size:12px; font-weight:600; color:var(--ink-faint);
+    text-transform:none; padding:0 12px 10px 0; border-bottom:1px solid var(--line-strong);
+    white-space:nowrap;
+  }
+  .ps-table td{
+    padding:12px 12px 12px 0; border-bottom:1px solid var(--line); font-size:14px;
+    vertical-align:top;
+  }
+  .ps-table tr:last-child td{ border-bottom:1px solid var(--line-strong); }
+  .ps-table th.ps-num, .ps-table td.ps-num{ text-align:right; padding-right:0; white-space:nowrap; }
+  .ps-product-cell{ display:flex; align-items:center; gap:12px; }
+  .ps-product-thumb{
+    width:44px; height:44px; flex:0 0 44px; border:1px solid var(--line-strong);
+    border-radius:4px; background:var(--surface); display:flex; align-items:center;
+    justify-content:center; color:var(--ink-faint); overflow:hidden;
+  }
+  .ps-product-thumb svg{ width:60%; height:60%; }
+  .ps-product-name{ font-family:var(--f-head); font-weight:600; font-size:14px; }
+  .ps-product-sub{ font-size:12.5px; color:var(--ink-faint); margin-top:2px; }
+  .ps-unavailable-row td{ color:var(--ink-faint); font-style:italic; }
+
+  .ps-totals{
+    border-top:2px solid var(--ink); padding-top:16px; margin-bottom:24px;
+    display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+  }
+  .ps-totals .ps-total-line{ font-size:19px; font-weight:600; color:var(--ink); margin:0; }
+  .ps-totals p{ margin:0; max-width:none; }
+
+  .ps-disclaimer{
+    font-size:12.5px; color:var(--ink-faint); border-top:1px solid var(--line);
+    padding-top:16px; max-width:none;
+  }
+  .ps-disclaimer p{ margin:0 0 6px; max-width:none; }
+  .ps-disclaimer p:last-child{ margin-bottom:0; }
+
+  @page{ size:A4 portrait; margin:16mm; }
+
+  @media print{
+    .site-header, .breadcrumb, .site-footer, .ps-actions-row{ display:none !important; }
+    .ps-screen-header{ display:none !important; }
+    .print-only{ display:block; }
+
+    body{ background:#fff; }
+    .wrap{ max-width:none; padding:0; }
+    main{ padding:0 !important; }
+
+    /* ============================================================
+       MODO TIPOGRÁFICO DE IMPRESIÓN
+       ------------------------------------------------------------
+       Causa real del PDF ilegible: styles.css:6 carga Space Grotesk
+       / Inter por @import remoto (--f-head / --f-body). Esas son las
+       únicas fuentes que usaba esta página — .ps-product-name y la
+       cabecera de impresión heredaban var(--f-head) sin ningún
+       reset — y el pipeline de impresión a PDF de Chrome no siempre
+       las incrusta a tiempo, cayendo a una sustitución con métricas
+       distintas (más pesada / más ancha). Además NINGÚN tamaño se
+       había ajustado para papel: cada elemento imprimía al mismo
+       font-size que en pantalla (24px el título, 19px el total,
+       14px la tabla…), que en una hoja A4 se ve desproporcionado y
+       "pesado" incluso con la familia correcta.
+       .print-document (= #summary-content, ver id="summary-content"
+       más abajo) fija una pila de sistema y una escala tipográfica
+       explícita en pt para todo el documento impreso — nunca
+       requiere que la fuente remota cargue, nunca se espera a ella
+       antes de imprimir (loadPriceState ya resuelve antes de mostrar
+       el botón "Imprimir", el print no depende de fonts.googleapis).
+       Cada regla de aquí tiene la especificidad suficiente (prefijo
+       .print-document) para ganar sin necesidad de !important. */
+    .print-document,
+    .print-document *{
+      font-family: Arial, Helvetica, sans-serif;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .print-document{
+      font-size: 10pt;
+      line-height: 1.35;
+      font-weight: 400;
+    }
+    .print-document h1{
+      font-size: 16pt;
+      line-height: 1.2;
+      font-weight: 600;
+    }
+    .print-document h2,
+    .print-document h3,
+    .print-document th{
+      font-weight: 600;
+    }
+    .print-document td,
+    .print-document p,
+    .print-document .ps-meta-line{
+      font-size: 10pt;
+      font-weight: 400;
+    }
+    /* "Mobau" es la marca del membrete, no el título del documento —
+       va más pequeña que el h1 (antes, al revés, se veía más grande
+       que "Resumen preliminar de productos"). */
+    .print-document .ps-mobau-name{ font-size: 11pt; font-weight: 700; color:#000; margin:0 0 2px; }
+    .print-document .ps-print-title{ color:#000; margin:0 0 10px; }
+    .print-document .ps-print-header p{ color:#000; margin:0 0 2px; }
+    .print-document .ps-table th{ font-size: 9pt; }
+    .print-document .ps-product-name{ font-size: 10pt; font-weight: 600; }
+    .print-document .ps-product-sub{ font-size: 9pt; }
+    .print-document .ps-totals .ps-total-line{ font-size: 13pt; font-weight: 600; }
+    .print-document .ps-disclaimer{ font-size: 9pt; }
+    /* Miniatura del producto: dimensiones fijas más pequeñas que en
+       pantalla — a escala 10pt un icono de 44px se ve grande y hace
+       ver la fila "densa"; 26px sigue siendo claramente visible. */
+    .print-document .ps-product-thumb{ width:26px; height:26px; flex:0 0 26px; }
+
+    /* La cabecera de impresión nunca queda cortada entre el final de
+       una página y el principio de la siguiente. */
+    .ps-print-header{ break-inside:avoid; page-break-inside:avoid; margin-bottom:20px; }
+    /* <thead> ya se repite en cada página por defecto en los
+       navegadores — se deja explícito para que ninguna otra regla lo
+       cambie por accidente. Cada fila de producto tampoco se corte a
+       la mitad entre dos páginas. */
+    .ps-table thead{ display:table-header-group; }
+    .ps-table tr{ break-inside:avoid; page-break-inside:avoid; }
+    .ps-table-wrap{ overflow-x:visible; }
+
+    /* Ancho de página A4 (menos márgenes): anchos fijos + wrap
+       explícito en texto largo (Producto/Marca/Distribuidor) evitan
+       que el texto desborde una celda y se vea "solapado" con la
+       siguiente. Cantidad se mantiene en una sola línea (siempre
+       corta: "2 ud."); Precio también permite wrap — los textos de
+       estado sin importe ("Precio bajo cotización", "Precio
+       pendiente de confirmación"…) son frases, no números, y con
+       nowrap desbordaban la celda y se cortaban contra el borde de
+       la página. */
+    .ps-table{ min-width:0; width:100%; table-layout:fixed; }
+    .ps-table th, .ps-table td{ overflow-wrap:anywhere; word-break:normal; }
+    .ps-table td.ps-num:last-child{ white-space:normal; }
+    .ps-table th:nth-child(1), .ps-table td:nth-child(1){ width:32%; }
+    .ps-table th:nth-child(2), .ps-table td:nth-child(2){ width:17%; }
+    .ps-table th:nth-child(3), .ps-table td:nth-child(3){ width:21%; }
+    .ps-table th:nth-child(4), .ps-table td:nth-child(4){ width:12%; }
+    .ps-table th:nth-child(5), .ps-table td:nth-child(5){ width:18%; }
+    /* Proyecto archivado: la tabla tiene 4 columnas (sin Precio, ver
+       .ps-table--noprice más abajo) — las proporciones de 5 columnas
+       no aplican; se reparte el ancho de forma pareja entre
+       Producto/Marca/Distribuidor/Cantidad. */
+    .ps-table--noprice th:nth-child(1), .ps-table--noprice td:nth-child(1){ width:40%; }
+    .ps-table--noprice th:nth-child(2), .ps-table--noprice td:nth-child(2){ width:20%; }
+    .ps-table--noprice th:nth-child(3), .ps-table--noprice td:nth-child(3){ width:26%; }
+    .ps-table--noprice th:nth-child(4), .ps-table--noprice td:nth-child(4){ width:14%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap breadcrumb">
+  <a href="proyectos.html">Mis proyectos</a> / <a href="#" id="bc-project-link">Proyecto</a> / <span>Resumen preliminar</span>
+</div>
+
+<main class="wrap" style="padding:28px 0 100px; max-width:900px;">
+
+  <div id="not-found" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No encontramos este proyecto.</p>
+    <p style="margin:0;">Puede que ya no exista, o que pertenezca a otra cuenta.</p>
+    <a href="proyectos.html" class="btn btn-primary">Volver a mis proyectos</a>
+  </div>
+
+  <div id="no-products" style="display:none;" class="cart-empty">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto todavía no tiene productos.</p>
+    <p style="margin:0;">Añade al menos un producto para generar un resumen.</p>
+    <a href="#" id="no-products-back-link" class="btn btn-primary">Volver al proyecto</a>
+  </div>
+
+  <div id="summary-content" class="print-document" style="display:none;">
+
+    <div class="ps-actions-row">
+      <a href="#" id="ps-back-link" class="btn btn-outline btn-sm">Volver al proyecto</a>
+      <button type="button" class="btn btn-primary btn-sm" id="ps-print-btn">Imprimir</button>
+    </div>
+
+    <!-- Cabecera de impresión: oculta en pantalla (.print-only), es la
+         única identificación de Mobau/proyecto/usuario que se imprime.
+         Cada línea se omite si el dato no existe — nunca "undefined".
+         h1 real (único visible al imprimir: el h1 de pantalla vive en
+         .ps-screen-header, oculto en @media print) — es el título del
+         documento impreso, "Mobau" es solo el membrete encima. -->
+    <div class="ps-print-header print-only">
+      <div class="ps-mobau-name">Mobau</div>
+      <h1 class="ps-print-title">Resumen preliminar de productos</h1>
+      <p id="ps-print-project"></p>
+      <p id="ps-print-preparedfor"></p>
+      <p id="ps-print-email"></p>
+      <p id="ps-print-date"></p>
+    </div>
+
+    <header class="ps-screen-header">
+      <h1 class="ps-doc-title">Resumen preliminar de productos</h1>
+      <p class="ps-project-line" id="ps-project-line"></p>
+    </header>
+
+    <p class="ps-meta-line" id="ps-archived-note" style="display:none; font-style:italic; margin-bottom:20px;"></p>
+
+    <div class="ps-table-wrap">
+      <table class="ps-table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Marca</th>
+            <th>Distribuidor</th>
+            <th class="ps-num">Cantidad</th>
+            <th class="ps-num" id="ps-th-price">Precio</th>
+          </tr>
+        </thead>
+        <tbody id="ps-table-body"></tbody>
+      </table>
+    </div>
+
+    <div class="ps-totals" id="ps-totals"></div>
+
+    <div class="ps-disclaimer">
+      <p>Este resumen es preliminar y orientativo — no es una factura ni una cotización final. Los precios, la disponibilidad y los plazos deben confirmarse con cada distribuidor.</p>
+      <p>Los productos bajo cotización no tienen un importe publicado en Mobau todavía; el distribuidor correspondiente debe indicarlo.</p>
+    </div>
+  </div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  /* Punto 6 — Fase 2: resumen preliminar imprimible de un proyecto.
+     Reutiliza exactamente las mismas funciones de precio que ya usan
+     catalogo.html/producto.html/seleccion.html/proyectos-detalle.html
+     (getPriceInfo, formatUSD) — ninguna regla de negocio nueva, solo
+     una presentación distinta (tabla) de los mismos datos. No crea
+     project_products ni product_prices, no cambia el estado de RFQ,
+     no genera PDF ni email: es una vista HTML que el usuario imprime
+     con la función nativa del navegador. */
+
+  const params = new URLSearchParams(window.location.search);
+  const projectId = params.get("id");
+
+  function escapeHtml(str){
+    return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  /* Una línea de la cabecera de impresión ("Proyecto: X", "Email: Y"…).
+     Nunca inventa un dato: si el valor no existe se omite la línea
+     entera en vez de escribir "undefined" o dejarla vacía. */
+  function setPrintLine(id, label, value){
+    const el = document.getElementById(id);
+    if (value === null || value === undefined || String(value).trim() === ""){
+      el.style.display = "none";
+      el.textContent = "";
+    } else {
+      el.style.display = "";
+      el.textContent = `${label}: ${value}`;
+    }
+  }
+
+  /* Fila de la tabla. Sin sesión no se llega aquí (requireSession ya
+     redirigió), así que getPriceInfo() siempre refleja el estado real
+     para un usuario autenticado — nunca un importe para quien no
+     debería verlo. */
+  function renderRow(row){
+    const p = PRODUCTS.find(pp => pp.id === row.product_id);
+    if (!p){
+      return `
+        <tr class="ps-unavailable-row">
+          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td>
+        </tr>`;
+    }
+    const dist = DISTRIBUTORS[p.distribuidor];
+    const marcaLabel = LABELS.marca[p.marca];
+    const unit = row.unit || getProductUnit(p);
+    const quantity = (typeof row.quantity === "number" && Number.isFinite(row.quantity)) ? row.quantity : 1;
+    const displayQty = unit === "ud." ? Math.round(quantity) : Math.round(quantity * 100) / 100;
+
+    /* Solo precio unitario — este resumen no muestra precio por línea
+       ni subtotal por producto (ver revisión: la línea es solo para
+       identificar el precio de referencia, el total agregado ya está
+       en renderTotals). */
+    const info = getPriceInfo(p.id);
+    const priceCell = info.kind === "published" ? formatUSD(info.amount) : info.text;
+
+    return `
+      <tr>
+        <td>
+          <div class="ps-product-cell">
+            <div class="ps-product-thumb">${iconMarkup(p.icon, 26)}</div>
+            <div>
+              <div class="ps-product-name">${escapeHtml(p.nombre)}</div>
+              <div class="ps-product-sub">${escapeHtml(LABELS.categoria[p.categoria])}</div>
+            </div>
+          </div>
+        </td>
+        <td>${escapeHtml(marcaLabel)}</td>
+        <td>${escapeHtml(dist.nombre)}</td>
+        <td class="ps-num">${displayQty} ${unit}</td>
+        <td class="ps-num">${priceCell}</td>
+      </tr>`;
+  }
+
+  /* Mismo cálculo que buildProjectPriceSummaryHtml() de
+     proyectos-detalle.html (misma regla: solo published con importe
+     entra al total, por cantidad) — aquí como bloque final de la
+     tabla en vez de una tarjeta lateral. */
+  function renderTotals(rows){
+    const el = document.getElementById("ps-totals");
+    let publishedCount = 0;
+    let pendingCount = 0;
+    let subtotal = 0;
+    let hasDemoPublished = false;
+    rows.forEach(row => {
+      const info = getPriceInfo(row.product_id);
+      if (info.kind === "published"){
+        publishedCount++;
+        const qty = (typeof row.quantity === "number" && Number.isFinite(row.quantity)) ? row.quantity : 1;
+        subtotal += info.amount * qty;
+        if (info.source === "demo") hasDemoPublished = true;
+      } else {
+        pendingCount++;
+      }
+    });
+
+    const parts = [];
+    if (publishedCount > 0){
+      parts.push(`<p class="ps-total-line">Total preliminar: ${formatUSD(subtotal)}</p>`);
+      parts.push(`<p class="ps-meta-line">Incluye ITBIS</p>`);
+      if (pendingCount > 0){
+        parts.push(`<p class="ps-meta-line">Productos pendientes de precio: ${pendingCount}</p>`);
+      }
+    } else {
+      /* Ningún producto published: nunca "Total preliminar: US$ 0.00",
+         un solo mensaje en su lugar. */
+      parts.push(`<p class="ps-meta-line">Todos los productos están pendientes de cotización.</p>`);
+    }
+    if (hasDemoPublished){
+      parts.push(`<p class="ps-meta-line" style="font-style:italic;">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
+    }
+    el.innerHTML = parts.join("");
+  }
+
+  document.getElementById("ps-print-btn").addEventListener("click", () => window.print());
+
+  (async () => {
+    const session = await MobauAuth.requireSession();
+    if (!session) return;
+
+    if (!projectId){
+      document.getElementById("not-found").style.display = "block";
+      return;
+    }
+
+    const project = await MobauProjects.get(projectId);
+    if (!project){
+      document.getElementById("not-found").style.display = "block";
+      return;
+    }
+
+    const backLink = `proyectos-detalle.html?id=${project.id}`;
+    document.getElementById("bc-project-link").textContent = project.name;
+    document.getElementById("bc-project-link").href = backLink;
+    document.getElementById("ps-back-link").href = backLink;
+    document.getElementById("no-products-back-link").href = backLink;
+
+    const rows = await MobauProjects.listProductsInProject(project.id);
+    if (!rows.length){
+      document.getElementById("no-products").style.display = "block";
+      return;
+    }
+
+    document.title = `Resumen preliminar — ${project.name} — Mobau`;
+    const isArchived = project.status === "archived";
+    const dateStr = new Date().toLocaleDateString("es-DO", { year: "numeric", month: "long", day: "numeric" });
+
+    document.getElementById("ps-project-line").innerHTML =
+      `Proyecto: <strong>${escapeHtml(project.name)}</strong> · Fecha: ${escapeHtml(dateStr)}`;
+
+    /* Mismo patrón de consulta que ya usan nav-session.js y
+       proyectos-cotizacion.html para professional_profiles (misma
+       tabla, mismo filtro por user_id, mismo maybeSingle). Nunca se
+       llama sin sesión (ya se validó arriba), y solo trae la fila del
+       propio usuario. Solo se pide professional_name: es el único
+       dato de perfil que aparece en la cabecera de impresión. */
+    const { data: professionalProfile } = await supabaseClient
+      .from("professional_profiles")
+      .select("professional_name")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    /* Cabecera de impresión — nunca visible en pantalla (.print-only).
+       Cada línea se omite si el dato no existe. */
+    setPrintLine("ps-print-project", "Proyecto", project.name);
+    setPrintLine("ps-print-preparedfor", "Preparado para", professionalProfile && professionalProfile.professional_name);
+    setPrintLine("ps-print-email", "Email", session.user.email);
+    setPrintLine("ps-print-date", "Fecha", dateStr);
+
+    if (isArchived){
+      /* Igual que proyectos-detalle.html: nunca se consulta
+         product_prices para un proyecto archivado — se muestran los
+         productos como historial, sin columna de precio ni total. */
+      document.getElementById("ps-archived-note").textContent =
+        "Los precios no están disponibles para proyectos archivados.";
+      document.getElementById("ps-archived-note").style.display = "block";
+      document.getElementById("ps-th-price").style.display = "none";
+      /* Marca la tabla como "sin columna de precio" — solo afecta a
+         los anchos de columna de impresión (ver .ps-table--noprice en
+         @media print), nada en pantalla depende de esta clase. */
+      document.querySelector(".ps-table").classList.add("ps-table--noprice");
+
+      document.getElementById("ps-table-body").innerHTML = rows.map(row => {
+        const p = PRODUCTS.find(pp => pp.id === row.product_id);
+        if (!p){
+          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td></tr>`;
+        }
+        const dist = DISTRIBUTORS[p.distribuidor];
+        const unit = row.unit || getProductUnit(p);
+        const quantity = (typeof row.quantity === "number" && Number.isFinite(row.quantity)) ? row.quantity : 1;
+        const displayQty = unit === "ud." ? Math.round(quantity) : Math.round(quantity * 100) / 100;
+        return `
+          <tr>
+            <td>
+              <div class="ps-product-cell">
+                <div class="ps-product-thumb">${iconMarkup(p.icon, 26)}</div>
+                <div>
+                  <div class="ps-product-name">${escapeHtml(p.nombre)}</div>
+                  <div class="ps-product-sub">${escapeHtml(LABELS.categoria[p.categoria])}</div>
+                </div>
+              </div>
+            </td>
+            <td>${escapeHtml(LABELS.marca[p.marca])}</td>
+            <td>${escapeHtml(dist.nombre)}</td>
+            <td class="ps-num">${displayQty} ${unit}</td>
+          </tr>`;
+      }).join("");
+
+      document.getElementById("ps-totals").innerHTML = "";
+      document.getElementById("summary-content").style.display = "block";
+      return;
+    }
+
+    await loadPriceState(rows.map(row => row.product_id));
+    document.getElementById("ps-table-body").innerHTML = rows.map(renderRow).join("");
+    renderTotals(rows);
+
+    document.getElementById("summary-content").style.display = "block";
+    injectIconSprite();
+  })();
+</script>
+</body>
+</html>
