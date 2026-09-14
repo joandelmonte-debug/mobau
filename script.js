@@ -317,6 +317,133 @@ const LABELS = {
   }
 };
 
+/* ============================================================
+   PRECIOS — Punto 6
+   ------------------------------------------------------------
+   Los precios viven en Supabase (tabla product_prices, RLS: solo
+   SELECT para authenticated), NUNCA en PRODUCTS ni en products —
+   así un usuario sin sesión no puede obtenerlos ni leyendo el HTML,
+   ni el estado JS, ni una respuesta pública de Supabase. Sin sesión,
+   loadPriceState() no hace ninguna llamada de red: PRICE_STATE.map
+   queda vacío y getPriceInfo() nunca revela un importe.
+
+   Un producto sin fila en product_prices se trata como
+   "quote_required" (Precio bajo cotización), nunca como error ni
+   como US$ 0 — sigue siendo seleccionable en todo momento.
+   ============================================================ */
+const PRICE_STATE = {
+  loggedIn: false,
+  loaded: false,
+  error: false,
+  map: {}
+};
+
+/* Una sola consulta agrupada por página (nunca una por tarjeta).
+   Debe llamarse una vez, antes del primer render que use precios;
+   los renders posteriores (filtros, cantidad, quitar producto) leen
+   PRICE_STATE ya cargado, sin volver a preguntar por sesión. */
+async function loadPriceState(productIds){
+  const session = await MobauAuth.getSession();
+  PRICE_STATE.loggedIn = !!session;
+  PRICE_STATE.error = false;
+
+  if (!session){
+    PRICE_STATE.map = {};
+    PRICE_STATE.loaded = true;
+    return PRICE_STATE;
+  }
+
+  try {
+    let query = supabaseClient
+      .from("product_prices")
+      .select("product_id, price_amount, currency, price_status, includes_itbis, itbis_rate, price_source");
+    if (productIds && productIds.length) query = query.in("product_id", productIds);
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const map = {};
+    (data || []).forEach(row => { map[row.product_id] = row; });
+    PRICE_STATE.map = map;
+  } catch (e) {
+    /* Error de red o de RLS: nunca se confunde con "sin fila" — se
+       marca aparte para mostrar "precio no disponible temporalmente"
+       en vez de "bajo cotización". */
+    PRICE_STATE.error = true;
+    PRICE_STATE.map = {};
+  }
+  PRICE_STATE.loaded = true;
+  return PRICE_STATE;
+}
+
+function formatUSD(amount){
+  return "US$ " + Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* Único punto de decisión de qué mostrar para un producto — todas las
+   páginas (catálogo, ficha, selección, proyecto) pasan por aquí, así
+   que las reglas de negocio (Punto 6) están en un solo lugar. */
+function getPriceInfo(productId){
+  if (!PRICE_STATE.loggedIn){
+    return { kind: "login-required", text: "Inicia sesión para consultar precios" };
+  }
+  if (PRICE_STATE.error){
+    return { kind: "error", text: "Precio no disponible temporalmente" };
+  }
+
+  const row = PRICE_STATE.map[productId];
+  if (!row || row.price_status === "quote_required"){
+    return { kind: "quote-required", text: "Precio bajo cotización" };
+  }
+  if (row.price_status === "pending_confirmation"){
+    return { kind: "pending", text: "Precio pendiente de confirmación" };
+  }
+  if (row.price_status === "unavailable"){
+    return { kind: "unavailable", text: "Precio no disponible" };
+  }
+
+  const amount = Number(row.price_amount);
+  if (row.price_status === "published" && Number.isFinite(amount)){
+    return { kind: "published", amount, source: row.price_source, text: `${formatUSD(amount)} · ITBIS incluido` };
+  }
+
+  /* Estado no reconocido, o "published" sin importe válido — no debería
+     ocurrir por los constraints de product_prices, pero si ocurriera,
+     nunca se muestra US$ 0: se trata como bajo cotización. */
+  return { kind: "quote-required", text: "Precio bajo cotización" };
+}
+
+function priceLineHtml(productId, className){
+  const info = getPriceInfo(productId);
+  return `<span class="${className || "price-line"} price-${info.kind}">${info.text}</span>`;
+}
+
+/* Variante SOLO para la tarjeta de producto (catálogo y relacionados):
+   omite "· ITBIS incluido" para que el precio no compita con el resto
+   de la tarjeta — la aclaración de ITBIS se conserva en la ficha, la
+   selección y el proyecto, que siguen usando priceLineHtml() tal cual.
+   No cambia qué se considera "published" ni el importe, solo el texto
+   que se muestra en este contexto. */
+function cardPriceLineHtml(productId, className){
+  const info = getPriceInfo(productId);
+  const text = info.kind === "published" ? formatUSD(info.amount) : info.text;
+  return `<span class="${className || "card-price"} price-${info.kind}">${text}</span>`;
+}
+
+/* Variante para filas con cantidad propia (página del proyecto): el
+   importe mostrado es el total de esa línea (price_amount * quantity),
+   no el precio unitario — igual que ya hace el total preliminar. Los
+   estados sin importe (quote_required, pending_confirmation,
+   unavailable, sin sesión) no cambian: no hay nada que multiplicar. */
+function priceLineHtmlForQuantity(productId, quantity, className){
+  const info = getPriceInfo(productId);
+  if (info.kind !== "published"){
+    return `<span class="${className || "price-line"} price-${info.kind}">${info.text}</span>`;
+  }
+  const qty = Number(quantity);
+  const lineTotal = Number.isFinite(qty) && qty > 0 ? info.amount * qty : info.amount;
+  return `<span class="${className || "price-line"} price-published">${formatUSD(lineTotal)} · ITBIS incluido</span>`;
+}
+
 /* ---------- archivos descargables por producto (simulado) ---------- */
 const DOWNLOADS = [
   { label: "BIM", ext: ".rfa · .ifc" },
@@ -697,22 +824,24 @@ function renderProductCard(p){
   const dist = DISTRIBUTORS[p.distribuidor];
   const marcaLabel = LABELS.marca[p.marca];
   const inSel = inSelection(p.id);
+  const fichaUrl = `producto.html?id=${p.id}`;
   const selectButton = `
     <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${p.id}" ${inSel ? "disabled" : ""}>
       ${inSel ? "En mi selección" : "Añadir a la selección"}
     </button>`;
   return `
     <article class="product-card" data-product-id="${p.id}">
-      <div class="card-media">
+      <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${p.nombre}">
         <span class="badge ${badgeClass(p.disponibilidad)}">${LABELS.disponibilidad[p.disponibilidad]}</span>
         ${iconMarkup(p.icon, 72)}
-      </div>
+      </a>
       <div class="card-body">
         <span class="card-brand">${marcaLabel}</span>
         <span class="card-name">${p.nombre}</span>
         <span class="card-meta">${dist.nombre} · ${LABELS.categoria[p.categoria]}</span>
+        ${cardPriceLineHtml(p.id, "card-price")}
         <div class="card-actions">
-          <a class="btn btn-outline" href="producto.html?id=${p.id}">Ver ficha</a>
+          <a class="btn btn-outline" href="${fichaUrl}">Ver ficha</a>
           ${selectButton}
         </div>
       </div>

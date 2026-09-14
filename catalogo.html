@@ -302,7 +302,10 @@
     render();
   });
 
-  render();
+  (async () => {
+    await loadPriceState(PRODUCTS.map(p => p.id));
+    render();
+  })();
 </script>
 </body>
 </html>

@@ -121,6 +121,13 @@
      otro formulario), pero sin el margin-bottom de 18px, que aquí
      sobraría dentro de una fila ya compacta. */
   .inline-edit-field{ margin:0; }
+
+  /* Punto 6 — el total preliminar y "Incluye ITBIS" quedan pegados al
+     margen derecho (mismo borde que el botón "Solicitar cotización"),
+     en vez de seguir el flujo de texto normal a la izquierda como el
+     contador de productos. Solo afecta esta página — seleccion.html
+     conserva su propia alineación. */
+  #products-price-summary{ text-align:right; }
 </style>
 </head>
 <body>
@@ -243,6 +250,7 @@
         </div>
         <p id="quote-hint" class="card-meta" style="display:none; margin-top:-4px;">Añade productos para poder solicitar una cotización.</p>
         <p id="products-counter" class="card-meta"></p>
+        <div id="products-price-summary"></div>
         <div id="products-empty" style="display:none;" class="cart-empty">
           <div class="empty-state-content">
             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
@@ -548,12 +556,66 @@
     window.location.href = `proyectos-cotizacion.html?id=${quoteBtn.dataset.projectId}`;
   });
 
+  /* Total preliminar — Punto 6: solo productos con price_status
+     "published" y price_amount no nulo entran en la suma; el resto
+     (bajo cotización, pendiente, no disponible, sin fila) se cuenta
+     aparte pero nunca se suma. line_total = price_amount * quantity,
+     siempre en number hasta formatUSD(). Proyectos archivados no
+     llaman a esta función — nunca calculan ni muestran un total. */
+  function buildProjectPriceSummaryHtml(rows){
+    if (PRICE_STATE.error){
+      return `<p class="price-summary-line price-error">Precio no disponible temporalmente</p>`;
+    }
+    let publishedCount = 0;
+    let pendingCount = 0;
+    let subtotal = 0;
+    let hasDemoPublished = false;
+    rows.forEach(row => {
+      const info = getPriceInfo(row.product_id);
+      if (info.kind === "published"){
+        publishedCount++;
+        const qty = (typeof row.quantity === "number" && Number.isFinite(row.quantity)) ? row.quantity : 1;
+        subtotal += info.amount * qty;
+        if (info.source === "demo") hasDemoPublished = true;
+      } else {
+        pendingCount++;
+      }
+    });
+    if (!publishedCount && !pendingCount) return "";
+
+    const parts = [];
+    if (publishedCount > 0){
+      parts.push(`<p class="price-summary-total">Total preliminar: ${formatUSD(subtotal)}</p>`);
+      if (pendingCount > 0){
+        parts.push(`<p class="price-summary-warning">Productos pendientes de precio: ${pendingCount}</p>`);
+      }
+      parts.push(`<p class="price-summary-note">Incluye ITBIS</p>`);
+    } else if (pendingCount > 0){
+      parts.push(`<p class="price-summary-warning">Productos pendientes de precio: ${pendingCount}</p>`);
+    }
+    if (hasDemoPublished){
+      parts.push(`<p class="price-summary-line price-demo-note">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
+    }
+    return parts.join("");
+  }
+
   async function loadSavedProducts(){
     const rows = await MobauProjects.listProductsInProject(project.id);
     const listEl = document.getElementById("products-list");
     const emptyEl = document.getElementById("products-empty");
     const counterEl = document.getElementById("products-counter");
+    const priceSummaryEl = document.getElementById("products-price-summary");
     const isArchived = project.status === "archived";
+
+    /* Archivado: nunca se consulta product_prices ni se calcula un
+       total — solo la nota fija. Activo: una sola consulta agrupada
+       por todos los product_id del proyecto (nunca una por fila). */
+    if (isArchived){
+      priceSummaryEl.innerHTML = `<p class="price-summary-line price-archived-note">Los precios no están disponibles para proyectos archivados.</p>`;
+    } else {
+      await loadPriceState(rows.map(row => row.product_id));
+      priceSummaryEl.innerHTML = buildProjectPriceSummaryHtml(rows);
+    }
 
     const quoteBtn = document.getElementById("request-quote-btn");
     const quoteHint = document.getElementById("quote-hint");
@@ -608,13 +670,17 @@
       const p = PRODUCTS.find(pp => pp.id === row.product_id);
       if (!p){
         return `
-          <div class="saved-project">
-            <div class="project-product-thumb" aria-hidden="true"></div>
-            <div style="flex:1; min-width:0;">
-              <div class="sp-name">Producto no disponible</div>
-              <div class="sp-meta">ID: ${row.product_id}</div>
+          <div class="saved-project saved-project--detail">
+            <div class="saved-project__top">
+              <div class="saved-project__identity">
+                <div class="project-product-thumb" aria-hidden="true"></div>
+                <div style="min-width:0;">
+                  <div class="sp-name">Producto no disponible</div>
+                  <div class="sp-meta">ID: ${row.product_id}</div>
+                </div>
+              </div>
+              <div class="saved-project__actions">${removeBtn}</div>
             </div>
-            ${removeBtn}
           </div>`;
       }
       const dist = DISTRIBUTORS[p.distribuidor];
@@ -628,11 +694,22 @@
       const displayValue = isUnit ? String(Math.round(currentQuantity)) : String(Math.round(currentQuantity * 100) / 100);
       const inputId = `dp-qty-${row.id}`;
       return `
-        <div class="saved-project">
-          <div class="project-product-thumb" role="img" aria-label="${p.nombre}">${iconMarkup(p.icon, 40)}</div>
-          <div style="flex:1; min-width:0;">
-            <div class="sp-name">${p.nombre}</div>
-            <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+        <div class="saved-project saved-project--detail">
+          <div class="saved-project__top">
+            <div class="saved-project__identity">
+              <div class="project-product-thumb" role="img" aria-label="${p.nombre}">${iconMarkup(p.icon, 40)}</div>
+              <div style="min-width:0;">
+                <div class="sp-name">${p.nombre}</div>
+                <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+              </div>
+            </div>
+            <div class="saved-project__actions">
+              <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
+              ${removeBtn}
+            </div>
+          </div>
+          <div class="saved-project__bottom">
+            ${isArchived ? "<span></span>" : `<div class="sp-price">${priceLineHtmlForQuantity(p.id, currentQuantity)}</div>`}
             <div class="dp-quantity">
               <label for="${inputId}" class="dp-quantity__label">Cantidad</label>
               <div class="quantity-control">
@@ -643,10 +720,6 @@
               </div>
               <p class="dp-quantity__error" id="dp-qty-error-${row.id}" style="display:none;"></p>
             </div>
-          </div>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
-            ${removeBtn}
           </div>
         </div>`;
     }

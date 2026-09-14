@@ -56,6 +56,7 @@
           <div>
             <p class="selection-summary__label" id="selection-summary-label">Resumen del proyecto</p>
             <p class="selection-summary__count" id="selection-summary-count"></p>
+            <div id="selection-price-summary"></div>
           </div>
           <div class="selection-summary__actions">
             <button type="button" class="btn btn-outline" id="add-to-project-btn" style="display:none;">Añadir al proyecto</button>
@@ -197,6 +198,53 @@
     window.location.href = `proyectos-cotizacion.html?id=${activeProject.id}`;
   });
 
+  /* Resumen de precios — nunca decide qué se puede seleccionar o
+     enviar a cotización; solo informa. Cuenta con precio publicado vs.
+     bajo cotización y suma line_total = price_amount * quantity SOLO
+     de los publicados (nunca strings, siempre con los valores como
+     number hasta el formato final). */
+  function renderPriceSummary(items){
+    const el = document.getElementById("selection-price-summary");
+    if (!el) return;
+
+    if (!PRICE_STATE.loggedIn){
+      el.innerHTML = `<p class="price-summary-line price-login-required">Inicia sesión para consultar precios</p>`;
+      return;
+    }
+    if (PRICE_STATE.error){
+      el.innerHTML = `<p class="price-summary-line price-error">Precio no disponible temporalmente</p>`;
+      return;
+    }
+
+    let publishedCount = 0;
+    let quoteCount = 0;
+    let subtotal = 0;
+    let hasDemoPublished = false;
+    items.forEach(item => {
+      const info = getPriceInfo(item.productId);
+      if (info.kind === "published"){
+        publishedCount++;
+        subtotal += info.amount * item.quantity;
+        if (info.source === "demo") hasDemoPublished = true;
+      } else {
+        quoteCount++;
+      }
+    });
+
+    const parts = [`<p class="price-summary-line">${publishedCount} con precio publicado · ${quoteCount} bajo cotización</p>`];
+    if (publishedCount > 0){
+      parts.push(`<p class="price-summary-total">Subtotal con precios publicados: ${formatUSD(subtotal)}</p>`);
+      parts.push(`<p class="price-summary-note">Incluye ITBIS</p>`);
+    }
+    if (quoteCount > 0){
+      parts.push(`<p class="price-summary-warning">Este total incluye únicamente los productos con precio publicado. Los productos restantes requieren cotización.</p>`);
+    }
+    if (hasDemoPublished){
+      parts.push(`<p class="price-summary-line price-demo-note">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
+    }
+    el.innerHTML = parts.join("");
+  }
+
   function renderSelection(){
     const items = getSelection();
     const emptyEl = document.getElementById("selection-empty");
@@ -205,6 +253,7 @@
     if (!items.length){
       contentEl.style.display = "none";
       emptyEl.style.display = "block";
+      document.getElementById("selection-price-summary").innerHTML = "";
       updateActionButtons();
       return;
     }
@@ -238,6 +287,7 @@
           <div class="selection-item__content">
             <div class="sp-name">${p.nombre}</div>
             <div class="selection-item__meta">${dist.nombre} · ${LABELS.marca[p.marca]} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+            <div class="selection-item__price">${cardPriceLineHtml(p.id)}</div>
           </div>
 
           <div class="selection-item__quantity">
@@ -305,6 +355,7 @@
       });
     });
 
+    renderPriceSummary(items);
     renderQuoteGate();
     updateActionButtons();
   }
@@ -328,8 +379,11 @@
     hintEl.style.display = allValid ? "none" : "flex";
   }
 
-  renderSelection();
-  initActiveProjectState();
+  (async () => {
+    await loadPriceState(getSelection().map(i => i.productId));
+    renderSelection();
+    initActiveProjectState();
+  })();
 </script>
 </body>
 </html>

@@ -47,7 +47,9 @@
       <span class="card-meta" id="p-meta" style="margin:0;">Categoría · Subcategoría</span>
     </div>
     <p class="desc" id="p-desc">Descripción del producto.</p>
-    <p class="resource-note" style="margin-top:-14px;">Precio, disponibilidad y plazo sujetos a confirmación del distribuidor.</p>
+    <p class="price-line" id="p-price" style="margin:-10px 0 4px;"></p>
+    <p class="price-line price-demo-note" id="p-price-demo-note" style="display:none; margin:0 0 6px;">Precio orientativo</p>
+    <p class="resource-note">Precio, disponibilidad y plazo sujetos a confirmación del distribuidor.</p>
 
     <p class="section-note">Antes de sumarlo a tu proyecto, esto es lo que necesitas saber:</p>
     <dl class="spec-table">
@@ -227,10 +229,11 @@
     btn.disabled = false;
   }
 
+  const relatedProducts = PRODUCTS.filter(p => p.categoria === product.categoria && p.id !== product.id).slice(0,3);
+
   function renderRelated(){
-    const related = PRODUCTS.filter(p => p.categoria === product.categoria && p.id !== product.id).slice(0,3);
     const grid = document.getElementById("related-grid");
-    grid.innerHTML = related.map(renderProductCard).join("");
+    grid.innerHTML = relatedProducts.map(renderProductCard).join("");
     injectIconSprite();
     bindAddButtons(grid, renderRelated);
     propagateCartLinks();
@@ -267,6 +270,12 @@
   });
 
   (async () => {
+    const priceIds = [product.id, ...relatedProducts.map(p => p.id)];
+    await loadPriceState(priceIds);
+    document.getElementById("p-price").innerHTML = priceLineHtml(product.id);
+    const priceInfo = getPriceInfo(product.id);
+    document.getElementById("p-price-demo-note").style.display =
+      (priceInfo.kind === "published" && priceInfo.source === "demo") ? "block" : "none";
     refreshAddButton();
     renderRelated();
     injectIconSprite();
