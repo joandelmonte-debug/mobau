@@ -5,6 +5,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catálogo — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+  /* Punto 21 — todo lo de aquí es local a catalogo.html (nunca styles.css):
+     .page-head, .product-grid y .filter-option/.filter-group se comparten
+     por NOMBRE con otras páginas (page-head en 9 páginas; product-grid con
+     producto.html), pero una regla dentro de un <style> de este documento
+     solo pinta ESTE documento — producto.html y el resto siguen leyendo
+     únicamente styles.css, sin cambio alguno. */
+
+  /* Cabecera más compacta: mismo breadcrumb y título, menos aire. */
+  .page-head{ padding: 20px 0 18px; }
+  .page-head .eyebrow{ margin-bottom: 4px; }
+  .page-head h1{ font-size: 26px; }
+
+  /* Ya no es el grid de 2 columnas (sidebar + contenido) de .catalog-layout
+     — ahora todo es una sola columna vertical: buscar → filtros → toolbar
+     → grid. Se usa un nombre de clase nuevo a propósito, para no heredar
+     ninguna regla de .catalog-layout en styles.css. */
+  .catalog-main{ padding: 24px 0 96px; }
+
+  /* Label del buscador — visualmente oculto (el placeholder ya lo explica
+     en pantalla), pero real para lectores de pantalla. Mismo patrón que
+     .dp-quantity__label (proyectos-detalle.html) / .selection-item__qty-label. */
+  .search-bar__label{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  /* Punto 21 (2ª iteración) — barra compacta de grupos desplegables:
+     sustituye a <aside class="filters"> Y a la primera iteración (chips/
+     píldoras siempre visibles + "Más filtros"). Ahora TODOS los grupos
+     (categoría incluida) son un botón compacto + un panel oculto — la
+     altura cerrada es mínima (una sola fila de botones), y como máximo
+     un panel está abierto a la vez (ver acordeón en el <script>), así
+     que nunca compite con la cuadrícula de productos por espacio. */
+  /* Ajuste visual — sin caja contenedora: la barra ya no vive dentro
+     de un panel con fondo/borde propios (eso era la 2ª iteración), solo
+     hereda el fondo de la página. Los botones son lo único que se ve
+     cuando todo está cerrado. Nada de esto toca state/matchesFilters/
+     render/aria-expanded/aria-controls — solo apariencia. */
+  .catalog-filters{
+    background: transparent; border: 0; box-shadow: none;
+    padding: 0; margin-bottom: 18px;
+  }
+  .catalog-filters__bar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  }
+  /* Cápsula/píldora — mismo lenguaje visual que .category-filter__chip
+     y .filter-option (border:1px solid var(--line-strong); background:
+     var(--bg); border-radius:100px), para que los 8 botones de grupo
+     se vean coherentes con los propios controles que abren. Sin punto
+     circular independiente: el contador "(n)" + el borde/fondo activo
+     ya comunican la selección sin depender solo del color. */
+  .catalog-filter-trigger{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 14px; border-radius:100px; border:1px solid var(--line-strong);
+    background:var(--bg); color:var(--ink-soft); font-size:13px; font-family:var(--f-body);
+    cursor:pointer;
+  }
+  .catalog-filter-trigger:hover{ border-color:var(--ink-faint); color:var(--ink); }
+  /* Abierto/con selección: nunca depende solo del color — borde + fondo
+     + peso de texto cambian juntos, y aria-expanded/el contador ya lo
+     anuncian a lectores de pantalla sin depender de esto. */
+  .catalog-filter-trigger[aria-expanded="true"],
+  .catalog-filter-trigger[data-has-selection="true"]{
+    border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); font-weight:600;
+  }
+  .catalog-filter-trigger__count{ font-weight:600; }
+  .catalog-filter-trigger__caret{ font-size:10px; color:var(--ink-faint); }
+
+  .catalog-filters__bar .clear{
+    margin-left:auto;
+    font-size:13px; color: var(--accent); background:none; border:none; cursor:pointer; padding:6px 4px;
+  }
+
+  /* Panel de un grupo abierto — el único elemento con fondo/borde
+     propios (para distinguirse de la página al abrirse), nunca la
+     barra completa: cuando está cerrado (hidden) no queda ninguna caja
+     visible, solo los botones de texto de arriba. */
+  .catalog-filter-panel{
+    margin-top:8px; padding:14px 16px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  }
+
+  /* Cada .filter-group ya no es una fila de la barra lateral (con borde
+     inferior) — ahora es el único contenido de su panel. */
+  .filter-group{ padding:0; border-bottom:none; margin-bottom:0; }
+  .filter-group legend{
+    font-family: var(--f-body); font-size:12.5px; font-weight:600; color: var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.03em; margin-bottom:8px; padding:0;
+  }
+  .filter-options-row{ display:flex; flex-wrap:wrap; gap:8px; }
+
+  /* Subcategoría — ayuda breve dentro del panel indicando la
+     dependencia con Categoría (uno de los patrones que admite el
+     encargo, sin tocar el botón). */
+  .filter-hint-note{ font-size:12.5px; color:var(--ink-faint); margin:0 0 10px; }
+
+  /* Distribuidor / Marca — buscador + índice A-Z + lista con scroll
+     interno, para no mostrar un bloque enorme cuando crezcan las
+     opciones reales. Todo generado desde PRODUCTS, nunca hardcodeado. */
+  .filter-search-input{
+    display:block; width:100%; max-width:280px; padding:8px 12px; margin-bottom:10px;
+    border:1px solid var(--line-strong); border-radius:var(--radius);
+    background:var(--bg); font-size:13px; font-family:var(--f-body); color:var(--ink);
+  }
+  .filter-search-input:focus{ border-color:var(--accent); outline:none; }
+  .filter-alpha-index{ display:flex; flex-wrap:wrap; gap:2px; margin-bottom:10px; }
+  .filter-alpha-btn{
+    width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-family:var(--f-body); border:1px solid var(--line); border-radius:2px;
+    background:var(--bg); color:var(--ink-soft); cursor:pointer;
+  }
+  .filter-alpha-btn:hover:not(:disabled){ border-color:var(--accent); color:var(--accent-ink); }
+  .filter-alpha-btn:disabled{ color:var(--ink-faint); border-color:var(--line); opacity:.45; cursor:default; }
+  .filter-results-status{ font-size:12px; color:var(--ink-faint); margin:0 0 8px; min-height:0; }
+  .filter-options-list{
+    display:flex; flex-wrap:wrap; align-content:flex-start; gap:8px;
+    max-height:220px; overflow-y:auto; padding-right:4px;
+  }
+  .filter-empty-note{ font-size:13px; color:var(--ink-faint); margin:0; }
+
+  /* Precio — dos inputs numéricos reales con <label> visible y símbolo
+     de moneda al lado (nunca dentro del valor numérico). */
+  .filter-price-row{ display:flex; flex-wrap:wrap; gap:16px; margin-bottom:10px; }
+  .filter-price-field{ display:flex; flex-direction:column; gap:4px; }
+  .filter-price-field label{
+    font-size:12.5px; font-weight:600; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+  .filter-price-field__input-row{ display:flex; align-items:center; gap:6px; }
+  .filter-price-field__currency{ font-size:13px; color:var(--ink-faint); }
+  .filter-price-field input[type="number"]{
+    width:120px; padding:8px 10px; border:1px solid var(--line-strong); border-radius:var(--radius);
+    background:var(--bg); font-size:13px; font-family:var(--f-body); color:var(--ink);
+  }
+  .filter-price-field input[type="number"]:focus{ border-color:var(--accent); outline:none; }
+  .filter-price-hint{ font-size:12px; color:var(--ink-faint); margin:0 0 10px; }
+  .filter-price-error{ font-size:12.5px; color:var(--danger); margin:8px 0 0; }
+
+  /* Categoría — mismo patrón visual y de comportamiento que los chips de
+     proyectos-detalle.html (.category-filter__chip/is-active/chip-check),
+     pero como lista fija de las 6 categorías reales del catálogo, no
+     generada dinámicamente. */
+  .category-filter__chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .category-filter__chip{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:6px 13px; border-radius:100px; border:1px solid var(--line-strong);
+    background:var(--bg); color:var(--ink-soft); font-size:13px; font-family:var(--f-body);
+    cursor:pointer; line-height:1.3;
+  }
+  .category-filter__chip:hover{ border-color:var(--ink-faint); }
+  .category-filter__chip.is-active{
+    border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); font-weight:600;
+  }
+  .category-filter__chip .chip-check{ width:12px; height:12px; flex-shrink:0; display:none; }
+  .category-filter__chip.is-active .chip-check{ display:block; }
+
+  /* Disponibilidad y el resto de grupos (dentro de "Más filtros") — mismos
+     checkboxes reales de siempre (accesibilidad e interacción nativas),
+     solo reestilizados como píldoras horizontales en vez de lista vertical.
+     El estado "marcado" nunca depende solo del color: el propio check del
+     checkbox nativo sigue siendo la señal principal. */
+  .filter-option{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 12px; border-radius:100px; border:1px solid var(--line-strong);
+    background:var(--bg); color:var(--ink-soft); font-size:13px;
+    margin-bottom:0; cursor:pointer;
+  }
+  .filter-option:hover{ border-color:var(--ink-faint); color:var(--ink); }
+  .filter-option:has(input:checked){
+    border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); font-weight:600;
+  }
+  .filter-option input{ accent-color:var(--accent); width:14px; height:14px; margin:0; }
+
+  /* Cuadrícula — 4 columnas en escritorio ancho, 3/2/1 según el ancho
+     real. Selector por id (#product-grid) para ganar limpiamente a
+     .product-grid de styles.css (3 cols) y a sus dos media queries (2/1
+     col) sin !important — producto.html sigue leyendo solo la clase,
+     sin ningún cambio. */
+  #product-grid{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+  @media (max-width:1280px){
+    #product-grid{ grid-template-columns: repeat(3, minmax(0,1fr)); }
+  }
+  @media (max-width:900px){
+    #product-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width:560px){
+    #product-grid{ grid-template-columns: 1fr; }
+  }
+</style>
 </head>
 <body>
 
@@ -33,117 +223,229 @@
   </div>
 </div>
 
-<main class="wrap catalog-layout">
+<main class="wrap catalog-main">
 
-  <aside class="filters" aria-label="Filtros de catálogo">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-      <h3>Filtrar</h3>
-      <button class="clear" id="clear-filters">Limpiar</button>
+  <div class="search-bar">
+    <label for="search-input" class="search-bar__label">Buscar productos</label>
+    <input type="search" id="search-input" placeholder="Buscar por nombre, producto, marca o categoría…">
+  </div>
+
+  <section class="catalog-filters" aria-label="Filtros de catálogo">
+    <!-- Barra compacta — un botón por grupo (mismo orden pedido:
+         categoría, subcategoría, disponibilidad, distribuidor, marca,
+         uso, espacio) + Limpiar filtros al final. Patrón disclosure real:
+         <button> con aria-expanded/aria-controls, nunca role="menu" ni
+         un <div onclick>. Solo un panel abierto a la vez (acordeón, ver
+         <script>) — la barra cerrada mide una sola fila. -->
+    <div class="catalog-filters__bar">
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-categoria" aria-expanded="false" aria-controls="filter-panel-categoria">
+        <span class="catalog-filter-trigger__label">Categoría</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-subcategoria" aria-expanded="false" aria-controls="filter-panel-subcategoria">
+        <span class="catalog-filter-trigger__label">Subcategoría</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-precio" aria-expanded="false" aria-controls="filter-panel-precio">
+        <span class="catalog-filter-trigger__label">Precio</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-disponibilidad" aria-expanded="false" aria-controls="filter-panel-disponibilidad">
+        <span class="catalog-filter-trigger__label">Disponibilidad</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-distribuidor" aria-expanded="false" aria-controls="filter-panel-distribuidor">
+        <span class="catalog-filter-trigger__label">Distribuidor</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-marca" aria-expanded="false" aria-controls="filter-panel-marca">
+        <span class="catalog-filter-trigger__label">Marca</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-uso" aria-expanded="false" aria-controls="filter-panel-uso">
+        <span class="catalog-filter-trigger__label">Uso</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-espacio" aria-expanded="false" aria-controls="filter-panel-espacio">
+        <span class="catalog-filter-trigger__label">Espacio</span>
+        <span class="catalog-filter-trigger__count" hidden></span>
+        <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
+      </button>
+      <button type="button" class="clear" id="clear-filters">Limpiar filtros</button>
     </div>
 
-    <fieldset class="filter-group" data-group="categoria">
-      <legend>Categoría</legend>
-      <label class="filter-option"><input type="checkbox" value="iluminacion"> Iluminación</label>
-      <label class="filter-option"><input type="checkbox" value="mobiliario"> Mobiliario</label>
-      <label class="filter-option"><input type="checkbox" value="revestimientos"> Revestimientos</label>
-      <label class="filter-option"><input type="checkbox" value="bano"> Baño</label>
-      <label class="filter-option"><input type="checkbox" value="cocina"> Cocina</label>
-      <label class="filter-option"><input type="checkbox" value="accesorios-decorativos"> Accesorios decorativos</label>
-    </fieldset>
-
-    <fieldset class="filter-group" data-group="subcategoria">
-      <legend>Subcategoría</legend>
-      <label class="filter-option"><input type="checkbox" value="Decorativa"> Decorativa</label>
-      <label class="filter-option"><input type="checkbox" value="Empotrada"> Empotrada</label>
-      <label class="filter-option"><input type="checkbox" value="De superficie"> De superficie</label>
-      <label class="filter-option"><input type="checkbox" value="Rieles y perfiles"> Rieles y perfiles</label>
-      <label class="filter-option"><input type="checkbox" value="Exterior"> Exterior</label>
-      <label class="filter-option"><input type="checkbox" value="Residencial"> Residencial</label>
-      <label class="filter-option"><input type="checkbox" value="Oficina"> Oficina</label>
-      <label class="filter-option"><input type="checkbox" value="Hospitality"> Hospitality</label>
-      <label class="filter-option"><input type="checkbox" value="Pisos"> Pisos</label>
-      <label class="filter-option"><input type="checkbox" value="Porcelanato"> Porcelanato</label>
-      <label class="filter-option"><input type="checkbox" value="Sanitarios"> Sanitarios</label>
-      <label class="filter-option"><input type="checkbox" value="Griferías"> Griferías</label>
-      <label class="filter-option"><input type="checkbox" value="Fregaderos"> Fregaderos</label>
-      <label class="filter-option"><input type="checkbox" value="Espejos"> Espejos</label>
-      <label class="filter-option"><input type="checkbox" value="Objetos"> Objetos</label>
-    </fieldset>
-
-    <fieldset class="filter-group" data-group="distribuidor">
-      <legend>Distribuidor</legend>
-      <label class="filter-option"><input type="checkbox" value="spectro"> Spectro Lighting</label>
-      <label class="filter-option"><input type="checkbox" value="altritempi"> Altri Tempi</label>
-      <label class="filter-option"><input type="checkbox" value="charo"> Charo</label>
-      <label class="filter-option"><input type="checkbox" value="casalua"> Casa Lúa</label>
-      <label class="filter-option"><input type="checkbox" value="terraceramica"> Terra Cerámica</label>
-      <label class="filter-option"><input type="checkbox" value="baccara"> Baccara Baño</label>
-      <label class="filter-option"><input type="checkbox" value="fontanacocina"> Fontana Cocina</label>
-    </fieldset>
-
-    <fieldset class="filter-group" data-group="marca">
-      <legend>Marca</legend>
-      <label class="filter-option"><input type="checkbox" value="delta-light"> Delta Light</label>
-      <label class="filter-option"><input type="checkbox" value="marset"> Marset</label>
-      <label class="filter-option"><input type="checkbox" value="leds-c4"> Leds-C4</label>
-      <label class="filter-option"><input type="checkbox" value="norden-studio"> Norden Studio</label>
-      <label class="filter-option"><input type="checkbox" value="vero-contract"> Vero Contract</label>
-      <label class="filter-option"><input type="checkbox" value="palma-outdoor"> Palma Outdoor</label>
-      <label class="filter-option"><input type="checkbox" value="terra-ceramica"> Terra Cerámica</label>
-      <label class="filter-option"><input type="checkbox" value="baccara"> Baccara</label>
-      <label class="filter-option"><input type="checkbox" value="fontana"> Fontana</label>
-    </fieldset>
-
-    <fieldset class="filter-group" data-group="uso">
-      <legend>Uso</legend>
-      <label class="filter-option"><input type="checkbox" value="residencial"> Residencial</label>
-      <label class="filter-option"><input type="checkbox" value="comercial"> Comercial</label>
-      <label class="filter-option"><input type="checkbox" value="hospitality"> Hospitality</label>
-      <label class="filter-option"><input type="checkbox" value="oficina"> Oficina</label>
-    </fieldset>
-
-    <fieldset class="filter-group" data-group="espacio">
-      <legend>Espacio</legend>
-      <label class="filter-option"><input type="checkbox" value="sala"> Sala</label>
-      <label class="filter-option"><input type="checkbox" value="comedor"> Comedor</label>
-      <label class="filter-option"><input type="checkbox" value="dormitorio"> Dormitorio</label>
-      <label class="filter-option"><input type="checkbox" value="cocina"> Cocina</label>
-      <label class="filter-option"><input type="checkbox" value="bano"> Baño</label>
-      <label class="filter-option"><input type="checkbox" value="exterior"> Exterior</label>
-      <label class="filter-option"><input type="checkbox" value="oficina"> Oficina</label>
-      <label class="filter-option"><input type="checkbox" value="areas-comunes"> Áreas comunes</label>
-      <label class="filter-option"><input type="checkbox" value="retail"> Retail / comercial</label>
-    </fieldset>
-
-    <fieldset class="filter-group" data-group="disponibilidad">
-      <legend>Disponibilidad</legend>
-      <label class="filter-option"><input type="checkbox" value="en-stock"> En stock habitual</label>
-      <label class="filter-option"><input type="checkbox" value="bajo-pedido"> Bajo pedido</label>
-      <label class="filter-option"><input type="checkbox" value="por-confirmar"> Por confirmar</label>
-    </fieldset>
-  </aside>
-
-  <section>
-    <div class="search-bar">
-      <input type="search" id="search-input" placeholder="Buscar por nombre de producto, marca o categoría…" aria-label="Buscar en el catálogo">
+    <!-- Categoría — chips reales <button>, mismo patrón visual y de
+         comportamiento que .category-filter de proyectos-detalle.html.
+         Lista fija (las 6 categorías reales del catálogo, mismos códigos
+         que index.html) — nunca generada ni inventada aquí. -->
+    <div id="filter-panel-categoria" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-categoria">
+      <fieldset class="filter-group" data-group="categoria">
+        <legend id="catalog-category-legend">Filtrar por categoría</legend>
+        <div class="category-filter__chips" id="catalog-category-chips" role="group" aria-labelledby="catalog-category-legend">
+          <button type="button" class="category-filter__chip is-active" data-category="" aria-pressed="true">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Todas</span>
+          </button>
+          <button type="button" class="category-filter__chip" data-category="iluminacion" aria-pressed="false">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Iluminación</span>
+          </button>
+          <button type="button" class="category-filter__chip" data-category="mobiliario" aria-pressed="false">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Mobiliario</span>
+          </button>
+          <button type="button" class="category-filter__chip" data-category="revestimientos" aria-pressed="false">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Revestimientos</span>
+          </button>
+          <button type="button" class="category-filter__chip" data-category="bano" aria-pressed="false">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Baño</span>
+          </button>
+          <button type="button" class="category-filter__chip" data-category="cocina" aria-pressed="false">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Cocina</span>
+          </button>
+          <button type="button" class="category-filter__chip" data-category="accesorios-decorativos" aria-pressed="false">
+            <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Accesorios decorativos</span>
+          </button>
+        </div>
+      </fieldset>
     </div>
 
-    <div class="catalog-toolbar">
-      <span class="result-count" id="result-count">20 productos</span>
-      <select class="sort-select" id="sort-select">
-        <option value="relevancia">Ordenar por relevancia</option>
-        <option value="nombre">Nombre A–Z</option>
-        <option value="marca">Marca A–Z</option>
-      </select>
+    <!-- Subcategoría — dependiente de Categoría: las opciones NO están
+         hardcodeadas aquí, se generan en JS (renderSubcategoriaPanel)
+         a partir de PRODUCTS reales, según qué categoría(s) estén
+         seleccionadas. Nunca usa CATEGORIES.subcategorias (esa lista es
+         aspiracional, no refleja los productos reales — ver auditoría). -->
+    <div id="filter-panel-subcategoria" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-subcategoria">
+      <fieldset class="filter-group" data-group="subcategoria">
+        <legend>Subcategoría</legend>
+        <p class="filter-hint-note">Las opciones dependen de la categoría seleccionada.</p>
+        <div class="filter-options-row" id="subcategoria-options-list"></div>
+      </fieldset>
     </div>
 
-    <p class="card-meta" id="search-fuzzy-note" style="display:none; margin:0 0 12px;"></p>
+    <!-- Precio — dos inputs numéricos reales, nunca el campo inexistente
+         PRODUCTS.precio (los precios viven en Supabase, ver auditoría):
+         compara contra getPriceInfo(product.id).amount, el mismo dato
+         real que ya muestran las tarjetas. -->
+    <div id="filter-panel-precio" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-precio">
+      <fieldset class="filter-group" data-group="precio">
+        <legend>Precio</legend>
+        <p class="filter-price-hint" id="price-hint">Precio unitario en US$. Los productos bajo cotización o sin precio publicado no se muestran mientras haya un límite activo.</p>
+        <div class="filter-price-row">
+          <div class="filter-price-field">
+            <label for="price-min">Desde</label>
+            <div class="filter-price-field__input-row">
+              <span class="filter-price-field__currency" aria-hidden="true">US$</span>
+              <input type="number" id="price-min" min="0" step="any" placeholder="0" aria-describedby="price-range-error">
+            </div>
+          </div>
+          <div class="filter-price-field">
+            <label for="price-max">Hasta</label>
+            <div class="filter-price-field__input-row">
+              <span class="filter-price-field__currency" aria-hidden="true">US$</span>
+              <input type="number" id="price-max" min="0" step="any" placeholder="Sin límite" aria-describedby="price-range-error">
+            </div>
+          </div>
+        </div>
+        <p class="filter-price-error" id="price-range-error" role="alert" hidden></p>
+      </fieldset>
+    </div>
 
-    <div class="product-grid" id="product-grid"></div>
-    <div class="empty-state" id="empty-state" style="display:none;">
-      No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.
+    <div id="filter-panel-disponibilidad" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-disponibilidad">
+      <fieldset class="filter-group" data-group="disponibilidad">
+        <legend>Disponibilidad</legend>
+        <div class="filter-options-row">
+          <label class="filter-option"><input type="checkbox" value="en-stock"> En stock habitual</label>
+          <label class="filter-option"><input type="checkbox" value="bajo-pedido"> Bajo pedido</label>
+          <label class="filter-option"><input type="checkbox" value="por-confirmar"> Por confirmar</label>
+        </div>
+      </fieldset>
+    </div>
+
+    <!-- Distribuidor — generado en JS (renderSearchableGroup) desde
+         PRODUCTS/DISTRIBUTORS reales, nunca hardcodeado: buscador +
+         índice A-Z + lista con scroll interno, pensado para crecer sin
+         convertirse en un bloque enorme. -->
+    <div id="filter-panel-distribuidor" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-distribuidor">
+      <fieldset class="filter-group" data-group="distribuidor">
+        <legend>Distribuidor</legend>
+        <label for="distribuidor-search" class="search-bar__label">Buscar distribuidor</label>
+        <input type="search" id="distribuidor-search" class="filter-search-input" placeholder="Buscar distribuidor…" aria-controls="distribuidor-options-list">
+        <div class="filter-alpha-index" id="distribuidor-alpha" role="group" aria-label="Ir a la letra"></div>
+        <p class="filter-results-status" id="distribuidor-results-status" role="status"></p>
+        <div class="filter-options-list" id="distribuidor-options-list"></div>
+      </fieldset>
+    </div>
+
+    <!-- Marca — mismo patrón que Distribuidor, generado desde
+         PRODUCTS/LABELS.marca reales. -->
+    <div id="filter-panel-marca" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-marca">
+      <fieldset class="filter-group" data-group="marca">
+        <legend>Marca</legend>
+        <label for="marca-search" class="search-bar__label">Buscar marca</label>
+        <input type="search" id="marca-search" class="filter-search-input" placeholder="Buscar marca…" aria-controls="marca-options-list">
+        <div class="filter-alpha-index" id="marca-alpha" role="group" aria-label="Ir a la letra"></div>
+        <p class="filter-results-status" id="marca-results-status" role="status"></p>
+        <div class="filter-options-list" id="marca-options-list"></div>
+      </fieldset>
+    </div>
+
+    <div id="filter-panel-uso" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-uso">
+      <fieldset class="filter-group" data-group="uso">
+        <legend>Uso</legend>
+        <div class="filter-options-row">
+          <label class="filter-option"><input type="checkbox" value="residencial"> Residencial</label>
+          <label class="filter-option"><input type="checkbox" value="comercial"> Comercial</label>
+          <label class="filter-option"><input type="checkbox" value="hospitality"> Hospitality</label>
+          <label class="filter-option"><input type="checkbox" value="oficina"> Oficina</label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div id="filter-panel-espacio" class="catalog-filter-panel" hidden aria-labelledby="filter-trigger-espacio">
+      <fieldset class="filter-group" data-group="espacio">
+        <legend>Espacio</legend>
+        <div class="filter-options-row">
+          <label class="filter-option"><input type="checkbox" value="sala"> Sala</label>
+          <label class="filter-option"><input type="checkbox" value="comedor"> Comedor</label>
+          <label class="filter-option"><input type="checkbox" value="dormitorio"> Dormitorio</label>
+          <label class="filter-option"><input type="checkbox" value="cocina"> Cocina</label>
+          <label class="filter-option"><input type="checkbox" value="bano"> Baño</label>
+          <label class="filter-option"><input type="checkbox" value="exterior"> Exterior</label>
+          <label class="filter-option"><input type="checkbox" value="oficina"> Oficina</label>
+          <label class="filter-option"><input type="checkbox" value="areas-comunes"> Áreas comunes</label>
+          <label class="filter-option"><input type="checkbox" value="retail"> Retail / comercial</label>
+        </div>
+      </fieldset>
     </div>
   </section>
+
+  <div class="catalog-toolbar">
+    <span class="result-count" id="result-count">20 productos</span>
+    <select class="sort-select" id="sort-select">
+      <option value="relevancia">Ordenar por relevancia</option>
+      <option value="nombre">Nombre A–Z</option>
+      <option value="marca">Marca A–Z</option>
+    </select>
+  </div>
+
+  <p class="card-meta" id="search-fuzzy-note" style="display:none; margin:0 0 12px;"></p>
+
+  <div class="product-grid" id="product-grid"></div>
+  <div class="empty-state" id="empty-state" style="display:none;">
+    No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.
+  </div>
 
 </main>
 
@@ -197,7 +499,12 @@
     espacio: new Set(),
     disponibilidad: new Set(),
     search: "",
-    sort: "relevancia"
+    sort: "relevancia",
+    /* Precio — no es un Set (es un rango, no una lista de OR): "" significa
+       "sin límite", nunca 0. Nunca se añade a GROUPS (ese array asume
+       .clear() de Set) ni a la URL — no se pidió. */
+    priceMin: "",
+    priceMax: ""
   };
 
   const GROUPS = ["categoria","subcategoria","distribuidor","marca","uso","espacio","disponibilidad"];
@@ -207,10 +514,358 @@
     const val = params.get(key);
     if(val){
       state[key].add(val);
-      const input = document.querySelector(`.filter-group[data-group="${key}"] input[value="${val.replace(/"/g,'\\"')}"]`);
-      if(input) input.checked = true;
+      /* categoria ya no tiene checkbox propio (ver chips más abajo) —
+         updateCategoryChipsUI() es quien refleja este valor en el DOM. */
+      if (key !== "categoria"){
+        const input = document.querySelector(`.filter-group[data-group="${key}"] input[value="${val.replace(/"/g,'\\"')}"]`);
+        if(input) input.checked = true;
+      }
     }
   });
+
+  /* Punto 21 (2ª iteración) — acordeón de grupos: cada botón controla su
+     propio panel (aria-expanded/aria-controls/hidden, patrón disclosure
+     real — nunca role="menu"). Como mucho un panel abierto a la vez: al
+     abrir uno se cierran los demás, así la barra nunca ocupa más que un
+     panel de alto. Nada de esto toca state/matchesFilters/render — solo
+     decide qué se ve. */
+  const FILTER_PANEL_GROUPS = ["categoria","subcategoria","precio","disponibilidad","distribuidor","marca","uso","espacio"];
+
+  function closeAllFilterPanels(){
+    FILTER_PANEL_GROUPS.forEach(key => {
+      document.getElementById(`filter-trigger-${key}`).setAttribute("aria-expanded", "false");
+      document.getElementById(`filter-panel-${key}`).hidden = true;
+    });
+  }
+
+  FILTER_PANEL_GROUPS.forEach(key => {
+    const trigger = document.getElementById(`filter-trigger-${key}`);
+    const panel = document.getElementById(`filter-panel-${key}`);
+    trigger.addEventListener("click", () => {
+      const wasOpen = trigger.getAttribute("aria-expanded") === "true";
+      closeAllFilterPanels();
+      if (!wasOpen){
+        trigger.setAttribute("aria-expanded", "true");
+        panel.hidden = false;
+      }
+    });
+  });
+
+  /* Contador visible + accesible en cada botón ("Marca (2)") — nunca
+     solo color. Para categoria usa state.categoria.size, igual que los
+     demás grupos (0 = "Todas", sin contador). */
+  function updateFilterTriggerCounts(){
+    FILTER_PANEL_GROUPS.forEach(key => {
+      const trigger = document.getElementById(`filter-trigger-${key}`);
+      const countEl = trigger.querySelector(".catalog-filter-trigger__count");
+      /* Precio no es un Set (es un rango: state.priceMin/state.priceMax),
+         así que no tiene .size — se resume aparte, sin duplicar esta
+         función para un solo grupo distinto. */
+      if (key === "precio"){
+        updatePriceTriggerDisplay(trigger, countEl);
+        return;
+      }
+      const n = state[key].size;
+      /* data-has-selection controla el estado "activo" de la cápsula
+         (CSS) — señal redundante, nunca la única: el texto "(n)" ya
+         comunica lo mismo. */
+      trigger.dataset.hasSelection = n > 0 ? "true" : "false";
+      if (n > 0){
+        countEl.textContent = `(${n})`;
+        countEl.hidden = false;
+      } else {
+        countEl.hidden = true;
+      }
+    });
+  }
+
+  /* Resume el estado de Precio en su propia cápsula: "(1)" si solo hay
+     un límite, el intervalo si hay ambos, oculto si no hay ninguno —
+     nunca depende solo del color (mismo dataset.hasSelection que el
+     resto de grupos activa el mismo estilo de cápsula activa). */
+  function updatePriceTriggerDisplay(trigger, countEl){
+    const hasMin = state.priceMin !== "";
+    const hasMax = state.priceMax !== "";
+    trigger.dataset.hasSelection = (hasMin || hasMax) ? "true" : "false";
+    if (hasMin && hasMax){
+      /* Resumen compacto (sin decimales ni "US$" repetido dos veces)
+         para que la cápsula no crezca demasiado — formatUSD() ya se usa
+         para el valor completo en el mensaje de ayuda del panel. */
+      const compact = (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
+      countEl.textContent = `($${compact(state.priceMin)}–$${compact(state.priceMax)})`;
+      countEl.hidden = false;
+    } else if (hasMin || hasMax){
+      countEl.textContent = "(1)";
+      countEl.hidden = false;
+    } else {
+      countEl.hidden = true;
+    }
+  }
+
+  /* Categoría por chips: mismo Set state.categoria de siempre (nunca una
+     consulta ni un estado nuevo), solo cambia cómo se refleja y se
+     cambia en el DOM. "Todas" (data-category="") equivale a
+     state.categoria.size === 0 — misma regla que ya usa matchesFilters()
+     y que ya usaba el filtro de categoría de proyectos-detalle.html. */
+  const categoryChipsEl = document.getElementById("catalog-category-chips");
+  function updateCategoryChipsUI(){
+    categoryChipsEl.querySelectorAll(".category-filter__chip").forEach(chip => {
+      const code = chip.dataset.category;
+      const active = code === "" ? state.categoria.size === 0 : state.categoria.has(code);
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", String(active));
+    });
+  }
+  categoryChipsEl.querySelectorAll(".category-filter__chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const code = chip.dataset.category;
+      if (code === ""){
+        state.categoria.clear();
+      } else if (state.categoria.has(code)){
+        state.categoria.delete(code);
+      } else {
+        state.categoria.add(code);
+      }
+      updateCategoryChipsUI();
+      /* Categoría es el padre de Subcategoría: cada cambio recalcula
+         las opciones válidas, poda las incompatibles de state.subcategoria
+         y vuelve a pintar el panel — antes de actualizar contadores y
+         de repintar la cuadrícula, para que ambos ya reflejen el estado
+         final (nunca un filtro incompatible invisible). */
+      renderSubcategoriaPanel();
+      updateFilterTriggerCounts();
+      render();
+    });
+  });
+
+  /* Subcategoría — dependiente de Categoría, derivada SIEMPRE de
+     PRODUCTS reales (nunca de CATEGORIES.subcategorias: esa lista es
+     aspiracional del catálogo completo y no garantiza que exista un
+     producto real detrás — ver auditoría). Sin categoría seleccionada,
+     "relevant" es PRODUCTS completo → unión global. Con una o varias
+     categorías, solo los productos de esas categorías → unión de sus
+     subcategorías reales. */
+  function getValidSubcategorias(){
+    const cats = state.categoria;
+    const relevant = cats.size === 0 ? PRODUCTS : PRODUCTS.filter(p => cats.has(p.categoria));
+    return [...new Set(relevant.map(p => p.subcategoria))].sort((a, b) => a.localeCompare(b, "es"));
+  }
+
+  function renderSubcategoriaPanel(){
+    const valid = getValidSubcategorias();
+    const validSet = new Set(valid);
+
+    /* Poda: solo se elimina lo que ya no es válido — nunca se toca
+       ningún otro grupo, nunca se limpia de más. */
+    Array.from(state.subcategoria).forEach(value => {
+      if (!validSet.has(value)) state.subcategoria.delete(value);
+    });
+
+    const container = document.getElementById("subcategoria-options-list");
+    if (!valid.length){
+      container.innerHTML = `<p class="filter-empty-note">No hay subcategorías disponibles para las categorías seleccionadas.</p>`;
+      return;
+    }
+
+    container.innerHTML = valid.map(value => `
+      <label class="filter-option">
+        <input type="checkbox" value="${value}"${state.subcategoria.has(value) ? " checked" : ""}>
+        ${value}
+      </label>`).join("");
+
+    container.querySelectorAll("input[type=checkbox]").forEach(input => {
+      input.addEventListener("change", () => {
+        input.checked ? state.subcategoria.add(input.value) : state.subcategoria.delete(input.value);
+        updateFilterTriggerCounts();
+        render();
+      });
+    });
+  }
+
+  /* Distribuidor / Marca — opciones generadas SIEMPRE desde PRODUCTS
+     reales (nunca hardcodeadas): DISTRIBUTORS[code].nombre y
+     LABELS.marca[code] ya existen en script.js, solo se leen. La
+     búsqueda y el índice A-Z filtran ÚNICAMENTE la presentación —
+     jamás tocan state[group] hasta que se marca/desmarca un checkbox
+     real. */
+  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  /* isLetter distingue el origen de la búsqueda: el índice A-Z filtra
+     por PREFIJO (como cualquier salto alfabético — "L" → empieza por L),
+     mientras que el texto libre sigue siendo por subcadena, como el
+     resto de buscadores del sitio. Sin esta distinción, "L" también
+     encontraría "Delta Light" (contiene una L), que no es lo que
+     espera un índice alfabético. */
+  const searchableGroupState = {
+    distribuidor: { query: "", isLetter: false },
+    marca: { query: "", isLetter: false }
+  };
+
+  function getGroupOptions(group){
+    const seen = new Set();
+    const list = [];
+    PRODUCTS.forEach(product => {
+      const code = product[group];
+      if (!seen.has(code)){
+        seen.add(code);
+        const label = group === "distribuidor"
+          ? (DISTRIBUTORS[code] ? DISTRIBUTORS[code].nombre : code)
+          : (LABELS.marca[code] || code);
+        list.push({ value: code, label });
+      }
+    });
+    return list.sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }
+
+  function renderSearchableGroup(group){
+    const options = getGroupOptions(group);
+    const selected = state[group];
+    const rawQuery = searchableGroupState[group].query;
+    const query = normalizeSearchText(rawQuery);
+
+    /* Índice A-Z sobre TODAS las opciones reales, nunca sobre el
+       subconjunto ya filtrado — una letra sin ninguna opción real
+       queda deshabilitada de forma coherente, sin importar la búsqueda
+       actual. */
+    const availableLetters = new Set(
+      options.map(o => normalizeSearchText(o.label).charAt(0).toUpperCase()).filter(Boolean)
+    );
+    const alphaEl = document.getElementById(`${group}-alpha`);
+    alphaEl.innerHTML = ALPHABET.map(letter => {
+      const has = availableLetters.has(letter);
+      return `<button type="button" class="filter-alpha-btn" data-letter="${letter}"${has ? "" : " disabled"} aria-label="Ir a la letra ${letter}">${letter}</button>`;
+    }).join("");
+    alphaEl.querySelectorAll(".filter-alpha-btn:not(:disabled)").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(`${group}-search`);
+        input.value = btn.dataset.letter;
+        searchableGroupState[group].query = btn.dataset.letter;
+        searchableGroupState[group].isLetter = true;
+        renderSearchableGroup(group);
+        input.focus();
+      });
+    });
+
+    /* Las opciones ya seleccionadas se muestran SIEMPRE, sin importar
+       el texto de búsqueda — nunca "desaparecen" solo porque el
+       usuario escribió otra cosa. El resto de la lista sí se filtra
+       por la búsqueda actual. */
+    const isLetter = searchableGroupState[group].isLetter;
+    const selectedOptions = options.filter(o => selected.has(o.value));
+    const matchingOptions = options.filter(o => {
+      if (selected.has(o.value)) return false;
+      if (!query) return true;
+      const normalizedLabel = normalizeSearchText(o.label);
+      return isLetter ? normalizedLabel.startsWith(query) : normalizedLabel.includes(query);
+    });
+    const visible = selectedOptions.concat(matchingOptions);
+
+    const listEl = document.getElementById(`${group}-options-list`);
+    if (!visible.length){
+      listEl.innerHTML = `<p class="filter-empty-note">Sin coincidencias para "${rawQuery}".</p>`;
+    } else {
+      listEl.innerHTML = visible.map(o => `
+        <label class="filter-option">
+          <input type="checkbox" value="${o.value}"${selected.has(o.value) ? " checked" : ""}>
+          ${o.label}
+        </label>`).join("");
+      listEl.querySelectorAll("input[type=checkbox]").forEach(input => {
+        input.addEventListener("change", () => {
+          input.checked ? state[group].add(input.value) : state[group].delete(input.value);
+          updateFilterTriggerCounts();
+          render();
+        });
+      });
+    }
+
+    const statusEl = document.getElementById(`${group}-results-status`);
+    statusEl.textContent = query
+      ? `${matchingOptions.length} ${matchingOptions.length === 1 ? "resultado" : "resultados"}`
+      : "";
+  }
+
+  function wireSearchableGroupSearchInput(group){
+    const input = document.getElementById(`${group}-search`);
+    let debounceTimer = null;
+    input.addEventListener("input", (e) => {
+      searchableGroupState[group].query = e.target.value;
+      searchableGroupState[group].isLetter = false;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => renderSearchableGroup(group), 150);
+    });
+  }
+
+  /* Precio — valores reales ya cargados (PRICE_STATE, vía getPriceInfo),
+     nunca desde PRODUCTS (no tiene precio) ni un número inventado. Solo
+     para el texto de ayuda del panel — no afecta al filtro en sí. */
+  function getLoadedPriceRange(){
+    const amounts = PRODUCTS
+      .map(p => getPriceInfo(p.id))
+      .filter(info => info.kind === "published")
+      .map(info => info.amount);
+    return amounts.length ? { min: Math.min(...amounts), max: Math.max(...amounts) } : null;
+  }
+
+  function updatePriceHint(){
+    const hintEl = document.getElementById("price-hint");
+    const base = "Precio unitario en US$. Los productos bajo cotización o sin precio publicado no se muestran mientras haya un límite activo.";
+    const range = getLoadedPriceRange();
+    hintEl.textContent = range ? `${base} Catálogo actual: ${formatUSD(range.min)}–${formatUSD(range.max)}.` : base;
+  }
+
+  /* "Desde" > "Hasta": nunca se filtra con un resultado incorrecto (ver
+     matchesPriceFilter) — solo se avisa con un mensaje claro,
+     conservando lo que el usuario ya escribió para poder corregirlo. */
+  function validatePriceRange(){
+    const errorEl = document.getElementById("price-range-error");
+    const hasMin = state.priceMin !== "";
+    const hasMax = state.priceMax !== "";
+    if (hasMin && hasMax && Number(state.priceMin) > Number(state.priceMax)){
+      errorEl.textContent = "El precio mínimo (\"Desde\") no puede ser mayor que el máximo (\"Hasta\").";
+      errorEl.hidden = false;
+    } else {
+      errorEl.textContent = "";
+      errorEl.hidden = true;
+    }
+  }
+
+  function wirePriceFilter(){
+    const minInput = document.getElementById("price-min");
+    const maxInput = document.getElementById("price-max");
+    let debounceTimer = null;
+    function handleChange(){
+      state.priceMin = minInput.value;
+      state.priceMax = maxInput.value;
+      validatePriceRange();
+      updateFilterTriggerCounts();
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(render, 200);
+    }
+    minInput.addEventListener("input", handleChange);
+    maxInput.addEventListener("input", handleChange);
+  }
+
+  /* Precio — compara SIEMPRE contra getPriceInfo(product.id).amount, el
+     mismo dato real (Supabase, vía PRICE_STATE) que ya muestran las
+     tarjetas — nunca un campo inventado en PRODUCTS, que no tiene
+     precio. Con cualquier límite activo, un producto sin precio
+     "published" (bajo cotización, pendiente, no disponible, sin
+     sesión) queda excluido — nunca se cuela con un precio que no tiene.
+     Rango inválido (mínimo > máximo): nunca filtra con un resultado
+     incorrecto — se trata como si no hubiera límite activo, y el
+     mensaje de error (ver validatePriceRange) explica por qué. */
+  function matchesPriceFilter(product){
+    const hasMin = state.priceMin !== "";
+    const hasMax = state.priceMax !== "";
+    if (!hasMin && !hasMax) return true;
+    if (hasMin && hasMax && Number(state.priceMin) > Number(state.priceMax)) return true;
+
+    const info = getPriceInfo(product.id);
+    if (info.kind !== "published") return false;
+    const amount = info.amount;
+    if (hasMin && amount < Number(state.priceMin)) return false;
+    if (hasMax && amount > Number(state.priceMax)) return false;
+    return true;
+  }
 
   /* Filtros de la barra lateral — la búsqueda (texto) se resuelve
      aparte, con searchProducts() (script.js), antes de aplicar esto. */
@@ -221,7 +876,8 @@
            (state.marca.size === 0 || state.marca.has(product.marca)) &&
            (state.uso.size === 0 || state.uso.has(product.uso)) &&
            (state.espacio.size === 0 || state.espacio.has(product.espacio)) &&
-           (state.disponibilidad.size === 0 || state.disponibilidad.has(product.disponibilidad));
+           (state.disponibilidad.size === 0 || state.disponibilidad.has(product.disponibilidad)) &&
+           matchesPriceFilter(product);
   }
 
   /* "Ordenar por relevancia" solo tiene sentido con una búsqueda
@@ -275,6 +931,7 @@
     input.addEventListener("change", () => {
       const group = input.closest(".filter-group").dataset.group;
       input.checked ? state[group].add(input.value) : state[group].delete(input.value);
+      updateFilterTriggerCounts();
       render();
     });
   });
@@ -299,11 +956,52 @@
     GROUPS.forEach(k => state[k].clear());
     document.getElementById("search-input").value = "";
     state.search = "";
+    document.getElementById("distribuidor-search").value = "";
+    document.getElementById("marca-search").value = "";
+    searchableGroupState.distribuidor.query = "";
+    searchableGroupState.distribuidor.isLetter = false;
+    searchableGroupState.marca.query = "";
+    searchableGroupState.marca.isLetter = false;
+    /* Precio no está en GROUPS (no es un Set) — se limpia aparte:
+       estado, inputs y el mensaje de validación, si estuviera visible. */
+    state.priceMin = "";
+    state.priceMax = "";
+    document.getElementById("price-min").value = "";
+    document.getElementById("price-max").value = "";
+    document.getElementById("price-range-error").hidden = true;
+    updateCategoryChipsUI();
+    renderSubcategoriaPanel();
+    renderSearchableGroup("distribuidor");
+    renderSearchableGroup("marca");
+    updateFilterTriggerCounts();
+    closeAllFilterPanels();
     render();
   });
 
+  /* Llamadas iniciales — DESPUÉS del bucle genérico de checkboxes de
+     arriba, a propósito: en este punto los paneles de subcategoría/
+     distribuidor/marca todavía están vacíos (ese bucle solo encuentra
+     los checkboxes estáticos de uso/espacio/disponibilidad), así que
+     los listeners que instalan estas llamadas nunca se duplican.
+     state ya está poblado desde la URL (arriba del todo del script).
+     Nunca dispara una consulta nueva: todo se deriva de PRODUCTS, ya
+     cargado en memoria por script.js. */
+  updateCategoryChipsUI();
+  renderSubcategoriaPanel();
+  renderSearchableGroup("distribuidor");
+  renderSearchableGroup("marca");
+  wireSearchableGroupSearchInput("distribuidor");
+  wireSearchableGroupSearchInput("marca");
+  wirePriceFilter();
+  updateFilterTriggerCounts();
+
   (async () => {
     await loadPriceState(PRODUCTS.map(p => p.id));
+    /* El texto de ayuda de Precio necesita PRICE_STATE ya cargado
+       (getPriceInfo depende de ella) — por eso se actualiza aquí,
+       nunca antes. No es una consulta nueva: loadPriceState() es la
+       misma llamada que ya existía. */
+    updatePriceHint();
     render();
   })();
 </script>
