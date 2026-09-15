@@ -222,6 +222,26 @@
   .card-actions .btn-add-to-project.is-added-to-project{
     background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink);
   }
+
+  /* Ajuste de alineación header/contenido — local a catalogo.html.
+     .catalog-main (arriba en este mismo <style>) usa un padding en
+     forma abreviada de 3 valores ("Npx 0 Mpx"), que sustituye por
+     completo al padding:0 32px de .wrap (styles.css) en vez de sumarse
+     a él — el resultado es que el contenido (buscador, filtros, grid)
+     no tiene padding lateral propio, a diferencia del header y de
+     page-head, que sí conservan los 32px/20px de .wrap. En vez de
+     tocar .catalog-main (el contenido no debe cambiar de ancho ni de
+     márgenes), se igualan aquí el header y page-head a ese mismo 0px,
+     en ambos lados y en todos los anchos — .site-header .wrap y
+     .page-head .wrap tienen más especificidad que .wrap (incluida su
+     variante móvil de 20px), así que gana siempre sin depender del
+     orden de las reglas. Solo horizontal: el padding vertical de
+     ambos bloques no se toca. */
+  .site-header .wrap,
+  .page-head .wrap{
+    padding-left: 0;
+    padding-right: 0;
+  }
 </style>
 </head>
 <body>

@@ -5,6 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Distribuidores — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+  /* Ajuste de alineación header/contenido — local a distribuidores.html
+     (nunca styles.css: .site-header, .page-head y .wrap se comparten
+     por nombre con otras 8 páginas, pero una regla dentro de un
+     <style> de este documento solo pinta ESTE documento).
+
+     .provider-grid (styles.css, línea ~869) usa un padding en forma
+     abreviada de 3 valores ("40px 0 100px"), que sustituye por completo
+     al padding:0 32px de .wrap en vez de sumarse a él — por eso el
+     contenido (la cuadrícula de distribuidores) no tiene padding
+     lateral propio en escritorio, a diferencia del header y page-head,
+     que sí conservan los 32px de .wrap ahí.
+
+     Ese desajuste NO existe por debajo de 900px: dentro de
+     @media(max-width:900px) (styles.css, línea ~1190) hay otra regla
+     ".wrap{padding:0 20px}" que, al tener la misma especificidad que
+     .provider-grid pero aparecer DESPUÉS en el mismo archivo, gana en
+     ese rango — ahí el contenido y el header ya comparten los mismos
+     20px de forma nativa. Por eso este ajuste se limita a min-width:901px:
+     por debajo ya está alineado y no debe tocarse. Solo horizontal: el
+     padding vertical de ambos bloques no se toca. */
+  @media (min-width: 901px){
+    .site-header .wrap,
+    .page-head .wrap{
+      padding-left: 0;
+      padding-right: 0;
+    }
+  }
+</style>
 </head>
 <body>
 
