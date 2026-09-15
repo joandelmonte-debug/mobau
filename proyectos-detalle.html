@@ -27,7 +27,7 @@
     align-items:center;
     flex-wrap:wrap;
     gap:12px;
-    margin-bottom:36px;
+    margin-bottom:24px;
   }
   .project-detail-actions .btn{
     display:inline-flex;
@@ -39,6 +39,39 @@
     padding:0 18px;
     line-height:1;
   }
+
+  /* Punto 28 — ficha izquierda más compacta (ámbito local, nunca
+     styles.css): mismo contenido, menos aire entre filas, para dejar
+     espacio real a "Añadir productos" sin ocultar información. */
+  .project-info-col .spec-table{ margin-bottom:20px; }
+  .project-info-col .spec-row{ padding:9px 0; font-size:13.5px; }
+
+  /* Punto 28 — "Añadir productos" en la columna izquierda, debajo de
+     la ficha y de Archivar/Volver a mis proyectos: sigue siendo el
+     mismo <div> de columna izquierda del grid (nunca una tercera
+     columna, nunca encima de "Productos de mi proyecto" — ese bloque
+     vive en el otro <div>, sin tocar). Solo enlaces <a> reales a
+     catalogo.html?categoria=<código real>&project_id=<project.id
+     real>, con las mismas 6 categorías/códigos que index.html —
+     nunca inventados, nunca hardcodeados (ver renderAddProductsNav).
+     Oculto con [hidden] en proyectos archivados (no se puede añadir
+     ahí, igual que ya avisa el estado vacío de la lista); no dispara
+     ninguna consulta nueva a Supabase — solo lee project.status y
+     LABELS.categoria, ambos ya en memoria. */
+  .project-add-products{
+    margin-top:4px; padding-top:20px; border-top:1px solid var(--line);
+  }
+  .project-add-products__title{ margin:0 0 4px; font-size:15px; }
+  .project-add-products__hint{ margin:0 0 12px; }
+  .project-add-products__nav{ display:flex; flex-direction:column; gap:8px; }
+  .project-add-products__link{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:11px 14px; border:1px solid var(--line-strong); border-radius:var(--radius);
+    color:var(--ink); font-size:14px; text-decoration:none;
+    transition:border-color .15s, background .15s;
+  }
+  .project-add-products__link:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .project-add-products__link svg{ color:var(--ink-faint); flex-shrink:0; }
 
   /* Estado vacío de productos — el recuadro (#products-empty) solo
      reserva la altura mínima y anula el padding heredado de .cart-empty
@@ -224,7 +257,7 @@
   <div id="project-view" style="display:none;">
     <div class="project-layout">
 
-      <div>
+      <div class="project-info-col">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:8px;">
           <div style="flex:1; min-width:0;">
             <h1 id="p-name" style="margin:0;">—</h1>
@@ -246,7 +279,7 @@
           </div>
         </div>
         <p id="edit-project-error" style="display:none; color:var(--danger); font-size:13px; margin:0 0 14px;"></p>
-        <p class="card-meta" id="p-meta" style="margin-bottom:28px;"></p>
+        <p class="card-meta" id="p-meta" style="margin-bottom:16px;"></p>
 
         <dl class="spec-table">
           <div class="spec-row">
@@ -300,6 +333,16 @@
           <button type="button" class="btn btn-outline btn-sm" id="archive-btn">Archivar</button>
           <a href="proyectos.html" class="btn btn-outline btn-sm">Volver a mis proyectos</a>
         </div>
+
+        <!-- Punto 28 — "Añadir productos": oculto de fábrica (hidden),
+             solo se muestra para proyectos activos (ver renderAddProductsNav).
+             Los 6 enlaces se generan en JS a partir de LABELS.categoria,
+             nunca hardcodeados aquí. -->
+        <aside class="project-add-products" id="project-add-products" hidden>
+          <h2 class="project-add-products__title">Añadir productos</h2>
+          <p class="card-meta project-add-products__hint">Explora una categoría del catálogo y añade productos nuevos a este proyecto.</p>
+          <nav aria-label="Añadir productos por categoría" class="project-add-products__nav" id="project-add-products-nav"></nav>
+        </aside>
       </div>
 
       <div class="account-section" style="margin-bottom:0;">
@@ -480,6 +523,37 @@
     if (!isProjectInfoEditing){
       document.getElementById("edit-project-btn").style.display = isActive ? "inline-flex" : "none";
     }
+
+    renderAddProductsNav(project);
+  }
+
+  /* Punto 28 — "Añadir productos": enlaces reales a catalogo.html,
+     mismas categorías/códigos que index.html (Object.keys(LABELS.categoria)
+     como fuente de verdad — nunca una lista propia ni categorías
+     inventadas). project se recibe explícito (no por closure) para no
+     depender de una variable global accidental si esta función se
+     reutiliza o se mueve en el futuro.
+     Cada href lleva project_id=<currentProject.id> real, nunca
+     hardcodeado — pero catalogo.html todavía NO lee ese parámetro hoy:
+     el "volver sin perder productos" real lo garantiza el flujo ya
+     existente (catálogo → Mi selección → "Añadir al proyecto activo",
+     que redirige a proyectos-detalle.html?id=<proyecto activo>), no
+     esta URL. Solo se muestra en proyectos activos (un archivado no
+     admite productos nuevos, igual que ya avisa el estado vacío de la
+     lista) — nunca dispara una consulta a Supabase, solo lee
+     currentProject.status y LABELS.categoria, ambos ya en memoria. */
+  function renderAddProductsNav(currentProject){
+    const aside = document.getElementById("project-add-products");
+    const isActive = currentProject.status === "active";
+    aside.hidden = !isActive;
+    if (!isActive) return;
+
+    const nav = document.getElementById("project-add-products-nav");
+    nav.innerHTML = Object.keys(LABELS.categoria).map(code => `
+      <a href="catalogo.html?categoria=${code}&project_id=${currentProject.id}" class="project-add-products__link">
+        <span>${LABELS.categoria[code]}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </a>`).join("");
   }
 
   /* Edición inline de la información del proyecto (nombre, tipo,
