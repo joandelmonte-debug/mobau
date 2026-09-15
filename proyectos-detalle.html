@@ -110,13 +110,47 @@
   }
   .dp-quantity__error{ margin:0; font-size:12px; color:var(--danger); }
 
-  /* Punto 17 — encabezado ligero de cada grupo de categoría en
-     "Productos de mi proyecto" (sin pestañas ni acordeones: solo un
-     h3 pequeño antes de las tarjetas .saved-project de esa categoría). */
-  .saved-project-group + .saved-project-group{ margin-top: 20px; }
-  .saved-project-group__title{
-    font-size: 13px; font-weight:600; text-transform:uppercase;
-    letter-spacing:.03em; color: var(--ink-faint); margin: 0 0 10px;
+  /* Punto 30 — filtro de categorías, minimalista: chips reales
+     (<button>), nunca un <select multiple> ni un panel pesado.
+     Bloque propio entre el resumen de precios y la lista (nunca
+     anidado dentro de ninguno de los dos) — sustituye a los
+     divisores de categoría del Punto 17 (títulos "MOBILIARIO"/
+     "ILUMINACIÓN..." repetidos entre tarjetas): la lista ahora es
+     plana y esas mismas categorías se eligen aquí.
+     Se oculta ÚNICAMENTE cuando el proyecto no tiene ningún producto
+     (ver renderCategoryFilter) — nunca por cuántas categorías reales
+     haya ni por si esos productos tienen precio: con una sola
+     categoría, "Todas" y esa categoría igual quedan como dos chips
+     reales, para que el filtro nunca desaparezca mientras queden
+     productos que filtrar. Margen corto y simétrico: separa lo
+     mismo del resumen (arriba) que de la primera tarjeta (abajo). */
+  .category-filter{ margin:16px 0; }
+  .category-filter__label{
+    display:block; font-size:12.5px; font-weight:600; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:.03em; margin-bottom:8px;
+  }
+  .category-filter__chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .category-filter__chip{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:6px 13px; border-radius:100px; border:1px solid var(--line-strong);
+    background:var(--bg); color:var(--ink-soft); font-size:13px; font-family:var(--f-body);
+    cursor:pointer; line-height:1.3;
+  }
+  .category-filter__chip:hover{ border-color:var(--ink-faint); }
+  /* Estado activo: nunca solo color — borde, fondo, peso de texto Y el
+     check se activan juntos, para que no dependa de una sola señal. */
+  .category-filter__chip.is-active{
+    border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); font-weight:600;
+  }
+  .category-filter__chip .chip-check{ width:12px; height:12px; flex-shrink:0; display:none; }
+  .category-filter__chip.is-active .chip-check{ display:block; }
+  /* display:none (no solo texto vacío) cuando "Todas" está activo —
+     así no queda una línea vacía reservando su propio alto de línea
+     por debajo de los chips. */
+  #products-filter-status{ margin:8px 0 0; min-height:0; }
+  @media (max-width:560px){
+    .category-filter__chips{ gap:6px; }
+    .category-filter__chip{ padding:5px 11px; font-size:12.5px; }
   }
 
   /* Grupo "Activo [lápiz]" / "Activo [check] [cancelar]" — reutiliza
@@ -141,8 +175,18 @@
      margen derecho (mismo borde que el botón "Solicitar cotización"),
      en vez de seguir el flujo de texto normal a la izquierda como el
      contador de productos. Solo afecta esta página — seleccion.html
-     conserva su propia alineación. */
+     conserva su propia alineación.
+     Punto 30 (ajuste de posición) — el resumen ahora vive DESPUÉS de
+     la lista de tarjetas, no antes: el borde/margen superior (línea
+     divisoria corta y elegante, separándolo de la última tarjeta) se
+     aplica con :not(:empty) — solo cuando el elemento de verdad tiene
+     contenido (JS le pone innerHTML=""` cuando no hay nada que
+     mostrar: proyecto sin productos, o filtro sin resultados). Así
+     nunca queda una línea huérfana flotando sin nada debajo. */
   #products-price-summary{ text-align:right; }
+  #products-price-summary:not(:empty){
+    margin-top:20px; padding-top:16px; border-top:1px solid var(--line-strong);
+  }
 </style>
 </head>
 <body>
@@ -259,16 +303,33 @@
       </div>
 
       <div class="account-section" style="margin-bottom:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
-          <h2 style="margin:0;">Productos de mi proyecto</h2>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <a href="#" class="btn btn-outline btn-sm" id="summary-link" hidden>Ver resumen preliminar</a>
-            <button type="button" class="btn btn-primary btn-sm" id="request-quote-btn" hidden disabled>Solicitar cotización</button>
+
+        <!-- Punto 30 (corrección de posición) — 1. project-products-header:
+             solo título + contador + botones superiores. Nunca contiene el
+             filtro ni el resumen — son bloques hermanos, no anidados. -->
+        <div id="project-products-header">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
+            <h2 style="margin:0;">Productos de mi proyecto</h2>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <a href="#" class="btn btn-outline btn-sm" id="summary-link" hidden>Ver resumen preliminar</a>
+              <button type="button" class="btn btn-primary btn-sm" id="request-quote-btn" hidden disabled>Solicitar cotización</button>
+            </div>
           </div>
+          <p id="quote-hint" class="card-meta" style="display:none; margin-top:-4px;">Añade productos para poder solicitar una cotización.</p>
+          <p id="products-counter" class="card-meta"></p>
         </div>
-        <p id="quote-hint" class="card-meta" style="display:none; margin-top:-4px;">Añade productos para poder solicitar una cotización.</p>
-        <p id="products-counter" class="card-meta"></p>
-        <div id="products-price-summary"></div>
+
+        <!-- 2. project-category-filter: etiqueta + chips + estado activo
+             (aria-live). Oculto solo cuando el proyecto no tiene ningún
+             producto (ver renderCategoryFilter) — nunca por el número de
+             categorías ni por el estado del precio. Hermano del resumen y
+             de la lista, nunca anidado dentro de ninguno de los dos. -->
+        <div class="category-filter" id="project-category-filter" hidden>
+          <span class="category-filter__label" id="products-filter-label">Filtrar por categoría</span>
+          <div class="category-filter__chips" id="products-filter-chips" role="group" aria-labelledby="products-filter-label"></div>
+          <p id="products-filter-status" class="card-meta" role="status"></p>
+        </div>
+
         <div id="products-empty" style="display:none;" class="cart-empty">
           <div class="empty-state-content">
             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
@@ -276,7 +337,18 @@
             <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
           </div>
         </div>
-        <div id="products-list"></div>
+
+        <!-- 3. project-products-list: tarjetas, sin divisores de categoría. -->
+        <div id="project-products-list"></div>
+
+        <!-- 4. products-price-summary: ahora DESPUÉS de la lista, no antes
+             — mismo elemento, mismo contenido, solo cambia de vecino. El
+             margen/borde superior (ver :not(:empty) en el <style> de
+             arriba) solo aparece cuando de verdad hay algo que mostrar,
+             para no dejar una línea divisoria huérfana cuando el
+             resumen está vacío (proyecto sin productos, o filtro sin
+             resultados). -->
+        <div id="products-price-summary"></div>
       </div>
 
     </div>
@@ -334,6 +406,15 @@
      en el HTML) y solo puede mostrarse después de que esto sea true —
      nunca se trata el proyecto como activo mientras se está cargando. */
   let isProjectLoaded = false;
+
+  /* Punto 30 — filtro de categorías, en memoria únicamente:
+     currentRows es la última respuesta real de listProductsInProject()
+     (nunca una copia transformada), y categoryFilter son los códigos
+     internos de product.categoria seleccionados (vacío = "Todas").
+     Cambiar el filtro solo vuelve a pintar a partir de estos dos —
+     nunca dispara una consulta nueva a Supabase. */
+  let currentRows = [];
+  let categoryFilter = new Set();
 
   async function renderProject(){
     const isActive = project.status === "active";
@@ -617,22 +698,285 @@
     return parts.join("");
   }
 
-  async function loadSavedProducts(){
-    const rows = await MobauProjects.listProductsInProject(project.id);
-    const listEl = document.getElementById("products-list");
-    const emptyEl = document.getElementById("products-empty");
-    const counterEl = document.getElementById("products-counter");
-    const priceSummaryEl = document.getElementById("products-price-summary");
-    const isArchived = project.status === "archived";
+  /* Punto 30 — mismo cálculo exacto que buildProjectPriceSummaryHtml
+     (solo published con importe suma, por cantidad; nunca quote_required,
+     pending_confirmation, unavailable ni sin fila), pero sobre las filas
+     ya filtradas por categoría — nunca una segunda copia de los
+     productos, nunca una consulta nueva. Solo cambia el rótulo
+     ("Subtotal filtrado" en vez de "Total preliminar") y añade qué
+     categorías están activas cuando ayuda a entenderlo. Si no hay
+     ninguna fila visible, devuelve "" — ese caso lo muestra el estado
+     vacío del filtro (#products-empty), nunca US$ 0.00 aquí. */
+  function buildFilteredPriceSummaryHtml(visibleRows, filterSet){
+    if (PRICE_STATE.error){
+      return `<p class="price-summary-line price-error">Precio no disponible temporalmente</p>`;
+    }
+    let publishedCount = 0;
+    let pendingCount = 0;
+    let subtotal = 0;
+    let hasDemoPublished = false;
+    visibleRows.forEach(row => {
+      const info = getPriceInfo(row.product_id);
+      if (info.kind === "published"){
+        publishedCount++;
+        const qty = (typeof row.quantity === "number" && Number.isFinite(row.quantity)) ? row.quantity : 1;
+        subtotal += info.amount * qty;
+        if (info.source === "demo") hasDemoPublished = true;
+      } else {
+        pendingCount++;
+      }
+    });
+    if (!publishedCount && !pendingCount) return "";
 
-    /* Archivado: nunca se consulta product_prices ni se calcula un
-       total — solo la nota fija. Activo: una sola consulta agrupada
-       por todos los product_id del proyecto (nunca una por fila). */
+    const scopeLabel = Array.from(filterSet).map(code => LABELS.categoria[code] || code).join(" + ");
+
+    const parts = [];
+    if (publishedCount > 0){
+      parts.push(`<p class="price-summary-total">Subtotal filtrado · ${scopeLabel}: ${formatUSD(subtotal)}</p>`);
+      if (pendingCount > 0){
+        parts.push(`<p class="price-summary-warning">Productos pendientes de precio: ${pendingCount}</p>`);
+      }
+      parts.push(`<p class="price-summary-note">Incluye ITBIS</p>`);
+    } else {
+      /* Ningún producto published en esta selección — nunca "Subtotal
+         filtrado: US$ 0.00". Un solo mensaje claro, igual que ya hace
+         renderTotals() en proyectos-resumen.html para el caso
+         equivalente sin filtro. */
+      parts.push(`<p class="price-summary-warning">Todos los productos de esta selección están pendientes de cotización.</p>`);
+    }
+    if (hasDemoPublished){
+      parts.push(`<p class="price-summary-line price-demo-note">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
+    }
+    return parts.join("");
+  }
+
+  /* Categorías reales presentes en el proyecto, en el orden canónico
+     del catálogo (Object.keys(LABELS.categoria) — el mismo mapa que
+     ya usaba el título de cada grupo del Punto 17), no el orden de
+     aparición en la lista. Nunca inventa una categoría: solo incluye
+     códigos que de verdad tiene algún producto de "rows". */
+  function getDistinctCategoryCodes(rows){
+    const present = new Set();
+    rows.forEach(row => {
+      const p = PRODUCTS.find(pp => pp.id === row.product_id);
+      if (p) present.add(p.categoria);
+    });
+    return Object.keys(LABELS.categoria).filter(code => present.has(code));
+  }
+
+  /* Construye (o esconde) el filtro a partir del set COMPLETO de filas
+     del proyecto — nunca del subconjunto ya filtrado, o los chips de
+     las categorías no seleccionadas desaparecerían. Se llama una sola
+     vez por carga real de datos (loadSavedProducts), nunca en cada
+     clic de chip: los clics solo cambian categoryFilter y vuelven a
+     pintar vía renderProductsView(), así que los listeners de aquí
+     nunca se duplican (innerHTML los reemplaza limpio cada vez que
+     esta función se vuelve a llamar). */
+  function renderCategoryFilter(rows){
+    const container = document.getElementById("project-category-filter");
+    const chipsEl = document.getElementById("products-filter-chips");
+    const codes = getDistinctCategoryCodes(rows);
+
+    /* Corrección (Punto 30): el filtro se oculta ÚNICAMENTE cuando el
+       proyecto no tiene ningún producto — nunca por cuántas categorías
+       reales haya (antes se ocultaba con menos de 2, y eso es lo que
+       hacía "desaparecer" el filtro al quitar productos: si los que
+       quedaban caían todos en una sola categoría, se ocultaba aunque
+       siguiera habiendo productos para filtrar). Con exactamente 1
+       categoría, "Todas" y esa categoría quedan como dos chips reales
+       — no cambian lo que se ve, pero el filtro sigue presente y
+       predecible mientras haya al menos un producto. */
+    if (!rows.length){
+      container.hidden = true;
+      categoryFilter.clear();
+      return;
+    }
+    container.hidden = false;
+
+    /* Caso D: si la categoría seleccionada ya no existe entre los
+       productos actuales (por ejemplo, se quitó el único producto de
+       esa categoría), se limpia sola — nunca se queda "seleccionada"
+       una categoría fantasma. Si eso vacía categoryFilter, ya es
+       exactamente la definición de "Todas". */
+    Array.from(categoryFilter).forEach(code => {
+      if (!codes.includes(code)) categoryFilter.delete(code);
+    });
+
+    const chipHtml = (code, label) => {
+      const active = code === "" ? categoryFilter.size === 0 : categoryFilter.has(code);
+      return `
+        <button type="button" class="category-filter__chip${active ? " is-active" : ""}" data-category="${code}" aria-pressed="${active}">
+          <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>${label}</span>
+        </button>`;
+    };
+
+    chipsEl.innerHTML = chipHtml("", "Todas") + codes.map(code => chipHtml(code, LABELS.categoria[code])).join("");
+
+    chipsEl.querySelectorAll(".category-filter__chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const code = btn.dataset.category;
+        if (code === ""){
+          categoryFilter.clear();
+        } else if (categoryFilter.has(code)){
+          categoryFilter.delete(code);
+        } else {
+          categoryFilter.add(code);
+        }
+        /* Si se deseleccionan todas, categoryFilter.size vuelve a 0 —
+           que es exactamente la definición de "Todas" ya usada en
+           todos lados; no hace falta un caso especial para eso. */
+        chipsEl.querySelectorAll(".category-filter__chip").forEach(chip => {
+          const chipCode = chip.dataset.category;
+          const isActive = chipCode === "" ? categoryFilter.size === 0 : categoryFilter.has(chipCode);
+          chip.classList.toggle("is-active", isActive);
+          chip.setAttribute("aria-pressed", String(isActive));
+        });
+        renderProductsView();
+      });
+    });
+  }
+
+  /* Punto 30 — pinta lista + resumen + estado vacío a partir de
+     currentRows (ya en memoria) y categoryFilter; nunca vuelve a
+     consultar Supabase ni a pedir project_products/product_prices de
+     nuevo. Se llama tanto al terminar loadSavedProducts() (carga real)
+     como en cada clic de chip (solo repintado). */
+  function renderProductsView(){
+    const rows = currentRows;
+    const isArchived = project.status === "archived";
+    const listEl = document.getElementById("project-products-list");
+    const emptyEl = document.getElementById("products-empty");
+    const priceSummaryEl = document.getElementById("products-price-summary");
+    const statusEl = document.getElementById("products-filter-status");
+
+    const hasFilter = categoryFilter.size > 0;
+    const visibleRows = hasFilter
+      ? rows.filter(row => {
+          const p = PRODUCTS.find(pp => pp.id === row.product_id);
+          return !!p && categoryFilter.has(p.categoria);
+        })
+      : rows;
+
+    /* role="status" en el HTML ya lo anuncia a lectores de pantalla al
+       cambiar — "Todas" no anuncia nada nuevo (ya lo dice el contador
+       de arriba, sin cambios), así que se oculta con display:none en
+       vez de dejar el texto vacío — un <p> vacío igual reserva su
+       propia altura de línea; hidden no reserva nada. */
+    if (hasFilter){
+      statusEl.textContent = `Mostrando ${visibleRows.length} ${visibleRows.length === 1 ? "producto" : "productos"}`;
+      statusEl.style.display = "";
+    } else {
+      statusEl.textContent = "";
+      statusEl.style.display = "none";
+    }
+
     if (isArchived){
       priceSummaryEl.innerHTML = `<p class="price-summary-line price-archived-note">Los precios no están disponibles para proyectos archivados.</p>`;
-    } else {
-      await loadPriceState(rows.map(row => row.product_id));
+    } else if (!hasFilter){
       priceSummaryEl.innerHTML = buildProjectPriceSummaryHtml(rows);
+    } else if (!visibleRows.length){
+      priceSummaryEl.innerHTML = "";
+    } else {
+      priceSummaryEl.innerHTML = buildFilteredPriceSummaryHtml(visibleRows, categoryFilter);
+    }
+
+    if (!rows.length){
+      /* Proyecto realmente vacío — sin productos guardados, con
+         independencia del filtro. Mismo mensaje de siempre. */
+      listEl.innerHTML = "";
+      emptyEl.innerHTML = isArchived
+        ? `<div class="empty-state-content">
+             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto no tiene productos guardados.</p>
+             <p style="margin:0;">Está archivado y es solo de consulta — no se pueden añadir productos.</p>
+           </div>`
+        : `<div class="empty-state-content">
+             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
+             <p style="margin:0;">Explora el catálogo y usa "Añadir a la selección" en lo que necesites.</p>
+             <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
+           </div>`;
+      emptyEl.style.display = "block";
+      return;
+    }
+
+    if (hasFilter && !visibleRows.length){
+      /* El proyecto sí tiene productos, pero ninguno cae en las
+         categorías seleccionadas — nunca debería pasar (los chips
+         solo muestran categorías que sí tienen al menos un producto),
+         pero se cubre igual: mensaje claro, nunca un hueco vacío ni
+         un US$ 0.00. */
+      listEl.innerHTML = "";
+      emptyEl.innerHTML = `<div class="empty-state-content">
+             <p style="margin:0; color:var(--ink); font-weight:600;">No hay productos en las categorías seleccionadas.</p>
+           </div>`;
+      emptyEl.style.display = "block";
+      return;
+    }
+    emptyEl.style.display = "none";
+
+    /* Punto 30 — lista plana: sin agrupar ni imprimir el nombre de la
+       categoría entre tarjetas (eso era el Punto 17; ahora la
+       categoría solo se usa para el filtro, en memoria). El orden es
+       el que ya trae "rows" (order_position/created_at de
+       listProductsInProject) — no se introduce ningún orden nuevo. */
+    listEl.innerHTML = visibleRows.map(row => renderProductRow(row, isArchived)).join("");
+
+    listEl.querySelectorAll(".remove-product-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const { error } = await MobauProjects.removeProductFromProject(btn.dataset.rowId);
+        if (error){
+          alert(error.message);
+          btn.disabled = false;
+          return;
+        }
+        const { data: touched } = await MobauProjects.touchProject(project.id);
+        if (touched) project = touched;
+        showToast("Producto quitado del proyecto.");
+        await renderProject();
+        loadSavedProducts();
+      });
+    });
+
+    listEl.querySelectorAll(".dp-qty-input").forEach(input => {
+      input.addEventListener("change", () => {
+        saveRowQuantity(input.dataset.rowId, input.dataset.unit, input.value);
+      });
+    });
+
+    listEl.querySelectorAll(".dp-qty-decrement").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(`dp-qty-${btn.dataset.rowId}`);
+        if (!input) return;
+        const min = Number(input.min) || 0.01;
+        const next = Math.max(min, Number(input.value) - 1);
+        saveRowQuantity(btn.dataset.rowId, btn.dataset.unit, next);
+      });
+    });
+
+    listEl.querySelectorAll(".dp-qty-increment").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(`dp-qty-${btn.dataset.rowId}`);
+        if (!input) return;
+        const next = Number(input.value) + 1;
+        saveRowQuantity(btn.dataset.rowId, btn.dataset.unit, next);
+      });
+    });
+  }
+
+  async function loadSavedProducts(){
+    const rows = await MobauProjects.listProductsInProject(project.id);
+    currentRows = rows;
+    const counterEl = document.getElementById("products-counter");
+    const isArchived = project.status === "archived";
+
+    /* Archivado: nunca se consulta product_prices. Activo: una sola
+       consulta agrupada por todos los product_id del proyecto (nunca
+       una por fila) — el precio en sí se pinta más abajo, en
+       renderProductsView(), que nunca vuelve a tocar Supabase (ni al
+       cargar ni al cambiar el filtro de categorías). */
+    if (!isArchived){
+      await loadPriceState(rows.map(row => row.product_id));
     }
 
     const quoteBtn = document.getElementById("request-quote-btn");
@@ -674,209 +1018,136 @@
     const distributorsLabel = `${distributorIds.size} ${distributorIds.size === 1 ? "distribuidor" : "distribuidores"}`;
     counterEl.textContent = `${productsLabel} · ${distributorsLabel}`;
 
-    if (!rows.length){
-      listEl.innerHTML = "";
-      emptyEl.innerHTML = isArchived
-        ? `<div class="empty-state-content">
-             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto no tiene productos guardados.</p>
-             <p style="margin:0;">Está archivado y es solo de consulta — no se pueden añadir productos.</p>
-           </div>`
-        : `<div class="empty-state-content">
-             <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
-             <p style="margin:0;">Explora el catálogo y usa "Añadir a la selección" en lo que necesites.</p>
-             <a href="catalogo.html" class="btn btn-primary">Explorar catálogo</a>
-           </div>`;
-      emptyEl.style.display = "block";
-      return;
-    }
-    emptyEl.style.display = "none";
+    /* Punto 30 — el resto (chips + lista + resumen + estado vacío) se
+       delega a renderCategoryFilter/renderProductsView, que trabajan
+       sobre currentRows/categoryFilter ya asignados arriba. Así, un
+       clic de chip puede volver a llamar solo a renderProductsView()
+       sin repetir nada de esta función ni tocar Supabase de nuevo. */
+    renderCategoryFilter(rows);
+    renderProductsView();
+  }
 
-    function renderProductRow(row){
-      const removeBtn = `<button type="button" class="btn btn-outline btn-sm remove-product-btn" data-row-id="${row.id}"${isArchived ? " disabled" : ""}>Quitar</button>`;
-      const p = PRODUCTS.find(pp => pp.id === row.product_id);
-      if (!p){
-        return `
-          <div class="saved-project saved-project--detail">
-            <div class="saved-project__top">
-              <div class="saved-project__identity">
-                <div class="project-product-thumb" aria-hidden="true"></div>
-                <div style="min-width:0;">
-                  <div class="sp-name">Producto no disponible</div>
-                  <div class="sp-meta">ID: ${row.product_id}</div>
-                </div>
-              </div>
-              <div class="saved-project__actions">${removeBtn}</div>
-            </div>
-          </div>`;
-      }
-      const dist = DISTRIBUTORS[p.distribuidor];
-      const unit = row.unit || getProductUnit(p);
-      const isUnit = unit === "ud.";
-      const step = isUnit ? "1" : "0.01";
-      const min = isUnit ? "1" : "0.01";
-      const currentQuantity = (typeof row.quantity === "number" && Number.isFinite(row.quantity))
-        ? row.quantity
-        : (isUnit ? 1 : 1);
-      const displayValue = isUnit ? String(Math.round(currentQuantity)) : String(Math.round(currentQuantity * 100) / 100);
-      const inputId = `dp-qty-${row.id}`;
+  /* Fila de producto guardado — reutilizada por renderProductsView().
+     isArchived se pasa explícito (ya no hay closure de loadSavedProducts)
+     para que el HTML nunca dependa de en qué función se generó. */
+  function renderProductRow(row, isArchived){
+    const removeBtn = `<button type="button" class="btn btn-outline btn-sm remove-product-btn" data-row-id="${row.id}"${isArchived ? " disabled" : ""}>Quitar</button>`;
+    const p = PRODUCTS.find(pp => pp.id === row.product_id);
+    if (!p){
       return `
         <div class="saved-project saved-project--detail">
           <div class="saved-project__top">
             <div class="saved-project__identity">
-              <div class="project-product-thumb" role="img" aria-label="${p.nombre}">${iconMarkup(p.icon, 40)}</div>
+              <div class="project-product-thumb" aria-hidden="true"></div>
               <div style="min-width:0;">
-                <div class="sp-name">${p.nombre}</div>
-                <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+                <div class="sp-name">Producto no disponible</div>
+                <div class="sp-meta">ID: ${row.product_id}</div>
               </div>
             </div>
-            <div class="saved-project__actions">
-              <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
-              ${removeBtn}
-            </div>
-          </div>
-          <div class="saved-project__bottom">
-            ${isArchived ? "<span></span>" : `<div class="sp-price">${priceLineHtmlForQuantity(p.id, currentQuantity)}</div>`}
-            <div class="dp-quantity">
-              <label for="${inputId}" class="dp-quantity__label">Cantidad</label>
-              <div class="quantity-control">
-                <button type="button" class="quantity-control__button dp-qty-decrement" data-row-id="${row.id}" data-unit="${unit}" aria-label="Reducir cantidad"${isArchived ? " disabled" : ""}>−</button>
-                <button type="button" class="quantity-control__button dp-qty-increment" data-row-id="${row.id}" data-unit="${unit}" aria-label="Aumentar cantidad"${isArchived ? " disabled" : ""}>+</button>
-                <input id="${inputId}" class="quantity-control__input dp-qty-input" type="number" data-row-id="${row.id}" data-unit="${unit}" value="${displayValue}" min="${min}" step="${step}" inputmode="decimal" aria-label="Cantidad de ${p.nombre}"${isArchived ? " disabled" : ""}>
-                <span class="quantity-control__unit">${unit}</span>
-              </div>
-              <p class="dp-quantity__error" id="dp-qty-error-${row.id}" style="display:none;"></p>
-            </div>
+            <div class="saved-project__actions">${removeBtn}</div>
           </div>
         </div>`;
     }
+    const dist = DISTRIBUTORS[p.distribuidor];
+    const unit = row.unit || getProductUnit(p);
+    const isUnit = unit === "ud.";
+    const step = isUnit ? "1" : "0.01";
+    const min = isUnit ? "1" : "0.01";
+    const currentQuantity = (typeof row.quantity === "number" && Number.isFinite(row.quantity))
+      ? row.quantity
+      : (isUnit ? 1 : 1);
+    const displayValue = isUnit ? String(Math.round(currentQuantity)) : String(Math.round(currentQuantity * 100) / 100);
+    const inputId = `dp-qty-${row.id}`;
+    return `
+      <div class="saved-project saved-project--detail">
+        <div class="saved-project__top">
+          <div class="saved-project__identity">
+            <div class="project-product-thumb" role="img" aria-label="${p.nombre}">${iconMarkup(p.icon, 40)}</div>
+            <div style="min-width:0;">
+              <div class="sp-name">${p.nombre}</div>
+              <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+            </div>
+          </div>
+          <div class="saved-project__actions">
+            <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
+            ${removeBtn}
+          </div>
+        </div>
+        <div class="saved-project__bottom">
+          ${isArchived ? "<span></span>" : `<div class="sp-price">${priceLineHtmlForQuantity(p.id, currentQuantity)}</div>`}
+          <div class="dp-quantity">
+            <label for="${inputId}" class="dp-quantity__label">Cantidad</label>
+            <div class="quantity-control">
+              <button type="button" class="quantity-control__button dp-qty-decrement" data-row-id="${row.id}" data-unit="${unit}" aria-label="Reducir cantidad"${isArchived ? " disabled" : ""}>−</button>
+              <button type="button" class="quantity-control__button dp-qty-increment" data-row-id="${row.id}" data-unit="${unit}" aria-label="Aumentar cantidad"${isArchived ? " disabled" : ""}>+</button>
+              <input id="${inputId}" class="quantity-control__input dp-qty-input" type="number" data-row-id="${row.id}" data-unit="${unit}" value="${displayValue}" min="${min}" step="${step}" inputmode="decimal" aria-label="Cantidad de ${p.nombre}"${isArchived ? " disabled" : ""}>
+              <span class="quantity-control__unit">${unit}</span>
+            </div>
+            <p class="dp-quantity__error" id="dp-qty-error-${row.id}" style="display:none;"></p>
+          </div>
+        </div>
+      </div>`;
+  }
 
-    /* Punto 17 — agrupa por la categoría real del catálogo
-       (product.categoria vía LABELS.categoria, misma fuente de verdad
-       que usa el resto del sitio) conservando el orden de primera
-       aparición de cada categoría y el orden de las filas dentro de
-       ella — sin ordenar alfabéticamente. Cada row entra en un único
-       grupo (Map por etiqueta), así que ningún producto se duplica; sin
-       categoría reconocida o sin coincidencia en PRODUCTS cae en "Otros". */
-    const groups = [];
-    const groupsByLabel = new Map();
-    rows.forEach(row => {
-      const p = PRODUCTS.find(pp => pp.id === row.product_id);
-      const label = (p && LABELS.categoria[p.categoria]) || "Otros";
-      if (!groupsByLabel.has(label)){
-        groupsByLabel.set(label, { label, rows: [] });
-        groups.push(groupsByLabel.get(label));
-      }
-      groupsByLabel.get(label).rows.push(row);
-    });
+  /* Guardado de cantidad — validación mínima antes de persistir: mayor
+     que 0 siempre; entera cuando la unidad es "ud.". El foco se
+     restaura sobre el mismo input (mismo id) tras el refresco, ya que
+     loadSavedProducts() reconstruye la lista entera. Reutilizada por
+     renderProductsView(); sin cambios de comportamiento respecto a
+     antes, solo deja de vivir anidada dentro de loadSavedProducts. */
+  async function saveRowQuantity(rowId, unit, rawValue){
+    const errorEl = document.getElementById(`dp-qty-error-${rowId}`);
+    const isUnitBased = unit === "ud.";
+    const rounded = Math.round(Number(rawValue) * 100) / 100;
 
-    listEl.innerHTML = groups.map(group => `
-      <div class="saved-project-group">
-        <h3 class="saved-project-group__title">${group.label}</h3>
-        ${group.rows.map(renderProductRow).join("")}
-      </div>`).join("");
-
-    listEl.querySelectorAll(".remove-product-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        const { error } = await MobauProjects.removeProductFromProject(btn.dataset.rowId);
-        if (error){
-          alert(error.message);
-          btn.disabled = false;
-          return;
-        }
-        /* "Actualizado" debe reflejar quitar un producto, aunque fuera
-           el último — se toca aquí, tras confirmar el borrado real. */
-        const { data: touched } = await MobauProjects.touchProject(project.id);
-        if (touched) project = touched;
-        showToast("Producto quitado del proyecto.");
-        await renderProject();
-        loadSavedProducts();
-      });
-    });
-
-    /* Guardado de cantidad — validación mínima antes de persistir:
-       mayor que 0 siempre; entera cuando la unidad es "ud.". El foco
-       se restaura sobre el mismo input (mismo id) tras el refresco,
-       ya que loadSavedProducts() reconstruye la lista entera. */
-    async function saveRowQuantity(rowId, unit, rawValue){
-      const errorEl = document.getElementById(`dp-qty-error-${rowId}`);
-      const isUnitBased = unit === "ud.";
-      const rounded = Math.round(Number(rawValue) * 100) / 100;
-
-      if (!Number.isFinite(rounded) || rounded <= 0){
-        errorEl.textContent = "La cantidad debe ser mayor que 0.";
-        errorEl.style.display = "block";
-        return;
-      }
-      if (isUnitBased && !Number.isInteger(rounded)){
-        errorEl.textContent = "Para unidades (ud.) la cantidad debe ser un número entero.";
-        errorEl.style.display = "block";
-        return;
-      }
-      errorEl.style.display = "none";
-      errorEl.textContent = "";
-
-      /* Bloquea solo los controles de ESTA fila (input + − + +) mientras
-         la operación está pendiente — un doble clic rápido en +/- no
-         puede disparar dos updateProductQuantity() concurrentes sobre
-         la misma fila. Otras filas no se tocan. try/finally garantiza
-         que se reactivan tanto si la operación tiene éxito como si falla. */
-      const rowControls = [
-        document.getElementById(`dp-qty-${rowId}`),
-        document.querySelector(`.dp-qty-decrement[data-row-id="${rowId}"]`),
-        document.querySelector(`.dp-qty-increment[data-row-id="${rowId}"]`)
-      ].filter(Boolean);
-      rowControls.forEach(el => { el.disabled = true; });
-
-      try {
-        const { error } = await MobauProjects.updateProductQuantity(rowId, rounded);
-        if (error){
-          errorEl.textContent = error.message;
-          errorEl.style.display = "block";
-          return;
-        }
-
-        const { data: touched } = await MobauProjects.touchProject(project.id);
-        if (touched) project = touched;
-
-        showToast("Cantidad actualizada.");
-        await renderProject();
-        await loadSavedProducts();
-        const restoredInput = document.getElementById(`dp-qty-${rowId}`);
-        if (restoredInput) restoredInput.focus();
-      } finally {
-        /* Tras éxito, loadSavedProducts() ya reconstruyó la fila con
-           elementos nuevos (sin disabled) — estos nodos antiguos pueden
-           haber quedado desconectados; reactivarlos entonces es un
-           no-op inofensivo, nunca un error. */
-        rowControls.forEach(el => { if (el.isConnected) el.disabled = false; });
-      }
+    if (!Number.isFinite(rounded) || rounded <= 0){
+      errorEl.textContent = "La cantidad debe ser mayor que 0.";
+      errorEl.style.display = "block";
+      return;
     }
+    if (isUnitBased && !Number.isInteger(rounded)){
+      errorEl.textContent = "Para unidades (ud.) la cantidad debe ser un número entero.";
+      errorEl.style.display = "block";
+      return;
+    }
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
 
-    listEl.querySelectorAll(".dp-qty-input").forEach(input => {
-      input.addEventListener("change", () => {
-        saveRowQuantity(input.dataset.rowId, input.dataset.unit, input.value);
-      });
-    });
+    /* Bloquea solo los controles de ESTA fila (input + − + +) mientras
+       la operación está pendiente — un doble clic rápido en +/- no
+       puede disparar dos updateProductQuantity() concurrentes sobre
+       la misma fila. Otras filas no se tocan. try/finally garantiza
+       que se reactivan tanto si la operación tiene éxito como si falla. */
+    const rowControls = [
+      document.getElementById(`dp-qty-${rowId}`),
+      document.querySelector(`.dp-qty-decrement[data-row-id="${rowId}"]`),
+      document.querySelector(`.dp-qty-increment[data-row-id="${rowId}"]`)
+    ].filter(Boolean);
+    rowControls.forEach(el => { el.disabled = true; });
 
-    listEl.querySelectorAll(".dp-qty-decrement").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const input = document.getElementById(`dp-qty-${btn.dataset.rowId}`);
-        if (!input) return;
-        const min = Number(input.min) || 0.01;
-        const next = Math.max(min, Number(input.value) - 1);
-        saveRowQuantity(btn.dataset.rowId, btn.dataset.unit, next);
-      });
-    });
+    try {
+      const { error } = await MobauProjects.updateProductQuantity(rowId, rounded);
+      if (error){
+        errorEl.textContent = error.message;
+        errorEl.style.display = "block";
+        return;
+      }
 
-    listEl.querySelectorAll(".dp-qty-increment").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const input = document.getElementById(`dp-qty-${btn.dataset.rowId}`);
-        if (!input) return;
-        const next = Number(input.value) + 1;
-        saveRowQuantity(btn.dataset.rowId, btn.dataset.unit, next);
-      });
-    });
+      const { data: touched } = await MobauProjects.touchProject(project.id);
+      if (touched) project = touched;
+
+      showToast("Cantidad actualizada.");
+      await renderProject();
+      await loadSavedProducts();
+      const restoredInput = document.getElementById(`dp-qty-${rowId}`);
+      if (restoredInput) restoredInput.focus();
+    } finally {
+      /* Tras éxito, loadSavedProducts() ya reconstruyó la fila con
+         elementos nuevos (sin disabled) — estos nodos antiguos pueden
+         haber quedado desconectados; reactivarlos entonces es un
+         no-op inofensivo, nunca un error. */
+      rowControls.forEach(el => { if (el.isConnected) el.disabled = false; });
+    }
   }
 
   (async () => {
