@@ -194,6 +194,34 @@
   @media (max-width:560px){
     #product-grid{ grid-template-columns: 1fr; }
   }
+
+  /* Punto 31 — botón "carpeta+" (añadir directo al proyecto activo),
+     local a catalogo.html: no toca .card-actions .btn de styles.css
+     (esa regla usa flex:1 y solo aplica a elementos con clase .btn;
+     este botón usa una clase propia para no heredarla ni pisarla).
+     Tamaño visual 36x36 (consistente con .selection-item__icon-button
+     de styles.css), que ya cumple el mínimo de 24x24 exigido. */
+  .card-actions .btn-add-to-project{
+    flex:0 0 auto; width:36px; height:36px; padding:0;
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--line-strong); border-radius:var(--radius);
+    background:var(--bg); color:var(--ink); cursor:pointer;
+  }
+  .card-actions .btn-add-to-project:hover{ border-color:var(--ink); }
+  .card-actions .btn-add-to-project:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .card-actions .btn-add-to-project[disabled]{ opacity:.5; cursor:not-allowed; }
+  .card-actions .btn-add-to-project svg{ width:18px; height:18px; }
+
+  /* Punto 31 (2ª iteración) — sombreado de "añadido en esta estancia".
+     Solo visual (ver addedToActiveProjectInSession en el <script>):
+     borde + fondo suave de la tarjeta, y el propio botón cambia a un
+     tono equivalente al de .btn-added en styles.css, sin depender
+     únicamente del color (el icono y el texto accesible también cambian). */
+  .product-card.is-added-to-project{ border-color: var(--accent); }
+  .product-card.is-added-to-project .card-body{ background: var(--accent-soft); }
+  .card-actions .btn-add-to-project.is-added-to-project{
+    background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink);
+  }
 </style>
 </head>
 <body>
@@ -923,8 +951,103 @@
     document.getElementById("result-count").textContent =
       filtered.length === 1 ? "1 producto" : `${filtered.length} productos`;
     injectIconSprite();
+    patchCardActionsForActiveProject(grid);
     bindAddButtons(grid, render);
+    bindAddToProjectButtons(grid);
     propagateCartLinks();
+  }
+
+  /* Punto 31 — quita "Ver ficha" de cada tarjeta (renderProductCard,
+     script.js, sigue intacta) y añade el botón "carpeta+" en su lugar.
+     Se hace aquí, sobre el HTML ya generado, para no editar script.js
+     ni afectar a producto.html (que también usa renderProductCard). */
+  const FOLDER_PLUS_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <path d="M3 6.5c0-.83.67-1.5 1.5-1.5h4.4c.4 0 .78.17 1.06.46l1.1 1.14c.28.29.66.46 1.06.46H19.5c.83 0 1.5.67 1.5 1.5v9.44c0 .83-.67 1.5-1.5 1.5h-15c-.83 0-1.5-.67-1.5-1.5z"/>
+      <path d="M12 11.2v5.1M9.4 13.75h5.2"/>
+    </svg>`;
+  const FOLDER_CHECK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <path d="M3 6.5c0-.83.67-1.5 1.5-1.5h4.4c.4 0 .78.17 1.06.46l1.1 1.14c.28.29.66.46 1.06.46H19.5c.83 0 1.5.67 1.5 1.5v9.44c0 .83-.67 1.5-1.5 1.5h-15c-.83 0-1.5-.67-1.5-1.5z"/>
+      <path d="M9 13.6l2.1 2.1 4-4.4"/>
+    </svg>`;
+
+  /* Punto 31 (2ª iteración) — marca visual de "añadido durante esta
+     estancia en catalogo.html". Vive solo en memoria de esta página:
+     un recarga o una nueva visita ejecuta este <script> desde cero y
+     el Set queda vacío otra vez, sin tocar los productos reales del
+     proyecto (esos viven en Supabase). No se usa sessionStorage porque
+     esto ya basta y evita marcas que sobrevivan a un simple F5 dentro
+     de la misma pestaña. No representa "el producto ya está en el
+     proyecto" (eso requeriría consultar el proyecto completo) — solo
+     "lo añadí en este momento de esta visita". */
+  const addedToActiveProjectInSession = new Set();
+
+  function patchCardActionsForActiveProject(container){
+    container.querySelectorAll(".product-card").forEach(card => {
+      const actions = card.querySelector(".card-actions");
+      if (!actions) return;
+      const verFicha = actions.querySelector("a.btn-outline");
+      if (verFicha) verFicha.remove();
+      let btn = actions.querySelector(".btn-add-to-project");
+      if (!btn){
+        btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-add-to-project";
+        btn.dataset.id = card.dataset.productId;
+        actions.appendChild(btn);
+      }
+      setAddToProjectButtonState(card, btn, addedToActiveProjectInSession.has(card.dataset.productId));
+    });
+  }
+
+  function setAddToProjectButtonState(card, btn, added){
+    card.classList.toggle("is-added-to-project", added);
+    btn.classList.toggle("is-added-to-project", added);
+    const label = added ? "Añadido a mi proyecto activo" : "Añadir a mi proyecto activo";
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+    btn.innerHTML = added ? FOLDER_CHECK_ICON : FOLDER_PLUS_ICON;
+  }
+
+  /* Añade el producto directamente al proyecto activo (sin pasar por
+     seleccion.html) y permanece en catalogo.html para poder seguir
+     añadiendo productos. Reutiliza exactamente las mismas funciones
+     que seleccion.html usa para "Añadir al proyecto activo":
+     getActiveProjectStatus() y saveProductToProject(..., "sum"), ambas
+     en proyectos-data.js — no se duplica lógica de inserción. */
+  function bindAddToProjectButtons(container){
+    container.querySelectorAll(".btn-add-to-project").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+        const card = btn.closest(".product-card");
+        btn.disabled = true;
+        try{
+          const status = await MobauProjects.getActiveProjectStatus();
+          if (!status.hasActiveProject){
+            showToast("No tienes un proyecto activo.");
+            return;
+          }
+          const productId = btn.dataset.id;
+          const product = PRODUCTS.find(p => p.id === productId);
+          if (!product){
+            showToast("No se pudo añadir el producto. Intenta de nuevo.");
+            return;
+          }
+          const unit = getProductUnit(product);
+          const initialQuantity = unit === "ud." ? 1 : 0;
+          const { error } = await MobauProjects.saveProductToProject(status.project.id, productId, initialQuantity, unit, "sum");
+          if (error){
+            showToast("No se pudo añadir el producto. Intenta de nuevo.");
+            return;
+          }
+          await MobauProjects.touchProject(status.project.id);
+          addedToActiveProjectInSession.add(productId);
+          setAddToProjectButtonState(card, btn, true);
+          showToast(`Añadido a "${status.project.name}".`);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
   document.querySelectorAll(".filter-group input[type=checkbox]").forEach(input => {
