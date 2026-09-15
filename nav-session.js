@@ -132,53 +132,115 @@
     })
     .catch(() => {});
 
-  /* Punto 27 — "Mi proyecto activo": el href ya arranca en el mismo
-     fallback seguro (proyectos.html?status=active) puesto en el HTML
-     de arriba, así que el menú es usable de inmediato sin esperar
-     esta consulta. Reutiliza MobauProjects.list("active") (misma
-     función/misma RLS que ya usa proyectos.html, y la que usa
-     internamente getActiveProjectStatus()) — no se inventa una
-     consulta nueva ni se vuelve a pedir la sesión.
+  /* Punto 27 — "Mi proyecto activo".
 
-     Guard de disponibilidad, con cuidado de orden de carga: en TODAS
-     las páginas (incluida proyectos.html) el <script src="nav-session.js">
-     va ANTES que <script src="proyectos-data.js"> en el <head>/<body> —
-     comprobar `typeof MobauProjects` justo después del primer await
-     (MobauAuth.getSession()) es una carrera real, no solo teórica:
-     cuando la sesión ya está en caché, esa promesa resuelve tan rápido
-     que el guard se ejecutaba ANTES de que el parser hubiera llegado a
-     ejecutar proyectos-data.js, y el enlace se quedaba en el fallback
-     incluso con un proyecto activo real (confirmado con una sesión
-     real, no solo con el iframe+mock: en proyectos.html, con
-     MobauProjects.list("active") devolviendo exactamente 1 proyecto,
-     el href seguía siendo el fallback). Por eso esto espera a
-     DOMContentLoaded — momento en que TODOS los <script> síncronos del
-     documento (incluido proyectos-data.js, si la página lo carga) ya
-     terminaron de ejecutarse, sin importar qué tan rápido resuelva la
-     sesión. document.readyState cubre el caso en que ya haya pasado
-     (sesión lenta, poco probable pero posible).
-     Con exactamente un proyecto activo, se sustituye SOLO el href de
-     ese enlace por proyectos-detalle.html?id=<id real> — nunca se
-     reemplaza el menú ni se vuelve a montar nada.
-     Con cero, o con más de uno (no debería ocurrir con la regla de un
-     solo proyecto activo por plan; si ocurre no se elige ninguno al
-     azar ni se corrige el dato), el href se queda en el fallback. Si
-     la consulta falla, list() ya devuelve [] y registra el error —
-     mismo fallback, sin excepción sin manejar. */
-  function resolveActiveProjectLink(){
-    if (typeof MobauProjects === "undefined") return;
-    MobauProjects.list("active")
-      .then(activeProjects => {
-        if (activeProjects.length === 1){
-          const link = document.getElementById("account-menu-active-project");
-          if (link) link.href = `proyectos-detalle.html?id=${activeProjects[0].id}`;
-        }
-      })
-      .catch(() => {});
+     BUG REAL DE SINCRONIZACIÓN (corregido aquí): la versión anterior
+     dejaba el href en el fallback hasta que MobauProjects.list("active")
+     resolvía, en una línea de tiempo TOTALMENTE separada de la del
+     usuario. Con sesión ya restaurada (el caso normal: recargar la
+     página, volver de otra pestaña, abrir el menú después de un rato)
+     MobauAuth.getSession() resuelve casi al instante, el menú queda
+     usable de inmediato, y el primer clic real solía llegar ANTES de
+     que la consulta a product_prices/projects terminara — la
+     navegación ocurre con el href que hubiera EN ESE INSTANTE en el
+     DOM (el fallback), sin importar que la promesa fuera a resolver
+     bien 100–300ms después. El "segundo clic" solo parecía arreglarlo
+     porque, para entonces, ya había pasado de sobra una navegación de
+     página completa — tiempo real suficiente para que la consulta ya
+     hubiera terminado en segundo plano.
+
+     CORRECCIÓN: una sola promesa compartida (resolveActiveProjectHref,
+     memoizada en activeProjectHrefPromise) entre quien actualiza el
+     href al resolver y el propio clic del enlace. Si el clic llega
+     antes de resolver, se intercepta ESE clic (preventDefault) y se
+     espera la MISMA promesa ya en curso — nunca una consulta nueva,
+     nunca un setTimeout fijo, nunca exige un segundo clic. */
+  let activeProjectHrefPromise = null;
+  let activeProjectHrefResolved = false;
+
+  function resolveActiveProjectHref(){
+    if (activeProjectHrefPromise) return activeProjectHrefPromise;
+    const fallback = "proyectos.html?status=active";
+    activeProjectHrefPromise = (async () => {
+      /* 1) DOM listo: en TODAS las páginas <script src="nav-session.js">
+         va antes que <script src="proyectos-data.js"> — sin esperar
+         esto, `typeof MobauProjects` puede evaluarse antes de que ese
+         script exista todavía (confirmado con sesión real ya en
+         caché: el guard corría antes de que el parser llegara al
+         siguiente <script>). */
+      if (document.readyState === "loading"){
+        await new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
+      }
+      /* 2) Páginas sin proyectos-data.js (index.html, distribuidores.html,
+         inscripción profesional, proyecto.html, rfq.html…): no existe
+         arquitectura para resolver el proyecto real ahí. Límite
+         conocido y documentado, no un bug — el fallback es el
+         resultado correcto en esas páginas, siempre. */
+      if (typeof MobauProjects === "undefined") return fallback;
+      /* 3) Reutiliza MobauAuth.getSession() — nunca una consulta nueva
+         de sesión. Si ya no hay sesión (cerró sesión entre que se
+         montó el menú y el clic — caso extremo pero real), nunca se
+         resuelve ni se navega a un destino privado: fallback. */
+      const currentSession = await MobauAuth.getSession();
+      if (!currentSession) return fallback;
+      /* 4) Una sola consulta real, sin importar cuántas veces se llame
+         esta función (al montar el menú Y desde el clic): la promesa
+         ya en curso se reutiliza siempre, MobauProjects.list("active")
+         se ejecuta como máximo una vez por carga de página. Cero o
+         más de uno (no debería pasar con la regla de un solo proyecto
+         activo por plan; si pasa, no se elige ninguno al azar ni se
+         corrige el dato) → fallback. Error de red → fallback (list()
+         ya lo registra y devuelve [] por su cuenta). */
+      try {
+        const activeProjects = await MobauProjects.list("active");
+        return activeProjects.length === 1
+          ? `proyectos-detalle.html?id=${activeProjects[0].id}`
+          : fallback;
+      } catch {
+        return fallback;
+      }
+    })();
+    return activeProjectHrefPromise;
   }
-  if (document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", resolveActiveProjectLink, { once: true });
-  } else {
-    resolveActiveProjectLink();
+
+  const activeProjectLink = document.getElementById("account-menu-active-project");
+  if (activeProjectLink){
+    /* aria-busy en vez de cualquier CSS nuevo: anuncia el estado de
+       carga a lectores de pantalla sin ocupar espacio ni cambiar la
+       altura del header — se retira apenas resuelve, junto con el
+       href real. */
+    activeProjectLink.setAttribute("aria-busy", "true");
+
+    /* Orden deliberado: el listener de clic prematuro se instala ANTES
+       de iniciar resolveActiveProjectHref() (más abajo) — así la
+       protección ya existe desde el instante en que se crea el
+       enlace, sin depender de que ningún clic no pueda colarse en el
+       hueco síncrono entre ambas líneas.
+       Primer clic antes de resolver: preventDefault() es temporal — se
+       usa SOLO mientras activeProjectHrefResolved sigue en false, y
+       deja de aplicarse en cuanto la promesa (ya en curso, la misma de
+       abajo) resuelve; a partir de ahí el enlace navega solo con su
+       href ya real, sin este listener de por medio. Solo se intercepta
+       el clic simple de botón principal — clic central, Ctrl/Cmd+clic
+       o Mayús+clic para abrir en pestaña nueva siguen su camino nativo
+       normal con el href que haya en ese instante, igual que cualquier
+       enlace real: eso no se puede ni se debe interceptar, y es
+       exactamente lo que mantiene el elemento como un <a> real para
+       teclado, lectores de pantalla y "copiar enlace". */
+    activeProjectLink.addEventListener("click", (e) => {
+      if (activeProjectHrefResolved) return;
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      resolveActiveProjectHref().then(href => {
+        activeProjectLink.href = href;
+        window.location.href = href;
+      });
+    });
+
+    resolveActiveProjectHref().then(href => {
+      activeProjectLink.href = href;
+      activeProjectLink.removeAttribute("aria-busy");
+      activeProjectHrefResolved = true;
+    });
   }
 })();
