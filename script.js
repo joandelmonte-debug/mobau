@@ -343,7 +343,7 @@ const LABELS = {
    source "db" se rellenan en sitio y de una vez desde Supabase.
    ============================================================ */
 const CATALOG_CONFIG = {
-  source: "static",      // "static" | "db" (cambia a "db" en el Paso 3)
+  source: "db",          // "static" | "db"
   staticFallback: true,  // si "db" falla se conservan los datos estáticos (se elimina en el Paso 4)
   cacheTtlMs: 60 * 1000,
   timeoutMs: 4000,       // corta también los reintentos internos de supabase-js (hasta ~7 s)
