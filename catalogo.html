@@ -565,7 +565,7 @@
       /* categoria ya no tiene checkbox propio (ver chips más abajo) —
          updateCategoryChipsUI() es quien refleja este valor en el DOM. */
       if (key !== "categoria"){
-        const input = document.querySelector(`.filter-group[data-group="${key}"] input[value="${val.replace(/"/g,'\\"')}"]`);
+        const input = document.querySelector(`.filter-group[data-group="${key}"] input[value="${val.replace(/["\\]/g, "\\$&")}"]`);
         if(input) input.checked = true;
       }
     }
@@ -717,8 +717,8 @@
 
     container.innerHTML = valid.map(value => `
       <label class="filter-option">
-        <input type="checkbox" value="${value}"${state.subcategoria.has(value) ? " checked" : ""}>
-        ${value}
+        <input type="checkbox" value="${escapeHtml(value)}"${state.subcategoria.has(value) ? " checked" : ""}>
+        ${escapeHtml(value)}
       </label>`).join("");
 
     container.querySelectorAll("input[type=checkbox]").forEach(input => {
@@ -809,12 +809,12 @@
 
     const listEl = document.getElementById(`${group}-options-list`);
     if (!visible.length){
-      listEl.innerHTML = `<p class="filter-empty-note">Sin coincidencias para "${rawQuery}".</p>`;
+      listEl.innerHTML = `<p class="filter-empty-note">Sin coincidencias para "${escapeHtml(rawQuery)}".</p>`;
     } else {
       listEl.innerHTML = visible.map(o => `
         <label class="filter-option">
-          <input type="checkbox" value="${o.value}"${selected.has(o.value) ? " checked" : ""}>
-          ${o.label}
+          <input type="checkbox" value="${escapeHtml(o.value)}"${selected.has(o.value) ? " checked" : ""}>
+          ${escapeHtml(o.label)}
         </label>`).join("");
       listEl.querySelectorAll("input[type=checkbox]").forEach(input => {
         input.addEventListener("change", () => {

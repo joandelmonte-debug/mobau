@@ -101,19 +101,20 @@
   function renderCartRow(item){
     const p = PRODUCTS.find(pp => pp.id === item.id);
     const d = DISTRIBUTORS[p.distribuidor];
+    const pid = escapeHtml(p.id);
     return `
-      <div class="cart-row" data-id="${p.id}">
+      <div class="cart-row" data-id="${pid}">
         <div class="c-thumb">${iconMarkup(p.icon, 40)}</div>
         <div>
-          <div class="c-name">${p.nombre}</div>
-          <div class="c-brand">${LABELS.marca[p.marca]}</div>
+          <div class="c-name">${escapeHtml(p.nombre)}</div>
+          <div class="c-brand">${escapeHtml(LABELS.marca[p.marca])}</div>
         </div>
-        <div class="c-meta">${d.nombre} · ${LABELS.categoria[p.categoria]}</div>
+        <div class="c-meta">${escapeHtml(d.nombre)} · ${escapeHtml(LABELS.categoria[p.categoria])}</div>
         <div class="c-qty">
-          <label for="qty-${p.id}">Cant.</label>
-          <input type="number" min="1" id="qty-${p.id}" value="${item.qty}" data-id="${p.id}">
+          <label for="qty-${pid}">Cant.</label>
+          <input type="number" min="1" id="qty-${pid}" value="${item.qty}" data-id="${pid}">
         </div>
-        <button type="button" class="c-remove" data-id="${p.id}">Quitar</button>
+        <button type="button" class="c-remove" data-id="${pid}">Quitar</button>
       </div>`;
   }
 

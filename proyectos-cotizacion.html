@@ -382,12 +382,12 @@
     listEl.innerHTML = productRows.map(row => {
       const p = PRODUCTS.find(pp => pp.id === row.product_id);
       if (!p){
-        return `<p class="card-meta">Producto no disponible (ID: ${row.product_id})</p>`;
+        return `<p class="card-meta">Producto no disponible (ID: ${escapeHtml(row.product_id)})</p>`;
       }
       const dist = DISTRIBUTORS[p.distribuidor];
       const unit = row.unit || getProductUnit(p);
       const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
-      return `<p style="margin:0 0 6px;">${p.nombre} (${dist.nombre}) × ${quantity} ${unit}</p>`;
+      return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>`;
     }).join("");
     const pieceCount = getCommercialPieceCount(productRows);
     document.getElementById(countId).textContent =

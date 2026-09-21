@@ -56,9 +56,11 @@ function normalizeSelectionItem(item){
   return null;
 }
 
-/* Normaliza el arreglo completo. Conserva todos los productId
-   válidos (mismo filtro contra el catálogo real que ya existía),
-   sin duplicar ninguno. */
+/* Normaliza el arreglo completo. Conserva TODOS los productId, sin
+   duplicar ninguno: nunca se descarta un producto por no estar en
+   PRODUCTS (el catálogo puede no haber cargado todavía, o el producto
+   estar archivado) — la selección solo se limpia tras completar una
+   operación. Los renderers muestran "no disponible" si no lo encuentran. */
 function normalizeSelection(raw){
   if (!Array.isArray(raw)) return [];
   const seen = new Set();
@@ -66,7 +68,6 @@ function normalizeSelection(raw){
   raw.forEach(rawItem => {
     const item = normalizeSelectionItem(rawItem);
     if (!item) return;
-    if (typeof PRODUCTS !== "undefined" && !PRODUCTS.some(p => p.id === item.productId)) return;
     if (seen.has(item.productId)) return;
     seen.add(item.productId);
     normalized.push(item);

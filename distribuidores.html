@@ -111,15 +111,15 @@
     <article class="provider-card">
       <div class="provider-top">
         <div>
-          <div class="provider-mark">${d.nombre}</div>
-          <div class="provider-loc">${d.ubicacion}</div>
+          <div class="provider-mark">${escapeHtml(d.nombre)}</div>
+          <div class="provider-loc">${escapeHtml(d.ubicacion)}</div>
         </div>
       </div>
       <div class="provider-cats">
-        ${d.categorias.map(c => `<span class="chip">${c}</span>`).join("")}
+        ${d.categorias.map(c => `<span class="chip">${escapeHtml(c)}</span>`).join("")}
       </div>
-      <p style="margin-bottom:2px;">${d.descripcion}</p>
-      <a href="catalogo.html?distribuidor=${key}" class="btn btn-outline">Ver productos</a>
+      <p style="margin-bottom:2px;">${escapeHtml(d.descripcion)}</p>
+      <a href="catalogo.html?distribuidor=${escapeHtml(encodeURIComponent(key))}" class="btn btn-outline">Ver productos</a>
     </article>
   `).join("");
   propagateCartLinks();

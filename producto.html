@@ -165,7 +165,7 @@
 
   document.getElementById("s-name").textContent = distribuidor.nombre;
   document.getElementById("s-loc").textContent = distribuidor.ubicacion;
-  document.getElementById("s-more-link").href = `catalogo.html?distribuidor=${product.distribuidor}`;
+  document.getElementById("s-more-link").href = `catalogo.html?distribuidor=${encodeURIComponent(product.distribuidor)}`;
 
   document.getElementById("resource-list").innerHTML = DOWNLOADS.map(d => `
     <div class="resource-row">

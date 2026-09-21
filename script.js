@@ -3,6 +3,25 @@
    Catálogo multi-categoría — piloto en validación
    ============================================================ */
 
+/* ---------- seguridad de salida ----------
+   Todo dato que venga de la base de datos (nombres, marcas, descripciones,
+   URLs) debe pasar por escapeHtml() al interpolarse en plantillas HTML
+   (texto y atributos) y por safeUrl() antes de usarse como src/href. */
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"'`]/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;"
+  }[ch]));
+}
+
+function safeUrl(url){
+  try {
+    const parsed = new URL(String(url ?? ""), window.location.href);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") ? parsed.href : "";
+  } catch (e) {
+    return "";
+  }
+}
+
 /* ---------- distribuidores / showrooms (NO son "marcas") ---------- */
 const DISTRIBUTORS = {
   "spectro": {
@@ -524,7 +543,8 @@ function injectIconSprite(){
 }
 
 function iconMarkup(key, size){
-  return `<svg width="${size||48}" height="${size||48}"><use href="#ic-${key}"></use></svg>`;
+  const px = Number(size) || 48;
+  return `<svg width="${px}" height="${px}"><use href="#ic-${escapeHtml(key)}"></use></svg>`;
 }
 
 function badgeClass(disp){
@@ -822,23 +842,24 @@ let myActiveProjects = [];
 
 function renderProductCard(p){
   const dist = DISTRIBUTORS[p.distribuidor];
-  const marcaLabel = LABELS.marca[p.marca];
+  const marcaLabel = escapeHtml(LABELS.marca[p.marca]);
   const inSel = inSelection(p.id);
-  const fichaUrl = `producto.html?id=${p.id}`;
+  const idAttr = escapeHtml(p.id);
+  const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
   const selectButton = `
-    <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${p.id}" ${inSel ? "disabled" : ""}>
+    <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${idAttr}" ${inSel ? "disabled" : ""}>
       ${inSel ? "En mi selección" : "Añadir a la selección"}
     </button>`;
   return `
-    <article class="product-card" data-product-id="${p.id}">
-      <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${p.nombre}">
-        <span class="badge ${badgeClass(p.disponibilidad)}">${LABELS.disponibilidad[p.disponibilidad]}</span>
+    <article class="product-card" data-product-id="${idAttr}">
+      <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${escapeHtml(p.nombre)}">
+        <span class="badge ${badgeClass(p.disponibilidad)}">${escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</span>
         ${iconMarkup(p.icon, 72)}
       </a>
       <div class="card-body">
         <span class="card-brand">${marcaLabel}</span>
-        <span class="card-name">${p.nombre}</span>
-        <span class="card-meta">${dist.nombre} · ${LABELS.categoria[p.categoria]}</span>
+        <span class="card-name">${escapeHtml(p.nombre)}</span>
+        <span class="card-meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.categoria[p.categoria])}</span>
         ${cardPriceLineHtml(p.id, "card-price")}
         <div class="card-actions">
           <a class="btn btn-outline" href="${fichaUrl}">Ver ficha</a>

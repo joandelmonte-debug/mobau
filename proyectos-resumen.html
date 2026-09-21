@@ -330,10 +330,6 @@
   const params = new URLSearchParams(window.location.search);
   const projectId = params.get("id");
 
-  function escapeHtml(str){
-    return (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-
   /* Una línea de la cabecera de impresión ("Proyecto: X", "Email: Y"…).
      Nunca inventa un dato: si el valor no existe se omite la línea
      entera en vez de escribir "undefined" o dejarla vacía. */

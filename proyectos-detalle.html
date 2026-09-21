@@ -550,8 +550,8 @@
 
     const nav = document.getElementById("project-add-products-nav");
     nav.innerHTML = Object.keys(LABELS.categoria).map(code => `
-      <a href="catalogo.html?categoria=${code}&project_id=${currentProject.id}" class="project-add-products__link">
-        <span>${LABELS.categoria[code]}</span>
+      <a href="catalogo.html?categoria=${encodeURIComponent(code)}&project_id=${encodeURIComponent(currentProject.id)}" class="project-add-products__link">
+        <span>${escapeHtml(LABELS.categoria[code])}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
       </a>`).join("");
   }
@@ -879,9 +879,9 @@
     const chipHtml = (code, label) => {
       const active = code === "" ? categoryFilter.size === 0 : categoryFilter.has(code);
       return `
-        <button type="button" class="category-filter__chip${active ? " is-active" : ""}" data-category="${code}" aria-pressed="${active}">
+        <button type="button" class="category-filter__chip${active ? " is-active" : ""}" data-category="${escapeHtml(code)}" aria-pressed="${active}">
           <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          <span>${label}</span>
+          <span>${escapeHtml(label)}</span>
         </button>`;
     };
 
@@ -1115,7 +1115,7 @@
               <div class="project-product-thumb" aria-hidden="true"></div>
               <div style="min-width:0;">
                 <div class="sp-name">Producto no disponible</div>
-                <div class="sp-meta">ID: ${row.product_id}</div>
+                <div class="sp-meta">ID: ${escapeHtml(row.product_id)}</div>
               </div>
             </div>
             <div class="saved-project__actions">${removeBtn}</div>
@@ -1136,14 +1136,14 @@
       <div class="saved-project saved-project--detail">
         <div class="saved-project__top">
           <div class="saved-project__identity">
-            <div class="project-product-thumb" role="img" aria-label="${p.nombre}">${iconMarkup(p.icon, 40)}</div>
+            <div class="project-product-thumb" role="img" aria-label="${escapeHtml(p.nombre)}">${iconMarkup(p.icon, 40)}</div>
             <div style="min-width:0;">
-              <div class="sp-name">${p.nombre}</div>
-              <div class="sp-meta">${LABELS.marca[p.marca]} · ${dist.nombre} · ${LABELS.disponibilidad[p.disponibilidad]}</div>
+              <div class="sp-name">${escapeHtml(p.nombre)}</div>
+              <div class="sp-meta">${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
             </div>
           </div>
           <div class="saved-project__actions">
-            <a href="producto.html?id=${p.id}" class="btn btn-outline btn-sm">Ver ficha</a>
+            <a href="producto.html?id=${escapeHtml(encodeURIComponent(p.id))}" class="btn btn-outline btn-sm">Ver ficha</a>
             ${removeBtn}
           </div>
         </div>
@@ -1154,7 +1154,7 @@
             <div class="quantity-control">
               <button type="button" class="quantity-control__button dp-qty-decrement" data-row-id="${row.id}" data-unit="${unit}" aria-label="Reducir cantidad"${isArchived ? " disabled" : ""}>−</button>
               <button type="button" class="quantity-control__button dp-qty-increment" data-row-id="${row.id}" data-unit="${unit}" aria-label="Aumentar cantidad"${isArchived ? " disabled" : ""}>+</button>
-              <input id="${inputId}" class="quantity-control__input dp-qty-input" type="number" data-row-id="${row.id}" data-unit="${unit}" value="${displayValue}" min="${min}" step="${step}" inputmode="decimal" aria-label="Cantidad de ${p.nombre}"${isArchived ? " disabled" : ""}>
+              <input id="${inputId}" class="quantity-control__input dp-qty-input" type="number" data-row-id="${row.id}" data-unit="${unit}" value="${displayValue}" min="${min}" step="${step}" inputmode="decimal" aria-label="Cantidad de ${escapeHtml(p.nombre)}"${isArchived ? " disabled" : ""}>
               <span class="quantity-control__unit">${unit}</span>
             </div>
             <p class="dp-quantity__error" id="dp-qty-error-${row.id}" style="display:none;"></p>

@@ -167,13 +167,13 @@
         const p = PRODUCTS.find(pp => pp.id === item.id);
         return `
           <div class="sum-row" style="align-items:flex-start;">
-            <span>${p.nombre} <span class="hint">×${item.qty}</span></span>
+            <span>${escapeHtml(p.nombre)} <span class="hint">×${item.qty}</span></span>
           </div>
           <div class="field full" style="margin:-6px 0 14px;">
-            <input type="text" placeholder="Acabado o nota para este producto (opcional)" data-acabado="${p.id}" style="font-size:13px; padding:9px 12px;">
+            <input type="text" placeholder="Acabado o nota para este producto (opcional)" data-acabado="${escapeHtml(p.id)}" style="font-size:13px; padding:9px 12px;">
           </div>`;
       }).join("");
-      return `<div class="rfq-group-title">RFQ para ${d.nombre} — ${LABELS.categoria[PRODUCTS.find(p => p.id === items[0].id).categoria]}</div>${rows}`;
+      return `<div class="rfq-group-title">RFQ para ${escapeHtml(d.nombre)} — ${escapeHtml(LABELS.categoria[PRODUCTS.find(p => p.id === items[0].id).categoria])}</div>${rows}`;
     }).join("");
 
     const lines = cart.length;
