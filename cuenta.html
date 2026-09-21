@@ -217,10 +217,10 @@
       return `
         <div class="saved-project">
           <div>
-            <div class="sp-name">${projectName}</div>
-            <div class="sp-meta">${metaParts.join(" · ")}</div>
+            <div class="sp-name">${escapeHtml(projectName)}</div>
+            <div class="sp-meta">${metaParts.map(part => escapeHtml(part)).join(" · ")}</div>
           </div>
-          <span class="status-chip ${statusClass}">${statusLabel}</span>
+          <span class="status-chip ${statusClass}">${escapeHtml(statusLabel)}</span>
         </div>`;
     }).join("");
   }
