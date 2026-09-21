@@ -53,10 +53,10 @@
           <div class="account-menu-name" id="account-menu-name">Tu cuenta</div>
           <div class="account-menu-email">${escapeHtml(email)}</div>
         </div>
-        <a href="inscripcion-profesional.html" role="menuitem">Mi perfil</a>
-        <a href="proyectos.html?status=active" role="menuitem">Mis proyectos</a>
-        <a href="proyectos.html?status=active" id="account-menu-active-project" role="menuitem">Mi proyecto activo</a>
-        <a href="proyectos.html?status=requested" role="menuitem">Solicitudes</a>
+        <a href="inscripcion-profesional.html" id="account-menu-profile" role="menuitem">Mi perfil</a>
+        <a href="proyectos.html?status=active" data-architect-only role="menuitem">Mis proyectos</a>
+        <a href="proyectos.html?status=active" id="account-menu-active-project" data-architect-only role="menuitem">Mi proyecto activo</a>
+        <a href="proyectos.html?status=requested" data-architect-only role="menuitem">Solicitudes</a>
         <button type="button" class="account-menu-item" id="account-menu-logout" role="menuitem">Cerrar sesión</button>
       </div>
     </div>`;
@@ -129,6 +129,24 @@
         const nameEl = document.getElementById("account-menu-name");
         if (nameEl) nameEl.textContent = data.professional_name;
       }
+    })
+    .catch(() => {});
+
+  /* Cuentas de distribuidor (profiles.role = 'supplier'): en segundo plano,
+     como el nombre — el menú ya es usable. "Mi perfil" pasa a
+     perfil-distribuidor.html y se quitan los enlaces solo de arquitecto.
+     Hasta que llega el rol (fracción de segundo) se ven los de arquitecto;
+     si la consulta falla, el menú queda como el de siempre. */
+  supabaseClient
+    .from("profiles")
+    .select("role")
+    .eq("id", session.user.id)
+    .maybeSingle()
+    .then(({ data }) => {
+      if (!data || data.role !== "supplier") return;
+      const profileLink = document.getElementById("account-menu-profile");
+      if (profileLink) profileLink.href = "perfil-distribuidor.html";
+      panel.querySelectorAll("[data-architect-only]").forEach(el => el.remove());
     })
     .catch(() => {});
 

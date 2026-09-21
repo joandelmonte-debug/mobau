@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perfil de distribuidor — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Distribuidor</div>
+    <h1 id="page-title">Perfil de distribuidor</h1>
+    <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Datos legales de tu empresa. Los revisamos manualmente antes de habilitar la carga de productos.</p>
+  </div>
+</div>
+
+<main class="wrap" style="max-width:640px; padding: 28px 0 100px;">
+
+  <p id="dp-loading" class="card-meta">Cargando tu perfil…</p>
+
+  <div id="dp-load-error" class="cart-empty" style="display:none;">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar tu perfil.</p>
+    <p id="dp-load-error-detail" style="margin:0 0 14px;">Ocurrió un error al consultar tus datos. Intenta de nuevo.</p>
+    <button type="button" class="btn btn-primary" id="dp-retry-btn">Reintentar</button>
+  </div>
+
+  <!-- Estado de verificación (solo lectura): lo escribe Mobau, nunca el distribuidor. -->
+  <div id="dp-status" class="account-section" style="display:none;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <h2 style="margin:0;" id="dp-status-title"></h2>
+      <span class="status-chip" id="dp-status-chip"></span>
+    </div>
+    <p id="dp-status-text" style="margin:0;"></p>
+    <p id="dp-status-reason" style="display:none; margin:12px 0 0; color:var(--danger);"></p>
+    <div id="dp-status-actions" style="display:none; margin-top:16px;">
+      <button type="button" class="btn btn-primary" id="dp-products-btn" disabled title="Disponible próximamente">Mis productos (próximamente)</button>
+    </div>
+  </div>
+
+  <!-- Vista de consulta, una vez que el perfil existe. -->
+  <div id="dp-view" class="account-section" style="display:none; margin-bottom:0;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px;">
+      <h2 style="margin:0;">Datos legales</h2>
+      <button type="button" class="icon-btn-muted" id="dp-edit-btn" aria-label="Editar datos legales" title="Editar datos legales">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+      </button>
+    </div>
+    <div class="field-grid" id="dp-view-grid"></div>
+  </div>
+
+  <!-- Formulario único: alta (INSERT) y edición (UPDATE) sobre las mismas 8 columnas. -->
+  <form class="form-card" id="dp-form" style="display:none;" novalidate>
+    <div class="field full">
+      <label for="dp-nombre-comercial">Nombre comercial</label>
+      <input id="dp-nombre-comercial" type="text" required placeholder="Ej. Spectro Lighting">
+    </div>
+    <div class="field full">
+      <label for="dp-razon-social">Razón social</label>
+      <input id="dp-razon-social" type="text" required placeholder="Nombre legal registrado de la empresa">
+    </div>
+    <div class="field full">
+      <label for="dp-rnc">RNC <span class="hint">9 dígitos (empresa) u 11 dígitos (persona física)</span></label>
+      <input id="dp-rnc" type="text" inputmode="numeric" required placeholder="Solo números, sin guiones">
+    </div>
+    <div class="field full">
+      <label for="dp-direccion-fiscal">Dirección fiscal</label>
+      <input id="dp-direccion-fiscal" type="text" required placeholder="Calle, número, sector, ciudad">
+    </div>
+    <div class="field full">
+      <label for="dp-telefono">Teléfono</label>
+      <input id="dp-telefono" type="tel" required placeholder="+1 (809) 000 0000">
+    </div>
+    <div class="field full">
+      <label for="dp-email-contacto">Correo de contacto</label>
+      <input id="dp-email-contacto" type="email" required placeholder="contacto@empresa.com">
+    </div>
+    <div class="field full">
+      <label for="dp-nombre-contacto">Nombre del contacto responsable</label>
+      <input id="dp-nombre-contacto" type="text" required placeholder="Ej. María Pérez">
+    </div>
+    <div class="field full">
+      <label for="dp-cargo-contacto">Cargo del contacto</label>
+      <input id="dp-cargo-contacto" type="text" required placeholder="Ej. Gerente comercial">
+    </div>
+    <p id="dp-form-error" style="display:none; color:var(--danger); font-size:13px; margin:-8px 0 14px;"></p>
+    <div style="display:flex; gap:10px;">
+      <button type="submit" class="btn btn-primary btn-block" id="dp-submit-btn">Enviar a verificación</button>
+      <button type="button" class="btn btn-outline" id="dp-cancel-btn" style="display:none;">Cancelar</button>
+    </div>
+  </form>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  let session = null;
+  let profile = null; // última fila real de distributor_profiles
+
+  /* Cada campo: columna de la tabla, id del input y etiqueta de la vista.
+     Son exactamente las 8 columnas con permiso de INSERT/UPDATE para el usuario. */
+  const FIELDS = [
+    { key: "nombre_comercial", id: "dp-nombre-comercial", label: "Nombre comercial" },
+    { key: "razon_social",     id: "dp-razon-social",     label: "Razón social" },
+    { key: "rnc",              id: "dp-rnc",              label: "RNC" },
+    { key: "direccion_fiscal", id: "dp-direccion-fiscal", label: "Dirección fiscal" },
+    { key: "telefono",         id: "dp-telefono",         label: "Teléfono" },
+    { key: "email_contacto",   id: "dp-email-contacto",   label: "Correo de contacto" },
+    { key: "nombre_contacto",  id: "dp-nombre-contacto",  label: "Contacto responsable" },
+    { key: "cargo_contacto",   id: "dp-cargo-contacto",   label: "Cargo del contacto" }
+  ];
+
+  const STATUS_INFO = {
+    pending_verification: {
+      title: "Tu perfil está en revisión",
+      chip: "En revisión", chipClass: "review",
+      text: "Estamos verificando tu RNC manualmente. Hasta que sea aprobado no podrás subir productos."
+    },
+    verified: {
+      title: "Perfil verificado",
+      chip: "Verificado", chipClass: "quoted",
+      text: "Tu empresa está verificada en Mobau."
+    },
+    rejected: {
+      title: "Perfil rechazado",
+      chip: "Rechazado", chipClass: "closed",
+      text: "Corrige tus datos y guárdalos para volver a enviarlos a revisión."
+    }
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  function normalizeRnc(value){
+    return value.replace(/[\s-]/g, "");
+  }
+
+  function showOnly(...visibleIds){
+    ["dp-loading", "dp-load-error", "dp-status", "dp-view", "dp-form"].forEach(id => {
+      $(id).style.display = visibleIds.includes(id) ? "block" : "none";
+    });
+  }
+
+  function renderStatus(){
+    const info = STATUS_INFO[profile.verification_status] || STATUS_INFO.pending_verification;
+    $("dp-status-title").textContent = info.title;
+    const chip = $("dp-status-chip");
+    chip.textContent = info.chip;
+    chip.className = `status-chip ${info.chipClass}`;
+    $("dp-status-text").textContent = info.text;
+
+    const reasonEl = $("dp-status-reason");
+    if (profile.verification_status === "rejected" && profile.rejection_reason){
+      reasonEl.textContent = `Motivo: ${profile.rejection_reason}`;
+      reasonEl.style.display = "block";
+    } else {
+      reasonEl.style.display = "none";
+    }
+    $("dp-status-actions").style.display = profile.verification_status === "verified" ? "block" : "none";
+  }
+
+  function renderView(){
+    const grid = $("dp-view-grid");
+    grid.replaceChildren();
+    FIELDS.forEach(f => {
+      const cell = document.createElement("div");
+      const label = document.createElement("p");
+      label.style.cssText = "font-size:13.5px; font-weight:600; margin:0 0 7px;";
+      label.textContent = f.label;
+      const value = document.createElement("p");
+      value.style.margin = "0";
+      value.textContent = profile[f.key] || "No indicado";
+      cell.append(label, value);
+      grid.appendChild(cell);
+    });
+  }
+
+  function showProfile(){
+    $("page-title").textContent = "Mi perfil de distribuidor";
+    $("page-subtitle").textContent = "Consulta tus datos legales y el estado de tu verificación.";
+    renderStatus();
+    renderView();
+    showOnly("dp-status", "dp-view");
+    $("dp-status").style.display = "block";
+    $("dp-view").style.display = "block";
+  }
+
+  function showForm({ editing }){
+    FIELDS.forEach(f => { $(f.id).value = editing ? (profile[f.key] || "") : ""; });
+    $("dp-form-error").style.display = "none";
+    $("dp-submit-btn").textContent = editing ? "Guardar cambios" : "Enviar a verificación";
+    $("dp-cancel-btn").style.display = editing ? "inline-flex" : "none";
+    if (editing){
+      showOnly("dp-status", "dp-form");
+    } else {
+      $("page-subtitle").textContent = "Completa los datos legales de tu empresa para enviarlos a verificación.";
+      showOnly("dp-form");
+    }
+  }
+
+  function readForm(){
+    const values = {};
+    FIELDS.forEach(f => { values[f.key] = $(f.id).value.trim(); });
+    values.rnc = normalizeRnc(values.rnc);
+    return values;
+  }
+
+  function validate(values){
+    if (FIELDS.some(f => !values[f.key])) return "Completa todos los campos para continuar.";
+    if (!/^(\d{9}|\d{11})$/.test(values.rnc)) return "El RNC debe tener 9 dígitos (empresa) u 11 dígitos (persona física).";
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email_contacto)) return "Ingresa un correo de contacto válido.";
+    return null;
+  }
+
+  function friendlyError(error){
+    if (error.code === "23505") return "Este RNC ya está registrado en otra cuenta. Si crees que es un error, escríbenos a hola@mobau.do.";
+    if (error.code === "42501") return "Tu cuenta no tiene permiso para guardar este perfil.";
+    return error.message || "No pudimos guardar tus datos. Intenta de nuevo.";
+  }
+
+  $("dp-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = $("dp-form-error");
+    errorEl.style.display = "none";
+
+    const values = readForm();
+    const problem = validate(values);
+    if (problem){
+      errorEl.textContent = problem;
+      errorEl.style.display = "block";
+      return;
+    }
+
+    /* Un perfil verificado que cambia RNC o razón social vuelve a revisión
+       (lo hace un trigger en la base de datos); se avisa antes de guardar. */
+    if (profile && profile.verification_status === "verified"
+        && (values.rnc !== profile.rnc || values.razon_social !== profile.razon_social)){
+      const ok = confirm("Cambiar el RNC o la razón social enviará tu perfil de nuevo a revisión y no podrás subir productos hasta que sea aprobado. ¿Continuar?");
+      if (!ok) return;
+    }
+
+    const btn = $("dp-submit-btn");
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Guardando…";
+
+    /* INSERT solo la primera vez; después solo UPDATE de las 8 columnas legales.
+       No se usa upsert: exigiría permiso de UPDATE sobre user_id. */
+    const query = profile
+      ? supabaseClient.from("distributor_profiles").update(values).eq("user_id", session.user.id).select().single()
+      : supabaseClient.from("distributor_profiles").insert({ ...values, user_id: session.user.id }).select().single();
+    const { data, error } = await query;
+
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+
+    if (error){
+      errorEl.textContent = friendlyError(error);
+      errorEl.style.display = "block";
+      return;
+    }
+
+    profile = data;
+    showToast("Datos guardados.");
+    showProfile();
+  });
+
+  $("dp-edit-btn").addEventListener("click", () => showForm({ editing: true }));
+  $("dp-cancel-btn").addEventListener("click", showProfile);
+
+  async function loadProfile(){
+    showOnly("dp-loading");
+
+    /* Guard: solo cuentas de distribuidor. La seguridad real está en las
+       políticas RLS; esto solo evita mostrar la página a quien no aplica. */
+    const { data: account, error: roleError } = await supabaseClient
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (roleError){
+      $("dp-load-error-detail").textContent = roleError.message || "Ocurrió un error al consultar tu cuenta. Intenta de nuevo.";
+      showOnly("dp-load-error");
+      return;
+    }
+    if (!account || account.role !== "supplier"){
+      window.location.href = "index.html";
+      return;
+    }
+
+    const { data: existing, error } = await supabaseClient
+      .from("distributor_profiles")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (error){
+      $("dp-load-error-detail").textContent = error.message || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
+      showOnly("dp-load-error");
+      return;
+    }
+
+    if (existing){
+      profile = existing;
+      showProfile();
+      return;
+    }
+    profile = null;
+    showForm({ editing: false });
+  }
+
+  $("dp-retry-btn").addEventListener("click", loadProfile);
+
+  (async () => {
+    session = await MobauAuth.requireSession();
+    if (!session) return; // ya redirigió a login.html
+    await loadProfile();
+  })();
+</script>
+</body>
+</html>
