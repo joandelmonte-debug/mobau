@@ -1227,6 +1227,7 @@
   (async () => {
     session = await MobauAuth.requireSession();
     if (!session) return;
+    if (!(await whenCatalogReady())) return;
     currentPlan = await MobauProjects.myPlan(session.user.id);
 
     const params = new URLSearchParams(window.location.search);

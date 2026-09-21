@@ -381,6 +381,7 @@
   }
 
   (async () => {
+    if (!(await whenCatalogReady({ status: "#selection-list" }))) return;
     await loadPriceState(getSelection().map(i => i.productId));
     renderSelection();
     initActiveProjectState();

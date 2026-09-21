@@ -708,6 +708,7 @@
   (async () => {
     session = await MobauAuth.requireSession();
     if (!session) return;
+    if (!(await whenCatalogReady())) return;
 
     arrivedWithProjectId = !!projectIdParam;
 

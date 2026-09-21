@@ -137,6 +137,7 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+runWithCatalog(() => {
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id") || "p1";
   const product = PRODUCTS.find(p => p.id === id) || PRODUCTS[0];
@@ -280,6 +281,7 @@
     renderRelated();
     injectIconSprite();
   })();
+}, { hide: "#product-root, .related-strip" });
 </script>
 </body>
 </html>

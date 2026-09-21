@@ -106,6 +106,7 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+runWithCatalog(() => {
   const grid = document.getElementById("provider-grid");
   grid.innerHTML = Object.entries(DISTRIBUTORS).map(([key, d]) => `
     <article class="provider-card">
@@ -123,6 +124,7 @@
     </article>
   `).join("");
   propagateCartLinks();
+}, { status: "#provider-grid" });
 </script>
 </body>
 </html>

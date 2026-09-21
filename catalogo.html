@@ -538,6 +538,7 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+runWithCatalog(() => {
   const state = {
     categoria: new Set(),
     subcategoria: new Set(),
@@ -1147,6 +1148,7 @@
     updatePriceHint();
     render();
   })();
+}, { status: "#product-grid" });
 </script>
 </body>
 </html>

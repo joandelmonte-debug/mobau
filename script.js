@@ -14,8 +14,9 @@ function escapeHtml(value){
 }
 
 function safeUrl(url){
+  if (typeof url !== "string" || !url.trim()) return "";
   try {
-    const parsed = new URL(String(url ?? ""), window.location.href);
+    const parsed = new URL(url.trim());
     return (parsed.protocol === "http:" || parsed.protocol === "https:") ? parsed.href : "";
   } catch (e) {
     return "";
@@ -335,6 +336,257 @@ const LABELS = {
     "por-confirmar": "Por confirmar"
   }
 };
+
+/* ============================================================
+   CATÁLOGO — fuente de datos (Fase 4, Paso 1)
+   PRODUCTS, DISTRIBUTORS, CATEGORIES y LABELS conservan su forma; con
+   source "db" se rellenan en sitio y de una vez desde Supabase.
+   ============================================================ */
+const CATALOG_CONFIG = {
+  source: "static",      // "static" | "db" (cambia a "db" en el Paso 3)
+  staticFallback: true,  // si "db" falla se conservan los datos estáticos (se elimina en el Paso 4)
+  cacheTtlMs: 60 * 1000,
+  timeoutMs: 4000        // corta también los reintentos internos de supabase-js (hasta ~7 s)
+};
+
+/* Solo en local: ?catalog=db|static fija la fuente durante la sesión de la pestaña. */
+(function applyLocalSourceOverride(){
+  const host = window.location.hostname;
+  if (host !== "localhost" && host !== "127.0.0.1") return;
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("catalog");
+    if (fromUrl === "db" || fromUrl === "static") sessionStorage.setItem("mobau_catalog_source", fromUrl);
+    const stored = sessionStorage.getItem("mobau_catalog_source");
+    if (stored === "db" || stored === "static") CATALOG_CONFIG.source = stored;
+  } catch (e) {}
+})();
+
+const CATALOG_STATE = { source: "static", status: "ready", error: null };
+const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v1", distributors: "mobau_distributors_v1", categories: "mobau_categories_v1" };
+const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at";
+const STATIC_ORDER = Object.freeze({
+  products: PRODUCTS.map(p => p.id),
+  distributors: Object.keys(DISTRIBUTORS),
+  categories: Object.keys(CATEGORIES)
+});
+
+function slugify(text){
+  return String(text ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function brandKey(brand){ return slugify(brand) || "sin-marca"; }
+function brandLabel(brand){ return (brand && brand.trim()) || "Sin marca"; }
+
+/* Fila de la base de datos -> forma que ya consume todo el front. */
+function mapProductRow(row){
+  return {
+    id: row.id, nombre: row.name, distribuidor: row.distributor_id, marca: brandKey(row.brand),
+    categoria: row.category_id, subcategoria: row.subcategory, uso: row.use_context, espacio: row.space,
+    disponibilidad: row.availability, icon: row.icon, descripcion: row.description,
+    medidas: row.measurements, materiales: row.materials, acabados: row.finishes, leadtime: row.lead_time,
+    imagen: safeUrl(row.image_url) || null, ficha: safeUrl(row.technical_sheet_url) || null,
+    cad: safeUrl(row.cad_bim_3d_url) || null, status: row.status, actualizado: row.updated_at
+  };
+}
+
+/* Conserva el orden actual del catálogo estático; lo nuevo va al final, por antigüedad. */
+function stableCatalogOrder(items, keyOf, knownOrder){
+  const rank = new Map(knownOrder.map((key, index) => [key, index]));
+  const unknownRank = knownOrder.length;
+  return items.slice().sort((a, b) => {
+    const ra = rank.has(keyOf(a)) ? rank.get(keyOf(a)) : unknownRank;
+    const rb = rank.has(keyOf(b)) ? rank.get(keyOf(b)) : unknownRank;
+    if (ra !== rb) return ra - rb;
+    return String(a.created_at || keyOf(a)).localeCompare(String(b.created_at || keyOf(b)));
+  });
+}
+
+function buildProducts(rows){
+  const ordered = stableCatalogOrder(rows, r => r.id, STATIC_ORDER.products);
+  const brands = {};
+  ordered.forEach(r => { brands[brandKey(r.brand)] = brandLabel(r.brand); });
+  return { products: ordered.map(mapProductRow), brands };
+}
+function buildDistributors(rows){
+  const out = {};
+  stableCatalogOrder(rows, r => r.id, STATIC_ORDER.distributors).forEach(r => {
+    out[r.id] = { nombre: r.name, ubicacion: r.location || "", categorias: r.categories || [], descripcion: r.description || "" };
+  });
+  return out;
+}
+function buildCategories(rows){
+  const categories = {}, labels = {};
+  stableCatalogOrder(rows, r => r.id, STATIC_ORDER.categories).forEach(r => {
+    categories[r.id] = { nombre: r.name, subcategorias: r.subcategories || [] };
+    labels[r.id] = r.name;
+  });
+  return { categories, labels };
+}
+function replaceContents(target, source){
+  if (Array.isArray(target)){ target.length = 0; target.push(...source); return; }
+  Object.keys(target).forEach(key => delete target[key]);
+  Object.assign(target, source);
+}
+
+function readCatalogCache(key){
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(key) || "null");
+    return cached && Date.now() - cached.savedAt < CATALOG_CONFIG.cacheTtlMs ? cached.rows : null;
+  } catch (e) { return null; }
+}
+function writeCatalogCache(key, rows){
+  try { sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), rows })); } catch (e) {}
+}
+async function runCatalogQuery(builder){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CATALOG_CONFIG.timeoutMs);
+  try { return await builder.abortSignal(controller.signal); } finally { clearTimeout(timer); }
+}
+async function fetchCatalogRows(key, useCache, query){
+  const cached = useCache ? readCatalogCache(key) : null;
+  if (cached) return cached;
+  const { data, error } = await runCatalogQuery(query());
+  if (error) throw error;
+  writeCatalogCache(key, data || []);
+  return data || [];
+}
+
+let catalogPromise = null;
+
+/* options: { source: "static" | "db", cache: boolean, force: boolean } -> Promise<PRODUCTS> */
+function loadCatalog(options = {}){
+  const source = options.source || CATALOG_CONFIG.source;
+  if (source !== "db"){
+    CATALOG_STATE.source = "static";
+    CATALOG_STATE.status = "ready";
+    return Promise.resolve(PRODUCTS);
+  }
+  if (catalogPromise && !options.force) return catalogPromise;
+
+  const useCache = options.cache !== false && !options.force;
+  CATALOG_STATE.status = "loading";
+  CATALOG_STATE.error = null;
+  catalogPromise = (async () => {
+    try {
+      const [productRows, distributorRows, categoryRows] = await Promise.all([
+        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, created_at")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, () => supabaseClient.from("categories").select("id, name, subcategories"))
+      ]);
+      const built = {
+        distributors: buildDistributors(distributorRows),
+        categories: buildCategories(categoryRows),
+        products: buildProducts(productRows)
+      };
+      replaceContents(DISTRIBUTORS, built.distributors);
+      replaceContents(CATEGORIES, built.categories.categories);
+      replaceContents(LABELS.categoria, built.categories.labels);
+      replaceContents(LABELS.marca, built.products.brands);
+      replaceContents(PRODUCTS, built.products.products);
+      CATALOG_STATE.source = "db";
+      CATALOG_STATE.status = "ready";
+      return PRODUCTS;
+    } catch (error){
+      CATALOG_STATE.error = error;
+      if (CATALOG_CONFIG.staticFallback){
+        console.warn("Catálogo: no se pudo cargar desde la base de datos; se usan los datos estáticos.", error);
+        CATALOG_STATE.source = "static";
+        CATALOG_STATE.status = "fallback";
+        return PRODUCTS;
+      }
+      CATALOG_STATE.status = "error";
+      catalogPromise = null;
+      throw error;
+    }
+  })();
+  return catalogPromise;
+}
+
+async function loadDistributors(options = {}){ await loadCatalog(options); return DISTRIBUTORS; }
+async function loadCategories(options = {}){ await loadCatalog(options); return CATEGORIES; }
+
+/* Incluye archivados. Con "db" añade a PRODUCTS los que falten; con "static" filtra PRODUCTS. */
+async function loadProductsByIds(ids, options = {}){
+  const wanted = [...new Set((ids || []).filter(Boolean).map(String))];
+  if (!wanted.length) return [];
+  await loadCatalog(options);
+  if (CATALOG_STATE.source === "db"){
+    const missing = wanted.filter(id => !PRODUCTS.some(p => p.id === id));
+    for (let i = 0; i < missing.length; i += 100){
+      const { data, error } = await runCatalogQuery(supabaseClient.from("products").select(PRODUCT_COLUMNS).in("id", missing.slice(i, i + 100)));
+      if (error) throw error;
+      (data || []).forEach(row => {
+        LABELS.marca[brandKey(row.brand)] = brandLabel(row.brand);
+        PRODUCTS.push(mapProductRow(row));
+      });
+    }
+  }
+  return PRODUCTS.filter(p => wanted.includes(p.id));
+}
+
+/* ---------- estados de carga y error del catálogo ---------- */
+function catalogUsesDb(options){ return ((options && options.source) || CATALOG_CONFIG.source) === "db"; }
+
+function catalogStatusEl(selector){
+  const existing = document.getElementById("catalog-status");
+  if (!selector && existing) return { el: existing, created: true };
+  const found = selector ? document.querySelector(selector) : null;
+  if (found) return { el: found, created: false };
+  const el = document.createElement("div");
+  el.id = "catalog-status";
+  el.className = "wrap";
+  el.style.padding = "28px 0";
+  const main = document.querySelector("main");
+  if (main) main.before(el); else document.body.prepend(el);
+  return { el, created: true };
+}
+function setCatalogHidden(selector, hidden){
+  if (!selector) return;
+  document.querySelectorAll(selector).forEach(el => {
+    if (hidden){ el.style.display = "none"; return; }
+    el.style.removeProperty("display");
+    if (!el.getAttribute("style")) el.removeAttribute("style");
+  });
+}
+function showCatalogLoading(el){
+  el.innerHTML = `<p class="card-meta" role="status">Cargando catálogo…</p>`;
+}
+function showCatalogError(el, onRetry){
+  el.innerHTML = `<div class="cart-empty"><p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar el catálogo.</p><p style="margin:0 0 14px;">Comprueba tu conexión e inténtalo de nuevo.</p><button type="button" class="btn btn-primary">Reintentar</button></div>`;
+  el.querySelector("button").addEventListener("click", onRetry);
+}
+
+/* options: { status: selector, hide: selector, onRetry: fn } -> Promise<boolean>. Con "static" no toca el DOM. */
+async function whenCatalogReady(options = {}){
+  if (!catalogUsesDb(options)) return true;
+  const { el, created } = catalogStatusEl(options.status);
+  const onRetry = options.onRetry || (() => window.location.reload());
+  const settled = CATALOG_STATE.status === "ready" || CATALOG_STATE.status === "fallback";
+  if (!settled){
+    setCatalogHidden(options.hide, true);
+    showCatalogLoading(el);
+  }
+  try {
+    await loadCatalog(options);
+  } catch (error){
+    setCatalogHidden(options.hide, true);
+    showCatalogError(el, onRetry);
+    return false;
+  }
+  if (!settled) el.replaceChildren();
+  if (created) el.remove();
+  setCatalogHidden(options.hide, false);
+  return true;
+}
+
+/* Envuelve el script completo de una página. Con "static" ejecuta run() al instante, como antes. */
+async function runWithCatalog(run, options = {}){
+  if (!catalogUsesDb(options)) return run();
+  const ready = await whenCatalogReady({ ...options, onRetry: () => runWithCatalog(run, options) });
+  if (ready) return run();
+}
+
+if (catalogUsesDb()) loadCatalog().catch(() => {});
 
 /* ============================================================
    PRECIOS — Punto 6

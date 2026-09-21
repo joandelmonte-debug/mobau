@@ -432,6 +432,7 @@
   (async () => {
     const session = await MobauAuth.requireSession();
     if (!session) return;
+    if (!(await whenCatalogReady())) return;
 
     if (!projectId){
       document.getElementById("not-found").style.display = "block";
