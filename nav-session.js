@@ -145,7 +145,15 @@
     .then(({ data }) => {
       if (!data || data.role !== "supplier") return;
       const profileLink = document.getElementById("account-menu-profile");
-      if (profileLink) profileLink.href = "perfil-distribuidor.html";
+      if (profileLink){
+        profileLink.href = "perfil-distribuidor.html";
+        const productsLink = document.createElement("a");
+        productsLink.href = "distribuidor-productos.html";
+        productsLink.setAttribute("role", "menuitem");
+        productsLink.textContent = "Mis productos";
+        productsLink.addEventListener("click", () => closeMenu());
+        profileLink.after(productsLink);
+      }
       panel.querySelectorAll("[data-architect-only]").forEach(el => el.remove());
     })
     .catch(() => {});

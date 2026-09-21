@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mis productos — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Distribuidor</div>
+    <h1>Mis productos</h1>
+    <p style="margin-top:14px; max-width:60ch;">Gestiona los productos de tu empresa: crea, edita y archiva.</p>
+  </div>
+</div>
+
+<main class="wrap" style="padding: 40px 0 100px;">
+
+  <p id="pl-loading" class="card-meta">Cargando tus productos…</p>
+
+  <div id="pl-load-error" class="cart-empty" style="display:none;">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar tus productos.</p>
+    <p id="pl-load-error-detail" style="margin:0 0 14px;">Ocurrió un error al consultar tus datos. Intenta de nuevo.</p>
+    <button type="button" class="btn btn-primary" id="pl-retry-btn">Reintentar</button>
+  </div>
+
+  <div id="pl-content" style="display:none;">
+
+    <p class="card-meta" style="border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); padding:12px 16px; margin:0 0 24px;">
+      Piloto: los cambios aún no se reflejan en el catálogo público.
+    </p>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:8px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:14px; flex:1; min-width:260px;">
+        <div class="field" style="margin:0;">
+          <label for="pl-search">Buscar</label>
+          <input id="pl-search" type="search" placeholder="Nombre o marca">
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="pl-category">Categoría</label>
+          <select id="pl-category"><option value="">Todas</option></select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="pl-status">Estado</label>
+          <select id="pl-status">
+            <option value="active">Activos</option>
+            <option value="archived">Archivados</option>
+            <option value="">Todos</option>
+          </select>
+        </div>
+      </div>
+      <a href="distribuidor-producto.html" class="btn btn-primary">Añadir producto</a>
+    </div>
+
+    <p id="pl-count" class="card-meta" style="margin:14px 0 12px;"></p>
+
+    <div id="pl-empty" class="cart-empty" style="display:none;">
+      <p id="pl-empty-title" style="margin:0 0 4px; color:var(--ink); font-weight:600;"></p>
+      <p id="pl-empty-text" style="margin:0;"></p>
+    </div>
+
+    <div class="cart-list" id="pl-list"></div>
+  </div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="distribuidores.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="distribuidores.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const AVAILABILITY = {
+    "en-stock":      { label: "En stock",      cls: "quoted" },
+    "bajo-pedido":   { label: "Bajo pedido",   cls: "progress" },
+    "por-confirmar": { label: "Por confirmar", cls: "draft" }
+  };
+  const PRICE_LABELS = {
+    quote_required: "Bajo cotización",
+    pending_confirmation: "Precio por confirmar",
+    unavailable: "No disponible"
+  };
+
+  let session = null;
+  let products = [];
+  let prices = new Map();
+  let categoryNames = new Map();
+
+  function showOnly(id){
+    ["pl-loading", "pl-load-error", "pl-content"].forEach(x => { $(x).style.display = x === id ? "block" : "none"; });
+  }
+
+  /* Devuelve el distributor_id del usuario, o null si ya redirigió. La
+     seguridad real está en RLS; esto solo evita mostrar la página a quien no aplica. */
+  async function requireVerifiedDistributor(){
+    const { data: account, error: roleError } = await supabaseClient
+      .from("profiles").select("role").eq("id", session.user.id).maybeSingle();
+    if (roleError) throw roleError;
+    if (!account || account.role !== "supplier"){ window.location.href = "index.html"; return null; }
+
+    const { data: dp, error: dpError } = await supabaseClient
+      .from("distributor_profiles").select("verification_status, distributor_id").eq("user_id", session.user.id).maybeSingle();
+    if (dpError) throw dpError;
+    if (!dp || dp.verification_status !== "verified" || !dp.distributor_id){
+      window.location.href = "perfil-distribuidor.html";
+      return null;
+    }
+    return dp.distributor_id;
+  }
+
+  function priceText(productId){
+    const row = prices.get(productId);
+    if (!row) return "Sin precio";
+    if (row.price_status === "published" && row.price_amount !== null){
+      return `US$ ${Number(row.price_amount).toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return PRICE_LABELS[row.price_status] || "Sin precio";
+  }
+
+  function makeThumb(product){
+    const thumb = document.createElement("div");
+    thumb.className = "c-thumb";
+    const placeholder = () => { thumb.replaceChildren(document.createTextNode((product.name || "?").trim().charAt(0).toUpperCase())); };
+    if (product.image_url){
+      const img = document.createElement("img");
+      img.alt = "";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.style.cssText = "width:100%; height:100%; object-fit:cover; border-radius:inherit;";
+      img.addEventListener("error", placeholder);
+      img.src = product.image_url;
+      thumb.appendChild(img);
+    } else {
+      placeholder();
+    }
+    return thumb;
+  }
+
+  function textDiv(className, text){
+    const el = document.createElement("div");
+    el.className = className;
+    el.textContent = text;
+    return el;
+  }
+
+  function buildRow(product){
+    const row = document.createElement("div");
+    row.className = "cart-row";
+
+    const avail = AVAILABILITY[product.availability] || AVAILABILITY["por-confirmar"];
+    const badge = document.createElement("span");
+    badge.className = `status-chip ${avail.cls}`;
+    badge.textContent = avail.label;
+    const statusLine = document.createElement("div");
+    statusLine.style.cssText = "display:flex; align-items:center; gap:4px 12px; flex-wrap:wrap; margin-top:8px;";
+    statusLine.append(badge, textDiv("c-meta", priceText(product.id)), textDiv("c-meta", `Actualizado ${relativeDate(product.updated_at)}`));
+
+    const info = document.createElement("div");
+    info.append(
+      textDiv("c-name", product.name),
+      textDiv("c-brand", product.brand || "Sin marca"),
+      textDiv("c-meta", [categoryNames.get(product.category_id) || product.category_id, product.subcategory].filter(Boolean).join(" · ")),
+      statusLine
+    );
+
+    const chip = document.createElement("span");
+    const isActive = product.status === "active";
+    chip.className = `status-chip ${isActive ? "sent" : "closed"}`;
+    chip.textContent = isActive ? "Activo" : "Archivado";
+
+    /* .c-qty ya ocupa todo el ancho en móvil (regla existente de .cart-row). */
+    const actions = document.createElement("div");
+    actions.className = "c-qty";
+    actions.style.cssText = "flex-wrap:wrap; gap:8px;";
+    const edit = document.createElement("a");
+    edit.className = "btn btn-outline btn-sm";
+    edit.href = `distribuidor-producto.html?id=${encodeURIComponent(product.id)}`;
+    edit.textContent = "Editar";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "btn btn-outline btn-sm";
+    toggle.textContent = isActive ? "Archivar" : "Reactivar";
+    toggle.addEventListener("click", () => toggleStatus(product, toggle));
+    actions.append(chip, edit, toggle);
+
+    row.append(makeThumb(product), info, actions);
+    return row;
+  }
+
+  function render(){
+    const query = $("pl-search").value.trim().toLowerCase();
+    const category = $("pl-category").value;
+    const status = $("pl-status").value;
+
+    const visible = products.filter(p =>
+      (!status || p.status === status) &&
+      (!category || p.category_id === category) &&
+      (!query || `${p.name} ${p.brand || ""}`.toLowerCase().includes(query))
+    );
+
+    $("pl-list").replaceChildren(...visible.map(buildRow));
+    $("pl-count").textContent = `${visible.length} de ${products.length} ${products.length === 1 ? "producto" : "productos"}`;
+
+    const empty = visible.length === 0;
+    $("pl-empty").style.display = empty ? "block" : "none";
+    $("pl-list").style.display = empty ? "none" : "block";
+    if (empty){
+      const noProductsAtAll = products.length === 0;
+      $("pl-empty-title").textContent = noProductsAtAll ? "Todavía no tienes productos." : "Ningún producto coincide con los filtros.";
+      $("pl-empty-text").textContent = noProductsAtAll ? "Usa “Añadir producto” para crear el primero." : "Prueba con otra búsqueda, categoría o estado.";
+    }
+  }
+
+  async function toggleStatus(product, button){
+    const next = product.status === "active" ? "archived" : "active";
+    if (next === "archived" && !confirm(`¿Archivar “${product.name}”? Los proyectos que ya lo incluyen no se ven afectados.`)) return;
+
+    button.disabled = true;
+    const { data, error } = await supabaseClient
+      .from("products").update({ status: next }).eq("id", product.id)
+      .select("id, name, brand, category_id, subcategory, availability, status, image_url, updated_at").single();
+    button.disabled = false;
+
+    if (error || !data){
+      showToast("No pudimos cambiar el estado. Intenta de nuevo.");
+      return;
+    }
+    products = products.map(p => p.id === data.id ? data : p);
+    render();
+    showToast(next === "archived" ? "Producto archivado." : "Producto reactivado.");
+  }
+
+  async function load(){
+    showOnly("pl-loading");
+    try {
+      const distributorId = await requireVerifiedDistributor();
+      if (!distributorId) return;
+
+      const [productsRes, categoriesRes] = await Promise.all([
+        supabaseClient.from("products")
+          .select("id, name, brand, category_id, subcategory, availability, status, image_url, updated_at")
+          .eq("distributor_id", distributorId).order("updated_at", { ascending: false }),
+        supabaseClient.from("categories").select("id, name").order("name")
+      ]);
+      if (productsRes.error) throw productsRes.error;
+      if (categoriesRes.error) throw categoriesRes.error;
+
+      products = productsRes.data;
+      categoryNames = new Map(categoriesRes.data.map(c => [c.id, c.name]));
+
+      prices = new Map();
+      if (products.length){
+        const { data: priceRows, error: priceError } = await supabaseClient
+          .from("product_prices").select("product_id, price_amount, price_status")
+          .in("product_id", products.map(p => p.id));
+        if (priceError) throw priceError;
+        prices = new Map(priceRows.map(r => [r.product_id, r]));
+      }
+
+      const select = $("pl-category");
+      select.replaceChildren(new Option("Todas", ""), ...categoriesRes.data.map(c => new Option(c.name, c.id)));
+
+      showOnly("pl-content");
+      render();
+
+      const saved = new URLSearchParams(window.location.search).get("guardado");
+      if (saved){
+        showToast(saved === "creado" ? "Producto creado." : "Cambios guardados.");
+        history.replaceState(null, "", window.location.pathname);
+      }
+    } catch (error){
+      $("pl-load-error-detail").textContent = (error && error.message) || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
+      showOnly("pl-load-error");
+    }
+  }
+
+  ["input", "change"].forEach(evt => {
+    $("pl-search").addEventListener(evt, render);
+    $("pl-category").addEventListener(evt, render);
+    $("pl-status").addEventListener(evt, render);
+  });
+  $("pl-retry-btn").addEventListener("click", load);
+
+  (async () => {
+    session = await MobauAuth.requireSession();
+    if (!session) return; // ya redirigió a login.html
+    await load();
+  })();
+})();
+</script>
+</body>
+</html>
