@@ -697,7 +697,7 @@ runWithCatalog(() => {
   function getValidSubcategorias(){
     const cats = state.categoria;
     const relevant = cats.size === 0 ? PRODUCTS : PRODUCTS.filter(p => cats.has(p.categoria));
-    return [...new Set(relevant.map(p => p.subcategoria))].sort((a, b) => a.localeCompare(b, "es"));
+    return [...new Set(relevant.map(p => p.subcategoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
   }
 
   function renderSubcategoriaPanel(){
@@ -1140,7 +1140,7 @@ runWithCatalog(() => {
   updateFilterTriggerCounts();
 
   (async () => {
-    await loadPriceState(PRODUCTS.map(p => p.id));
+    await loadPriceState();
     /* El texto de ayuda de Precio necesita PRICE_STATE ya cargado
        (getPriceInfo depende de ella) — por eso se actualiza aquí,
        nunca antes. No es una consulta nueva: loadPriceState() es la

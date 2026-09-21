@@ -736,6 +736,7 @@
      siempre en number hasta formatUSD(). Proyectos archivados no
      llaman a esta función — nunca calculan ni muestran un total. */
   function buildProjectPriceSummaryHtml(rows){
+    rows = rows.filter(row => isProductAvailable(row.product_id));
     if (PRICE_STATE.error){
       return `<p class="price-summary-line price-error">Precio no disponible temporalmente</p>`;
     }
@@ -782,6 +783,7 @@
      ninguna fila visible, devuelve "" — ese caso lo muestra el estado
      vacío del filtro (#products-empty), nunca US$ 0.00 aquí. */
   function buildFilteredPriceSummaryHtml(visibleRows, filterSet){
+    visibleRows = visibleRows.filter(row => isProductAvailable(row.product_id));
     if (PRICE_STATE.error){
       return `<p class="price-summary-line price-error">Precio no disponible temporalmente</p>`;
     }
@@ -1040,6 +1042,7 @@
 
   async function loadSavedProducts(){
     const rows = await MobauProjects.listProductsInProject(project.id);
+    await loadProductsByIds(rows.map(row => row.product_id)).catch(() => {});
     currentRows = rows;
     const counterEl = document.getElementById("products-counter");
     const isArchived = project.status === "archived";
@@ -1055,7 +1058,8 @@
 
     const quoteBtn = document.getElementById("request-quote-btn");
     const quoteHint = document.getElementById("quote-hint");
-    const allValid = rows.length > 0 && rows.every(row => isValidQuantity(row.quantity));
+    const availableRows = rows.filter(row => isProductAvailable(row.product_id));
+    const allValid = availableRows.length > 0 && availableRows.every(row => isValidQuantity(row.quantity));
     quoteBtn.dataset.projectId = project.id;
 
     /* El resumen preliminar (Punto 6 — Fase 2) sirve igual para
@@ -1079,7 +1083,9 @@
       quoteBtn.disabled = !allValid;
       quoteHint.textContent = rows.length === 0
         ? "Añade productos para poder solicitar una cotización."
-        : "Indica la cantidad de todos los productos antes de solicitar una cotización.";
+        : availableRows.length === 0
+          ? "Ninguno de los productos está disponible actualmente."
+          : "Indica la cantidad de todos los productos antes de solicitar una cotización.";
       quoteHint.style.display = allValid ? "none" : "block";
     }
 
@@ -1136,10 +1142,10 @@
       <div class="saved-project saved-project--detail">
         <div class="saved-project__top">
           <div class="saved-project__identity">
-            <div class="project-product-thumb" role="img" aria-label="${escapeHtml(p.nombre)}">${iconMarkup(p.icon, 40)}</div>
+            <div class="project-product-thumb" role="img" aria-label="${escapeHtml(p.nombre)}">${productMediaMarkup(p, 40)}</div>
             <div style="min-width:0;">
               <div class="sp-name">${escapeHtml(p.nombre)}</div>
-              <div class="sp-meta">${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
+              <div class="sp-meta">${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(dist.nombre)} · ${p.status === "archived" ? "No disponible actualmente" : escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
             </div>
           </div>
           <div class="saved-project__actions">

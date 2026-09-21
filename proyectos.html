@@ -213,6 +213,7 @@
          esta página (antes: una por proyecto, todas en paralelo pero
          igual N consultas) — se agrupan por project_id en memoria. */
       const productsByProject = await MobauProjects.listProductsInProjects(projects.map(p => p.id));
+      await loadProductsByIds([...productsByProject.values()].flat().map(row => row.product_id)).catch(() => {});
       const cardsHtml = projects.map(p => {
         const rows = productsByProject.get(p.id) || [];
         const distributorIds = new Set();
@@ -355,6 +356,7 @@
 
     session = await MobauAuth.requireSession();
     if (!session) return;
+    if (!(await whenCatalogReady())) return;
     currentPlan = await MobauProjects.myPlan(session.user.id);
 
     /* Punto 14 — el menú de cuenta enlaza aquí con ?status=active o

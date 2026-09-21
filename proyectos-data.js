@@ -386,6 +386,16 @@ const MobauProjects = {
     return { data, error };
   },
 
+  /* Marca como no incluidos en la solicitud los productos indicados (p. ej. archivados). */
+  async excludeFromRfq(projectId, productIds) {
+    const { error } = await supabaseClient
+      .from("project_products")
+      .update({ selected_for_rfq: false })
+      .eq("project_id", projectId)
+      .in("product_id", productIds);
+    return { error };
+  },
+
   /* Lista las RFQs del usuario autenticado, más recientes primero.
      Filtra explícitamente por requester_user_id además de la RLS ya
      confirmada en Supabase (rfqs_select: requester_user_id = auth.uid()),

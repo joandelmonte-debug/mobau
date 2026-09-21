@@ -346,7 +346,8 @@ const CATALOG_CONFIG = {
   source: "static",      // "static" | "db" (cambia a "db" en el Paso 3)
   staticFallback: true,  // si "db" falla se conservan los datos estáticos (se elimina en el Paso 4)
   cacheTtlMs: 60 * 1000,
-  timeoutMs: 4000        // corta también los reintentos internos de supabase-js (hasta ~7 s)
+  timeoutMs: 4000,       // corta también los reintentos internos de supabase-js (hasta ~7 s)
+  pageSize: 1000         // tope de filas por consulta de PostgREST; se pagina si hay más
 };
 
 /* Solo en local: ?catalog=db|static fija la fuente durante la sesión de la pestaña. */
@@ -442,13 +443,22 @@ async function runCatalogQuery(builder){
   const timer = setTimeout(() => controller.abort(), CATALOG_CONFIG.timeoutMs);
   try { return await builder.abortSignal(controller.signal); } finally { clearTimeout(timer); }
 }
+async function selectAllRows(query){
+  const rows = [];
+  const size = CATALOG_CONFIG.pageSize;
+  for (let from = 0; ; from += size){
+    const { data, error } = await runCatalogQuery(query().range(from, from + size - 1));
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < size) return rows;
+  }
+}
 async function fetchCatalogRows(key, useCache, query){
   const cached = useCache ? readCatalogCache(key) : null;
   if (cached) return cached;
-  const { data, error } = await runCatalogQuery(query());
-  if (error) throw error;
-  writeCatalogCache(key, data || []);
-  return data || [];
+  const rows = await selectAllRows(query);
+  writeCatalogCache(key, rows);
+  return rows;
 }
 
 let catalogPromise = null;
@@ -469,9 +479,9 @@ function loadCatalog(options = {}){
   catalogPromise = (async () => {
     try {
       const [productRows, distributorRows, categoryRows] = await Promise.all([
-        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active")),
-        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, created_at")),
-        fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, () => supabaseClient.from("categories").select("id, name, subcategories"))
+        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active").order("id")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, created_at").order("id")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, () => supabaseClient.from("categories").select("id, name, subcategories").order("id"))
       ]);
       const built = {
         distributors: buildDistributors(distributorRows),
@@ -602,6 +612,7 @@ if (catalogUsesDb()) loadCatalog().catch(() => {});
    "quote_required" (Precio bajo cotización), nunca como error ni
    como US$ 0 — sigue siendo seleccionable en todo momento.
    ============================================================ */
+const PRICE_IN_LIMIT = 200;
 const PRICE_STATE = {
   loggedIn: false,
   loaded: false,
@@ -625,15 +636,23 @@ async function loadPriceState(productIds){
   }
 
   try {
-    let query = supabaseClient
-      .from("product_prices")
-      .select("product_id, price_amount, currency, price_status, includes_itbis, itbis_rate, price_source");
-    if (productIds && productIds.length) query = query.in("product_id", productIds);
-    const { data, error } = await query;
-    if (error) throw error;
-
+    const columns = "product_id, price_amount, currency, price_status, includes_itbis, itbis_rate, price_source";
+    const ids = productIds ? [...new Set(productIds)] : [];
     const map = {};
-    (data || []).forEach(row => { map[row.product_id] = row; });
+    if (ids.length && ids.length <= PRICE_IN_LIMIT){
+      const { data, error } = await supabaseClient.from("product_prices").select(columns).in("product_id", ids);
+      if (error) throw error;
+      (data || []).forEach(row => { map[row.product_id] = row; });
+    } else {
+      /* Sin ids (o demasiados para la URL): todos los precios, paginados (PostgREST corta en 1000 filas). */
+      const size = 1000;
+      for (let from = 0; ; from += size){
+        const { data, error } = await supabaseClient.from("product_prices").select(columns).order("product_id").range(from, from + size - 1);
+        if (error) throw error;
+        (data || []).forEach(row => { map[row.product_id] = row; });
+        if (!data || data.length < size) break;
+      }
+    }
     PRICE_STATE.map = map;
   } catch (e) {
     /* Error de red o de RLS: nunca se confunde con "sin fila" — se
@@ -797,6 +816,39 @@ function injectIconSprite(){
 function iconMarkup(key, size){
   const px = Number(size) || 48;
   return `<svg width="${px}" height="${px}"><use href="#ic-${escapeHtml(key)}"></use></svg>`;
+}
+
+const CATEGORY_ICONS = { iluminacion: "lampCeiling", mobiliario: "chair", revestimientos: "tile", bano: "bath", cocina: "faucet", "accesorios-decorativos": "decor" };
+
+/* Sin imagen: icono asignado -> icono de la categoría -> inicial del nombre. */
+function productFallbackMarkup(p, size){
+  const key = p.icon || CATEGORY_ICONS[p.categoria];
+  if (key) return iconMarkup(key, size);
+  const px = Number(size) || 48;
+  const initial = escapeHtml(String(p.nombre || "?").trim().charAt(0).toUpperCase());
+  return `<span style="font-family:var(--f-head); font-weight:600; font-size:${Math.round(px * 0.5)}px;">${initial}</span>`;
+}
+
+/* Imagen real si existe (con respaldo si falla la carga); si no, el respaldo directamente. */
+function productMediaMarkup(p, size){
+  const fallback = productFallbackMarkup(p, size);
+  const url = safeUrl(p.imagen);
+  if (!url) return fallback;
+  return `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-media-fallback style="width:100%; height:100%; object-fit:cover; border-radius:inherit;"><span class="media-fallback" style="display:none;">${fallback}</span>`;
+}
+
+document.addEventListener("error", (event) => {
+  const img = event.target;
+  if (!(img instanceof HTMLImageElement) || !("mediaFallback" in img.dataset)) return;
+  const fallback = img.nextElementSibling;
+  img.remove();
+  if (fallback && fallback.classList.contains("media-fallback")) fallback.style.display = "contents";
+}, true);
+
+/* Disponible = existe en el catálogo cargado y no está archivado. */
+function isProductAvailable(productId){
+  const p = PRODUCTS.find(pp => pp.id === productId);
+  return !!p && p.status !== "archived";
 }
 
 function badgeClass(disp){
@@ -1098,7 +1150,9 @@ function renderProductCard(p){
   const inSel = inSelection(p.id);
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
-  const selectButton = `
+  const selectButton = p.status === "archived"
+    ? `<button type="button" class="btn btn-added" disabled>No disponible actualmente</button>`
+    : `
     <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${idAttr}" ${inSel ? "disabled" : ""}>
       ${inSel ? "En mi selección" : "Añadir a la selección"}
     </button>`;
@@ -1106,7 +1160,7 @@ function renderProductCard(p){
     <article class="product-card" data-product-id="${idAttr}">
       <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${escapeHtml(p.nombre)}">
         <span class="badge ${badgeClass(p.disponibilidad)}">${escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</span>
-        ${iconMarkup(p.icon, 72)}
+        ${productMediaMarkup(p, 72)}
       </a>
       <div class="card-body">
         <span class="card-brand">${marcaLabel}</span>

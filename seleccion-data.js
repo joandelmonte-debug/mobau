@@ -109,6 +109,9 @@ function addToSelection(productId, initialQuantity, initialUnit){
   if (typeof PRODUCTS !== "undefined" && !PRODUCTS.some(p => p.id === productId)) {
     return { success: false, error: "Este producto no existe en el catálogo." };
   }
+  if (typeof PRODUCTS !== "undefined" && PRODUCTS.some(p => p.id === productId && p.status === "archived")) {
+    return { success: false, error: "Este producto ya no está disponible." };
+  }
   const items = getSelection();
   if (items.some(item => item.productId === productId)) {
     return { success: true, alreadyExists: true };

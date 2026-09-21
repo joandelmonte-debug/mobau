@@ -373,9 +373,9 @@
       <tr>
         <td>
           <div class="ps-product-cell">
-            <div class="ps-product-thumb">${iconMarkup(p.icon, 26)}</div>
+            <div class="ps-product-thumb">${productMediaMarkup(p, 26)}</div>
             <div>
-              <div class="ps-product-name">${escapeHtml(p.nombre)}</div>
+              <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
               <div class="ps-product-sub">${escapeHtml(LABELS.categoria[p.categoria])}</div>
             </div>
           </div>
@@ -397,7 +397,7 @@
     let pendingCount = 0;
     let subtotal = 0;
     let hasDemoPublished = false;
-    rows.forEach(row => {
+    rows.filter(row => isProductAvailable(row.product_id)).forEach(row => {
       const info = getPriceInfo(row.product_id);
       if (info.kind === "published"){
         publishedCount++;
@@ -452,6 +452,7 @@
     document.getElementById("no-products-back-link").href = backLink;
 
     const rows = await MobauProjects.listProductsInProject(project.id);
+    await loadProductsByIds(rows.map(row => row.product_id)).catch(() => {});
     if (!rows.length){
       document.getElementById("no-products").style.display = "block";
       return;
@@ -509,9 +510,9 @@
           <tr>
             <td>
               <div class="ps-product-cell">
-                <div class="ps-product-thumb">${iconMarkup(p.icon, 26)}</div>
+                <div class="ps-product-thumb">${productMediaMarkup(p, 26)}</div>
                 <div>
-                  <div class="ps-product-name">${escapeHtml(p.nombre)}</div>
+                  <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
                   <div class="ps-product-sub">${escapeHtml(LABELS.categoria[p.categoria])}</div>
                 </div>
               </div>

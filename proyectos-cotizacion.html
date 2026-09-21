@@ -377,6 +377,12 @@
     }, 0);
   }
 
+  async function loadRowProducts(rows){
+    await loadProductsByIds(rows.map(row => row.product_id)).catch(() => {});
+    return rows;
+  }
+  const availableProductRows = () => productRows.filter(row => isProductAvailable(row.product_id));
+
   function renderPiecesList(containerId, countId){
     const listEl = document.getElementById(containerId);
     listEl.innerHTML = productRows.map(row => {
@@ -384,12 +390,15 @@
       if (!p){
         return `<p class="card-meta">Producto no disponible (ID: ${escapeHtml(row.product_id)})</p>`;
       }
+      if (p.status === "archived"){
+        return `<p class="card-meta">${escapeHtml(p.nombre)} — no disponible actualmente (no se incluirá en la solicitud)</p>`;
+      }
       const dist = DISTRIBUTORS[p.distribuidor];
       const unit = row.unit || getProductUnit(p);
       const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
       return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>`;
     }).join("");
-    const pieceCount = getCommercialPieceCount(productRows);
+    const pieceCount = getCommercialPieceCount(availableProductRows());
     document.getElementById(countId).textContent =
       `${pieceCount} ${pieceCount === 1 ? "pieza" : "piezas"}`;
   }
@@ -398,9 +407,9 @@
     const distributorIds = new Set();
     productRows.forEach(row => {
       const p = PRODUCTS.find(pp => pp.id === row.product_id);
-      if (p) distributorIds.add(p.distribuidor);
+      if (p && p.status !== "archived") distributorIds.add(p.distribuidor);
     });
-    document.getElementById("sum-piezas").textContent = getCommercialPieceCount(productRows);
+    document.getElementById("sum-piezas").textContent = getCommercialPieceCount(availableProductRows());
     document.getElementById("sum-distribuidores").textContent = distributorIds.size;
   }
 
@@ -623,7 +632,7 @@
        llegamos desde Mi selección. Si veníamos de proyectos-detalle.html
        (?id=), los productos ya están asociados. */
     if (!arrivedWithProjectId){
-      const selectionItems = getSelection();
+      const selectionItems = getSelection().filter(item => isProductAvailable(item.productId));
       const { failedCount, totalCount } = await MobauProjects.transferSelectionToProject(project.id, selectionItems, "sum");
       if (failedCount > 0){
         errorEl.innerHTML = `Se asociaron ${totalCount - failedCount} de ${totalCount} productos. Tu selección no se modificó. <a href="proyectos-detalle.html?id=${project.id}" style="color:var(--danger); text-decoration:underline;">Ver el proyecto</a> para continuar manualmente.`;
@@ -637,11 +646,20 @@
          la transferencia (lo ya guardado + lo recién añadido, sin
          duplicados) — para validar cantidades sobre el estado real. */
       if (submitMode === "send"){
-        productRows = await MobauProjects.listProductsInProject(project.id);
+        productRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
       }
     }
 
-    if (submitMode === "send" && !productRows.every(row => isValidQuantity(row.quantity))){
+    const sendableRows = productRows.filter(row => isProductAvailable(row.product_id));
+    if (submitMode === "send" && sendableRows.length === 0){
+      errorEl.textContent = "Ninguno de los productos está disponible actualmente; no hay nada que cotizar.";
+      errorEl.style.display = "block";
+      setButtonsDisabled(false);
+      activeBtn.textContent = originalText;
+      return;
+    }
+
+    if (submitMode === "send" && !sendableRows.every(row => isValidQuantity(row.quantity))){
       errorEl.textContent = "Indica la cantidad de todos los productos antes de solicitar la cotización.";
       errorEl.style.display = "block";
       setButtonsDisabled(false);
@@ -653,6 +671,19 @@
       if (!arrivedWithProjectId) clearSelection();
       window.location.href = `proyectos-detalle.html?id=${project.id}`;
       return;
+    }
+
+    /* Los productos no disponibles se marcan fuera de la solicitud antes de registrarla. */
+    const excludedIds = productRows.filter(row => !isProductAvailable(row.product_id)).map(row => row.product_id);
+    if (excludedIds.length){
+      const { error: excludeError } = await MobauProjects.excludeFromRfq(project.id, excludedIds);
+      if (excludeError){
+        errorEl.textContent = `No pudimos excluir los productos no disponibles: ${excludeError.message}`;
+        errorEl.style.display = "block";
+        setButtonsDisabled(false);
+        activeBtn.textContent = originalText;
+        return;
+      }
     }
 
     /* submitMode === "send": registrar la solicitud real. */
@@ -733,7 +764,7 @@
       if (!project){ document.getElementById("not-found").style.display = "block"; return; }
       if (project.status === "archived"){ document.getElementById("is-archived").style.display = "block"; return; }
 
-      productRows = await MobauProjects.listProductsInProject(project.id);
+      productRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
       if (!productRows.length){ document.getElementById("no-products").style.display = "block"; return; }
 
       document.getElementById("bc-project").textContent = project.name;
@@ -770,7 +801,7 @@
         if (activeProjects.length) project = activeProjects[0];
       }
 
-      productRows = selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit }));
+      productRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit })));
 
       if (project){
         const nameField = mode === "save" ? "save-name-field" : "send-name-field";

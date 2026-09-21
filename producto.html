@@ -137,10 +137,19 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
-runWithCatalog(() => {
+runWithCatalog(async () => {
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id") || "p1";
-  const product = PRODUCTS.find(p => p.id === id) || PRODUCTS[0];
+  let product = PRODUCTS.find(p => p.id === id);
+  if (!product){
+    try { [product] = await loadProductsByIds([id]); } catch (e) { product = null; }
+  }
+  if (!product){
+    const { el } = catalogStatusEl();
+    el.innerHTML = `<div class="cart-empty"><p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No encontramos este producto.</p><p style="margin:0 0 14px;">Puede que ya no esté en el catálogo.</p><a href="catalogo.html" class="btn btn-primary">Ver el catálogo</a></div>`;
+    setCatalogHidden("#product-root, .related-strip", true);
+    return;
+  }
   const distribuidor = DISTRIBUTORS[product.distribuidor];
   const marcaLabel = LABELS.marca[product.marca];
 
@@ -148,13 +157,20 @@ runWithCatalog(() => {
   document.getElementById("bc-name").textContent = product.nombre;
   document.getElementById("p-brand").textContent = marcaLabel;
   document.getElementById("p-name").textContent = product.nombre;
-  document.getElementById("p-meta").textContent = `${LABELS.categoria[product.categoria]} · ${product.subcategoria}`;
-  document.getElementById("p-desc").textContent = product.descripcion;
-  document.getElementById("p-medidas").textContent = product.medidas;
-  document.getElementById("p-materiales").textContent = product.materiales;
-  document.getElementById("p-acabados").textContent = product.acabados;
-  document.getElementById("p-leadtime").textContent = product.leadtime;
-  document.getElementById("p-uso").textContent = LABELS.uso[product.uso];
+  document.getElementById("p-meta").textContent = [LABELS.categoria[product.categoria], product.subcategoria].filter(Boolean).join(" · ");
+  document.getElementById("p-desc").textContent = product.descripcion || "";
+  if (!product.descripcion) document.getElementById("p-desc").style.display = "none";
+  if (product.status === "archived"){
+    const note = document.createElement("p");
+    note.className = "price-line price-unavailable";
+    note.textContent = "No disponible actualmente";
+    document.getElementById("p-desc").after(note);
+  }
+  document.getElementById("p-medidas").textContent = product.medidas || "—";
+  document.getElementById("p-materiales").textContent = product.materiales || "—";
+  document.getElementById("p-acabados").textContent = product.acabados || "—";
+  document.getElementById("p-leadtime").textContent = product.leadtime || "—";
+  document.getElementById("p-uso").textContent = LABELS.uso[product.uso] || "—";
   document.getElementById("p-distribuidor").textContent = `${distribuidor.nombre} — ${distribuidor.ubicacion}`;
   document.getElementById("p-marca").textContent = marcaLabel;
 
@@ -162,18 +178,40 @@ runWithCatalog(() => {
   badge.textContent = LABELS.disponibilidad[product.disponibilidad];
   badge.classList.add(badgeClass(product.disponibilidad));
 
-  document.getElementById("gallery-main").innerHTML = iconMarkup(product.icon, 120);
+  document.getElementById("gallery-main").innerHTML = productMediaMarkup(product, 120);
+  if (safeUrl(product.imagen)) document.querySelector(".gallery-thumbs").style.display = "none";
 
   document.getElementById("s-name").textContent = distribuidor.nombre;
   document.getElementById("s-loc").textContent = distribuidor.ubicacion;
   document.getElementById("s-more-link").href = `catalogo.html?distribuidor=${encodeURIComponent(product.distribuidor)}`;
 
-  document.getElementById("resource-list").innerHTML = DOWNLOADS.map(d => `
+  /* Enlaces reales cuando el distribuidor los cargó; el resto sigue simulado. */
+  const realDownloads = { "BIM": safeUrl(product.cad), "Ficha técnica": safeUrl(product.ficha) };
+  const cadCovered = ["BIM", "CAD", "Modelo 3D"];
+  let hasRealDownload = false;
+  document.getElementById("resource-list").innerHTML = DOWNLOADS.map(d => {
+    const url = realDownloads[d.label] || (d.label === "CAD" || d.label === "Modelo 3D" ? realDownloads["BIM"] : "");
+    if (url && cadCovered.includes(d.label) && d.label !== "BIM") return "";
+    if (url){
+      hasRealDownload = true;
+      const host = new URL(url).hostname;
+      return `
+    <div class="resource-row">
+      <span class="r-label">${d.label === "BIM" ? "CAD / BIM / 3D" : d.label}</span>
+      <span class="r-ext">${escapeHtml(host)}</span>
+      <a class="btn btn-outline" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Descargar</a>
+    </div>`;
+    }
+    return `
     <div class="resource-row">
       <span class="r-label">${d.label}</span>
       <span class="r-ext">${d.ext}</span>
       <button type="button" class="btn btn-outline" data-download="${d.label}">Descargar</button>
-    </div>`).join("");
+    </div>`;
+  }).join("");
+  if (hasRealDownload){
+    document.getElementById("resource-list").nextElementSibling.textContent = "Los archivos con enlace se descargan directamente del distribuidor; el resto son descargas de demostración.";
+  }
 
   document.querySelectorAll('[data-download]').forEach(btn => {
     btn.addEventListener("click", () => showToast(`Descarga simulada — ${btn.dataset.download}`));
@@ -213,6 +251,16 @@ runWithCatalog(() => {
 
   function refreshAddButton(){
     const btn = document.getElementById("add-project-btn");
+    if (product.status === "archived"){
+      qtyInput.disabled = true;
+      qtyIncrementBtn.disabled = true;
+      qtyDecrementBtn.disabled = true;
+      btn.textContent = "No disponible actualmente";
+      btn.classList.add("btn-added");
+      btn.classList.remove("btn-primary");
+      btn.disabled = true;
+      return;
+    }
     const already = inSelection(product.id);
     qtyInput.disabled = already;
     qtyIncrementBtn.disabled = already;
@@ -230,7 +278,7 @@ runWithCatalog(() => {
     btn.disabled = false;
   }
 
-  const relatedProducts = PRODUCTS.filter(p => p.categoria === product.categoria && p.id !== product.id).slice(0,3);
+  const relatedProducts = PRODUCTS.filter(p => p.categoria === product.categoria && p.id !== product.id && p.status !== "archived").slice(0,3);
 
   function renderRelated(){
     const grid = document.getElementById("related-grid");

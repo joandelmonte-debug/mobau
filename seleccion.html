@@ -144,10 +144,14 @@
 
   document.getElementById("add-to-project-btn").addEventListener("click", async () => {
     if (!activeProject) return;
-    const items = getSelection();
+    const all = getSelection();
+    const items = all.filter(item => isProductAvailable(item.productId));
     if (!items.length) return;
+    const skipped = all.length - items.length;
 
-    const ok = confirm("¿Añadir estos productos al proyecto activo?");
+    const ok = confirm(skipped
+      ? `¿Añadir estos productos al proyecto activo? ${skipped} no ${skipped === 1 ? "disponible" : "disponibles"} no se ${skipped === 1 ? "añadirá" : "añadirán"} y se quitará${skipped === 1 ? "" : "n"} de tu selección.`
+      : "¿Añadir estos productos al proyecto activo?");
     if (!ok) return;
 
     const btn = document.getElementById("add-to-project-btn");
@@ -182,7 +186,7 @@
     btn.style.pointerEvents = "none";
     btn.textContent = "Preparando…";
 
-    const items = getSelection();
+    const items = getSelection().filter(item => isProductAvailable(item.productId));
     if (items.length){
       const { failedCount, totalCount } = await MobauProjects.transferSelectionToProject(activeProject.id, items, "sum");
       if (failedCount > 0){
@@ -245,6 +249,23 @@
     el.innerHTML = parts.join("");
   }
 
+  /* Producto archivado o desconocido: se ve, pero no se puede cotizar ni transferir; solo quitar. */
+  function renderUnavailableRow(item, p){
+    return `
+        <div class="selection-item">
+          <div class="selection-item__thumb">${p ? productMediaMarkup(p, 26) : ""}</div>
+          <div class="selection-item__content">
+            <div class="sp-name">${p ? escapeHtml(p.nombre) : "Producto no disponible"}</div>
+            <div class="selection-item__meta">No disponible actualmente${p ? "" : ` · ID: ${escapeHtml(item.productId)}`}</div>
+          </div>
+          <div class="selection-item__actions">
+            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(item.productId)}" aria-label="Quitar de la selección" title="Quitar de la selección">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
+          </div>
+        </div>`;
+  }
+
   function renderSelection(){
     const items = getSelection();
     const emptyEl = document.getElementById("selection-empty");
@@ -272,7 +293,7 @@
 
     listEl.innerHTML = items.map(item => {
       const p = PRODUCTS.find(pp => pp.id === item.productId);
-      if (!p) return "";
+      if (!p || p.status === "archived") return renderUnavailableRow(item, p);
       distributorIds.add(p.distribuidor);
       const dist = DISTRIBUTORS[p.distribuidor];
       const isUnit = item.unit === "ud.";
@@ -283,7 +304,7 @@
       const inputId = `quantity-${productIdAttr}`;
       return `
         <div class="selection-item">
-          <div class="selection-item__thumb">${iconMarkup(p.icon, 26)}</div>
+          <div class="selection-item__thumb">${productMediaMarkup(p, 26)}</div>
 
           <div class="selection-item__content">
             <div class="sp-name">${escapeHtml(p.nombre)}</div>
@@ -315,9 +336,12 @@
     /* No se suman cantidades de unidades distintas (ud. + m² no es un
        total con sentido) — el resumen cuenta piezas y distribuidores,
        nunca una cifra combinada de unidades. */
+    const availableItems = items.filter(item => isProductAvailable(item.productId));
+    const unavailableCount = items.length - availableItems.length;
     const countEl = document.getElementById("selection-summary-count");
     countEl.textContent =
-      `${items.length} ${items.length === 1 ? "producto" : "productos"} · ${distributorIds.size} ${distributorIds.size === 1 ? "distribuidor" : "distribuidores"}`;
+      `${availableItems.length} ${availableItems.length === 1 ? "producto" : "productos"} · ${distributorIds.size} ${distributorIds.size === 1 ? "distribuidor" : "distribuidores"}` +
+      (unavailableCount ? ` · ${unavailableCount} no ${unavailableCount === 1 ? "disponible" : "disponibles"}` : "");
 
     listEl.querySelectorAll(".remove-selection-btn").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -356,7 +380,7 @@
       });
     });
 
-    renderPriceSummary(items);
+    renderPriceSummary(availableItems);
     renderQuoteGate();
     updateActionButtons();
   }
@@ -364,10 +388,10 @@
   /* "Solicitar cotización" solo se habilita si TODOS los productos
      de la selección tienen una cantidad finita mayor que 0. */
   function renderQuoteGate(){
-    const items = getSelection();
+    const items = getSelection().filter(item => isProductAvailable(item.productId));
     const quoteBtn = document.getElementById("request-quote-btn");
     const hintEl = document.getElementById("quote-quantity-hint");
-    const allValid = items.every(item => isValidQuantity(item.quantity));
+    const allValid = items.length > 0 && items.every(item => isValidQuantity(item.quantity));
     if (allValid){
       quoteBtn.href = "proyectos-cotizacion.html?mode=send";
       quoteBtn.style.opacity = "";
@@ -382,6 +406,7 @@
 
   (async () => {
     if (!(await whenCatalogReady({ status: "#selection-list" }))) return;
+    await loadProductsByIds(getSelection().map(i => i.productId)).catch(() => {});
     await loadPriceState(getSelection().map(i => i.productId));
     renderSelection();
     initActiveProjectState();
