@@ -37,6 +37,10 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
   }
 });
 
+/* Lista blanca de destinos permitidos tras el enlace mágico — nunca se
+   acepta una ruta fuera de este array, ver sendMagicLink() más abajo. */
+const MAGIC_LINK_NEXT_PAGES = ["index.html", "perfil-distribuidor.html"];
+
 /* ---------- helpers de autenticación, reutilizables en cualquier página ---------- */
 const MobauAuth = {
   client: supabaseClient,
@@ -69,15 +73,22 @@ const MobauAuth = {
      extraData es opcional (por ejemplo { name: "Ana Rosario" })
      y queda disponible luego como raw_user_meta_data en Supabase.
 
-     redirectTo lleva a index.html (no a cuenta.html) y calcula la
-     ruta base a mano para GitHub Pages, que publica el sitio dentro
-     de /mobau/ — en local (o cualquier otro host) basePath queda
-     vacío y el enlace resuelve igual en la raíz. */
-  async sendMagicLink(email, extraData) {
+     nextPage es opcional y SOLO puede ser uno de MAGIC_LINK_NEXT_PAGES
+     (lista blanca fija arriba) — cualquier otro valor, incluido uno
+     manipulado o ausente, cae siempre a "index.html". Nunca se arma
+     la URL de redirección a partir de un valor externo sin pasar por
+     este filtro, así que un valor arbitrario no puede convertirse en
+     una redirección fuera del sitio.
+
+     redirectTo calcula la ruta base a mano para GitHub Pages, que
+     publica el sitio dentro de /mobau/ — en local (o cualquier otro
+     host) basePath queda vacío y el enlace resuelve igual en la raíz. */
+  async sendMagicLink(email, extraData, nextPage) {
+    const target = MAGIC_LINK_NEXT_PAGES.includes(nextPage) ? nextPage : "index.html";
     const basePath = window.location.hostname === "joandelmonte-debug.github.io"
       ? "/mobau"
       : "";
-    const redirectTo = `${window.location.origin}${basePath}/index.html`;
+    const redirectTo = `${window.location.origin}${basePath}/${target}`;
     return supabaseClient.auth.signInWithOtp({
       email,
       options: {

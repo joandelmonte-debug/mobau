@@ -30,9 +30,26 @@
   <div class="auth-card">
     <div class="eyebrow">Área profesional</div>
     <h1>Crear cuenta</h1>
-    <p>Guarda proyectos, retómalos cuando quieras y agiliza tus próximas solicitudes.</p>
+    <p id="registro-intro">Guarda proyectos, retómalos cuando quieras y agiliza tus próximas solicitudes.</p>
 
     <form class="form-card" id="registro-form">
+      <fieldset style="border:none; margin:0 0 20px; padding:0;">
+        <legend style="font-weight:600; margin-bottom:10px;">Tipo de cuenta</legend>
+        <div style="display:flex; gap:12px; align-items:flex-start; padding:14px 0; border-top:1px solid var(--line);">
+          <input type="radio" name="reg-account-type" id="reg-type-professional" value="individual" checked style="margin-top:4px;">
+          <label for="reg-type-professional" style="font-weight:normal;">
+            <span style="display:block; font-weight:600; color:var(--ink);">Arquitecto / Interiorista</span>
+            <span class="card-meta">Guarda proyectos, arma selecciones y solicita cotizaciones a distribuidores.</span>
+          </label>
+        </div>
+        <div style="display:flex; gap:12px; align-items:flex-start; padding:14px 0;">
+          <input type="radio" name="reg-account-type" id="reg-type-supplier" value="supplier" style="margin-top:4px;">
+          <label for="reg-type-supplier" style="font-weight:normal;">
+            <span style="display:block; font-weight:600; color:var(--ink);">Distribuidor</span>
+            <span class="card-meta">Crea la ficha legal de tu empresa para mostrar tu catálogo — sujeta a revisión manual de Mobau.</span>
+          </label>
+        </div>
+      </fieldset>
       <div class="field full"><label for="reg-nombre">Nombre completo</label><input id="reg-nombre" type="text" required placeholder="Ej. Ana María Rosario"></div>
       <div class="field full"><label for="reg-email">Email</label><input id="reg-email" type="email" required placeholder="nombre@estudio.com"></div>
       <p id="registro-error" style="display:none; color:var(--danger); font-size:13px; margin:-8px 0 14px;"></p>
@@ -91,19 +108,61 @@
   const registroForm = document.getElementById("registro-form");
   const registroError = document.getElementById("registro-error");
   const registroBtn = document.getElementById("registro-submit-btn");
+  const registroIntro = document.getElementById("registro-intro");
+  const typeProfessionalInput = document.getElementById("reg-type-professional");
+  const typeSupplierInput = document.getElementById("reg-type-supplier");
+
+  const INTRO_TEXT = {
+    individual: "Guarda proyectos, retómalos cuando quieras y agiliza tus próximas solicitudes.",
+    supplier: "Vas a crear una cuenta de distribuidor — es independiente de cualquier cuenta profesional que ya tengas en Mobau. Usa un correo distinto si ya usas Mobau como arquitecto o interiorista."
+  };
+
+  /* ?tipo=distribuidor preselecciona "Distribuidor" — cualquier otro valor
+     (incluido uno ausente o no reconocido, p.ej. ?tipo=admin) deja el
+     default "Arquitecto / Interiorista". Comparación exacta, nunca parcial. */
+  if (new URLSearchParams(window.location.search).get("tipo") === "distribuidor") {
+    typeSupplierInput.checked = true;
+  }
+
+  function selectedAccountType() {
+    return typeSupplierInput.checked ? "supplier" : "individual";
+  }
+
+  function updateIntroText() {
+    registroIntro.textContent = INTRO_TEXT[selectedAccountType()];
+  }
+
+  typeProfessionalInput.addEventListener("change", updateIntroText);
+  typeSupplierInput.addEventListener("change", updateIntroText);
+  updateIntroText();
 
   registroForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = document.getElementById("reg-nombre").value.trim();
     const email = document.getElementById("reg-email").value.trim();
+    const accountType = selectedAccountType();
     registroError.style.display = "none";
     registroBtn.disabled = true;
     registroBtn.textContent = "Enviando…";
 
-    const { error } = await MobauAuth.sendMagicLink(email, { name });
+    /* El backend conserva su propia lista blanca (handle_new_user()):
+       solo account_type === "supplier" crea rol supplier; cualquier otro
+       valor crea individual. nextPage solo se usa para el alta de
+       distribuidor y pasa por la lista blanca de sendMagicLink(). */
+    const extraData = accountType === "supplier" ? { name, account_type: "supplier" } : { name };
+    const nextPage = accountType === "supplier" ? "perfil-distribuidor.html" : undefined;
+    const { error } = await MobauAuth.sendMagicLink(email, extraData, nextPage);
 
     if (error) {
-      registroError.textContent = "No pudimos enviar el enlace. Verifica el correo e intenta de nuevo.";
+      /* No hay comprobación previa de si el correo ya existe: Supabase no
+         distingue alta de acceso en el enlace mágico, así que un mensaje
+         específico de "correo ya usado" solo podría basarse en el error
+         crudo de Supabase — y podría llegar a revelar datos de una cuenta
+         ajena. Por eso, ante cualquier error en el alta de distribuidor,
+         se muestra siempre el mismo mensaje genérico y no revelador. */
+      registroError.textContent = accountType === "supplier"
+        ? "No se pudo crear esta cuenta. Si ya tienes una cuenta Mobau, utiliza otro correo para la cuenta distribuidora o contacta con Mobau para recibir ayuda."
+        : "No pudimos enviar el enlace. Verifica el correo e intenta de nuevo.";
       registroError.style.display = "block";
       registroBtn.disabled = false;
       registroBtn.textContent = "Enviarme el enlace de acceso";

@@ -44,6 +44,18 @@
     <button type="button" class="btn btn-primary" id="dp-retry-btn">Reintentar</button>
   </div>
 
+  <!-- Sesión válida, pero no es una cuenta de distribuidor (arquitecto,
+       interiorista, estudio o admin) — nunca se redirige en silencio;
+       se explica y se ofrece crear una cuenta de distribuidor aparte. -->
+  <div id="dp-not-supplier" class="cart-empty" style="display:none;">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Esta sección es para cuentas de distribuidor</p>
+    <p id="dp-not-supplier-detail" style="margin:0 0 14px;"></p>
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary" id="dp-create-supplier-btn">Crear cuenta de distribuidor</button>
+      <a href="index.html" class="btn btn-outline">Volver al inicio</a>
+    </div>
+  </div>
+
   <!-- Estado de verificación (solo lectura): lo escribe Mobau, nunca el distribuidor. -->
   <div id="dp-status" class="account-section" style="display:none;">
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
@@ -193,7 +205,7 @@
   }
 
   function showOnly(...visibleIds){
-    ["dp-loading", "dp-load-error", "dp-status", "dp-view", "dp-form"].forEach(id => {
+    ["dp-loading", "dp-load-error", "dp-not-supplier", "dp-status", "dp-view", "dp-form"].forEach(id => {
       $(id).style.display = visibleIds.includes(id) ? "block" : "none";
     });
   }
@@ -342,7 +354,11 @@
       return;
     }
     if (!account || account.role !== "supplier"){
-      window.location.href = "index.html";
+      const email = session.user.email;
+      $("dp-not-supplier-detail").textContent = email
+        ? `Tu cuenta (${email}) está registrada como profesional. Un distribuidor es una cuenta separada e independiente en Mobau — te recomendamos usar un correo corporativo distinto.`
+        : "Tu cuenta está registrada como profesional. Un distribuidor es una cuenta separada e independiente en Mobau.";
+      showOnly("dp-not-supplier");
       return;
     }
 
@@ -368,6 +384,17 @@
   }
 
   $("dp-retry-btn").addEventListener("click", loadProfile);
+
+  /* Cierra la sesión profesional actual (sin pasar por MobauAuth.signOut(),
+     que redirige siempre a login.html) y abre el registro con "Distribuidor"
+     preseleccionado. "Volver al inicio" (enlace de arriba) es un <a> normal:
+     nunca cierra la sesión, el usuario sigue conectado con su cuenta. */
+  $("dp-create-supplier-btn").addEventListener("click", async () => {
+    const btn = $("dp-create-supplier-btn");
+    btn.disabled = true;
+    await supabaseClient.auth.signOut();
+    window.location.href = "registro.html?tipo=distribuidor";
+  });
 
   (async () => {
     session = await MobauAuth.requireSession();
