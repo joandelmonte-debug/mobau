@@ -411,7 +411,7 @@ function buildProducts(rows){
 function buildDistributors(rows){
   const out = {};
   stableCatalogOrder(rows, r => r.id, STATIC_ORDER.distributors).forEach(r => {
-    out[r.id] = { nombre: r.name, ubicacion: r.location || "", categorias: r.categories || [], descripcion: r.description || "" };
+    out[r.id] = { nombre: r.name, ubicacion: r.location || "", categorias: r.categories || [], descripcion: r.description || "", email: r.contact_email || null, telefono: r.contact_phone || null, web: safeUrl(r.website) || null };
   });
   return out;
 }
@@ -480,7 +480,7 @@ function loadCatalog(options = {}){
     try {
       const [productRows, distributorRows, categoryRows] = await Promise.all([
         fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active").order("id")),
-        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, created_at").order("id")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, contact_email, contact_phone, website, created_at").order("id")),
         fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, () => supabaseClient.from("categories").select("id, name, subcategories").order("id"))
       ]);
       const built = {

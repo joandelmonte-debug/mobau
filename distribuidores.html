@@ -33,6 +33,75 @@
       padding-right: 0;
     }
   }
+
+  /* Todo lo de aquí en adelante es local a distribuidores.html, mismo
+     principio que el ajuste de arriba: nunca en styles.css. */
+
+  /* Label del buscador — visualmente oculto (el placeholder ya lo
+     explica en pantalla), pero real para lectores de pantalla. Mismo
+     patrón exacto que catalogo.html (.search-bar__label). */
+  .search-bar__label{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  /* Barra de herramientas: buscador a la izquierda, alternar vista a
+     la derecha — se apilan en una sola columna en móvil. */
+  .directory-toolbar{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; margin-bottom:18px;
+  }
+  .directory-toolbar .search-bar{ flex:1 1 320px; margin-bottom:0; max-width:420px; }
+  .directory-view-toggle{ display:flex; gap:8px; }
+
+  /* Categoría — mismo patrón visual y de comportamiento que los chips
+     de catalogo.html/proyectos-detalle.html (.category-filter__chip/
+     is-active/chip-check), pero con las categorías reales presentes
+     entre los distribuidores cargados, nunca una lista fija. */
+  .category-filter__chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
+  .category-filter__chip{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:6px 13px; border-radius:100px; border:1px solid var(--line-strong);
+    background:var(--bg); color:var(--ink-soft); font-size:13px; font-family:var(--f-body);
+    cursor:pointer; line-height:1.3;
+  }
+  .category-filter__chip:hover{ border-color:var(--ink-faint); }
+  .category-filter__chip.is-active{
+    border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); font-weight:600;
+  }
+  .category-filter__chip .chip-check{ width:12px; height:12px; flex-shrink:0; display:none; }
+  .category-filter__chip.is-active .chip-check{ display:block; }
+
+  /* Bloque de contacto (email/teléfono/web) — compartido entre la
+     tarjeta (grid) y la fila de tabla (lista), mismo tamaño de texto
+     que .provider-loc para no competir con el nombre. */
+  .provider-contact{ display:flex; flex-direction:column; gap:2px; font-size:13px; }
+  .provider-contact a{ color: var(--ink-soft); text-decoration:none; }
+  .provider-contact a:hover{ color: var(--accent-ink); text-decoration:underline; }
+  .provider-count{ font-size:12.5px; color:var(--ink-faint); }
+
+  /* Vista de lista: tabla real (encabezados de columna, filas densas)
+     para la lectura de directorio — usa los mismos tokens de diseño
+     (var(--line), var(--radius), var(--f-head)/var(--f-mono)) que ya
+     usa el resto del sitio, sin definir ningún color ni fuente nueva. */
+  .distributor-table-wrap{
+    border:1px solid var(--line); border-radius:var(--radius-lg);
+    overflow:hidden; overflow-x:auto;
+  }
+  .distributor-table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  .distributor-table th{
+    text-align:left; font-family:var(--f-body); font-weight:600; font-size:12px;
+    text-transform:uppercase; letter-spacing:.03em; color:var(--ink-faint);
+    padding:12px 16px; background:var(--surface); border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .distributor-table td{
+    padding:14px 16px; border-bottom:1px solid var(--line); vertical-align:top;
+  }
+  .distributor-table tr:last-child td{ border-bottom:none; }
+  .distributor-table .provider-mark{ font-size:14.5px; }
+  .distributor-table .provider-cats{ margin:4px 0 0; }
+  .distributor-table td.col-actions{ text-align:right; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -63,7 +132,45 @@
   </div>
 </div>
 
-<main class="wrap provider-grid" id="provider-grid"></main>
+<main class="wrap" style="padding: 40px 0 100px;">
+
+  <div class="directory-toolbar">
+    <div class="search-bar">
+      <label for="distributor-search" class="search-bar__label">Buscar distribuidores</label>
+      <input type="search" id="distributor-search" placeholder="Buscar por nombre o descripción…">
+    </div>
+    <div class="directory-view-toggle" role="group" aria-label="Tipo de vista">
+      <button type="button" class="btn btn-sm btn-primary" id="view-grid-btn" aria-pressed="true">Cuadrícula</button>
+      <button type="button" class="btn btn-sm btn-outline" id="view-list-btn" aria-pressed="false">Lista</button>
+    </div>
+  </div>
+
+  <div class="category-filter__chips" id="distributor-category-chips" role="group" aria-label="Filtrar por categoría"></div>
+
+  <p id="distributor-count" class="card-meta" style="margin:0 0 16px;"></p>
+
+  <div id="distributors-empty" class="cart-empty" style="display:none;">
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No encontramos distribuidores.</p>
+    <p style="margin:0;">Prueba con otra palabra o quita algún filtro de categoría.</p>
+  </div>
+
+  <div class="wrap provider-grid" id="provider-grid" style="padding:0;"></div>
+  <div class="distributor-table-wrap" id="provider-list" style="display:none;">
+    <table class="distributor-table">
+      <thead>
+        <tr>
+          <th>Distribuidor</th>
+          <th>Categorías</th>
+          <th>Contacto</th>
+          <th>Productos</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="provider-table-body"></tbody>
+    </table>
+  </div>
+
+</main>
 
 <footer class="site-footer" id="contacto">
   <div class="wrap">
@@ -107,8 +214,76 @@
 <script src="script.js"></script>
 <script>
 runWithCatalog(() => {
-  const grid = document.getElementById("provider-grid");
-  grid.innerHTML = Object.entries(DISTRIBUTORS).map(([key, d]) => `
+  const state = { search: "", categoria: new Set(), view: "grid" };
+
+  /* Categorías reales presentes entre los distribuidores cargados —
+     nunca una lista fija: si un distribuidor nuevo trae una categoría
+     que hoy no existe en ningún otro, aparece sola sin tocar este
+     archivo (mismo principio que ya usa catalogo.html con PRODUCTS). */
+  function getPresentCategories(){
+    const set = new Set();
+    Object.values(DISTRIBUTORS).forEach(d => (d.categorias || []).forEach(c => set.add(c)));
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }
+
+  function renderCategoryChips(){
+    const cats = getPresentCategories();
+    const chipsEl = document.getElementById("distributor-category-chips");
+    const chipHtml = (value, label) => {
+      const active = value === "" ? state.categoria.size === 0 : state.categoria.has(value);
+      return `
+        <button type="button" class="category-filter__chip${active ? " is-active" : ""}" data-category="${escapeHtml(value)}" aria-pressed="${active}">
+          <svg class="chip-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>${escapeHtml(label)}</span>
+        </button>`;
+    };
+    chipsEl.innerHTML = chipHtml("", "Todas") + cats.map(c => chipHtml(c, c)).join("");
+    chipsEl.querySelectorAll(".category-filter__chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const value = btn.dataset.category;
+        if (value === "") state.categoria.clear();
+        else if (state.categoria.has(value)) state.categoria.delete(value);
+        else state.categoria.add(value);
+        renderCategoryChips();
+        render();
+      });
+    });
+  }
+
+  /* Búsqueda simple por substring (nombre + descripción): con 7–30
+     distribuidores no hace falta el motor de relevancia/difuso de
+     searchProducts() (script.js), pensado para el catálogo de
+     productos — reutiliza solo normalizeSearchText/searchTokens. */
+  function matchesSearch(d){
+    const query = normalizeSearchText(state.search);
+    if (query.length < 2) return true;
+    const haystack = normalizeSearchText(`${d.nombre} ${d.descripcion || ""}`);
+    return searchTokens(state.search).every(tok => haystack.includes(tok));
+  }
+
+  function matchesFilters(d){
+    return (state.categoria.size === 0 || (d.categorias || []).some(c => state.categoria.has(c))) && matchesSearch(d);
+  }
+
+  function activeProductCount(key){
+    return PRODUCTS.filter(p => p.distribuidor === key && p.status !== "archived").length;
+  }
+
+  /* Filas de contacto (email/teléfono/web) — se omite cada una que no
+     exista, nunca un "No disponible" repetido tres veces por tarjeta.
+     d.web ya viene validado por safeUrl() en buildDistributors()
+     (script.js); aquí solo falta escapar el texto visible. */
+  function contactMarkup(d){
+    const rows = [];
+    if (d.email) rows.push(`<a href="mailto:${escapeHtml(d.email)}">${escapeHtml(d.email)}</a>`);
+    if (d.telefono) rows.push(`<a href="tel:${escapeHtml(d.telefono.replace(/[^0-9+]/g, ""))}">${escapeHtml(d.telefono)}</a>`);
+    if (d.web) rows.push(`<a href="${escapeHtml(d.web)}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.web.replace(/^https?:\/\//, ""))}</a>`);
+    return rows.length ? `<div class="provider-contact">${rows.join("")}</div>` : "";
+  }
+
+  function renderCard([key, d]){
+    const count = activeProductCount(key);
+    return `
     <article class="provider-card">
       <div class="provider-top">
         <div>
@@ -120,10 +295,84 @@ runWithCatalog(() => {
         ${d.categorias.map(c => `<span class="chip">${escapeHtml(c)}</span>`).join("")}
       </div>
       <p style="margin-bottom:2px;">${escapeHtml(d.descripcion)}</p>
+      ${contactMarkup(d)}
+      <p class="provider-count">${count} ${count === 1 ? "producto activo" : "productos activos"}</p>
       <a href="catalogo.html?distribuidor=${escapeHtml(encodeURIComponent(key))}" class="btn btn-outline">Ver productos</a>
-    </article>
-  `).join("");
-  propagateCartLinks();
+    </article>`;
+  }
+
+  function renderRow([key, d]){
+    const count = activeProductCount(key);
+    return `
+      <tr>
+        <td>
+          <div class="provider-mark">${escapeHtml(d.nombre)}</div>
+          <div class="provider-loc">${escapeHtml(d.ubicacion)}</div>
+        </td>
+        <td>
+          <div class="provider-cats">${d.categorias.map(c => `<span class="chip">${escapeHtml(c)}</span>`).join("")}</div>
+        </td>
+        <td>${contactMarkup(d) || "—"}</td>
+        <td>${count} ${count === 1 ? "producto" : "productos"}</td>
+        <td class="col-actions"><a href="catalogo.html?distribuidor=${escapeHtml(encodeURIComponent(key))}" class="btn btn-outline btn-sm">Ver productos</a></td>
+      </tr>`;
+  }
+
+  function render(){
+    const entries = Object.entries(DISTRIBUTORS)
+      .filter(([, d]) => matchesFilters(d))
+      .sort(([, a], [, b]) => a.nombre.localeCompare(b.nombre, "es"));
+
+    document.getElementById("distributor-count").textContent =
+      `${entries.length} ${entries.length === 1 ? "distribuidor" : "distribuidores"}`;
+
+    const empty = document.getElementById("distributors-empty");
+    const grid = document.getElementById("provider-grid");
+    const listWrap = document.getElementById("provider-list");
+
+    if (!entries.length){
+      empty.style.display = "block";
+      grid.style.display = "none";
+      listWrap.style.display = "none";
+      propagateCartLinks();
+      return;
+    }
+    empty.style.display = "none";
+
+    if (state.view === "grid"){
+      grid.innerHTML = entries.map(renderCard).join("");
+      grid.style.display = "grid";
+      listWrap.style.display = "none";
+    } else {
+      document.getElementById("provider-table-body").innerHTML = entries.map(renderRow).join("");
+      listWrap.style.display = "block";
+      grid.style.display = "none";
+    }
+    propagateCartLinks();
+  }
+
+  document.getElementById("distributor-search").addEventListener("input", (e) => {
+    state.search = e.target.value;
+    render();
+  });
+
+  function setView(view){
+    state.view = view;
+    const gridBtn = document.getElementById("view-grid-btn");
+    const listBtn = document.getElementById("view-list-btn");
+    gridBtn.classList.toggle("btn-primary", view === "grid");
+    gridBtn.classList.toggle("btn-outline", view !== "grid");
+    gridBtn.setAttribute("aria-pressed", String(view === "grid"));
+    listBtn.classList.toggle("btn-primary", view === "list");
+    listBtn.classList.toggle("btn-outline", view !== "list");
+    listBtn.setAttribute("aria-pressed", String(view === "list"));
+    render();
+  }
+  document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid"));
+  document.getElementById("view-list-btn").addEventListener("click", () => setView("list"));
+
+  renderCategoryChips();
+  render();
 }, { status: "#provider-grid" });
 </script>
 </body>
