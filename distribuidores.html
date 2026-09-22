@@ -45,14 +45,16 @@
     overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
   }
 
-  /* Barra de herramientas: buscador a la izquierda, alternar vista a
-     la derecha — se apilan en una sola columna en móvil. */
+  /* Barra de herramientas: buscador a la izquierda (ocupa todo el
+     ancho disponible), alternar vista a la derecha, ambos centrados
+     verticalmente en la misma fila — se apilan en una sola columna en
+     móvil (flex-wrap ya cubre ese caso). */
   .directory-toolbar{
-    display:flex; align-items:flex-end; justify-content:space-between;
+    display:flex; align-items:center; justify-content:space-between;
     gap:16px; flex-wrap:wrap; margin-bottom:18px;
   }
-  .directory-toolbar .search-bar{ flex:1 1 320px; margin-bottom:0; max-width:420px; }
-  .directory-view-toggle{ display:flex; gap:8px; }
+  .directory-toolbar .search-bar{ flex:1 1 320px; margin-bottom:0; }
+  .directory-view-toggle{ display:flex; gap:8px; flex-shrink:0; }
 
   /* Categoría — mismo patrón visual y de comportamiento que los chips
      de catalogo.html/proyectos-detalle.html (.category-filter__chip/
