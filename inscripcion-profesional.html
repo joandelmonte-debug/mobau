@@ -28,8 +28,8 @@
 
 <div class="page-head">
   <div class="wrap">
-    <div class="eyebrow">Perfil</div>
-    <h1 id="page-title">Completa tu perfil profesional</h1>
+    <div class="eyebrow" id="page-eyebrow">Perfil</div>
+    <h1 id="page-title">Completa tu perfil</h1>
     <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Estos datos nos ayudan a identificarte ante los distribuidores cuando solicites una cotización.</p>
   </div>
 </div>
@@ -62,19 +62,21 @@
        existe). -->
   <form class="form-card" id="pp-form" style="display:none;">
     <div class="field full">
-      <label for="pp-name">Nombre profesional</label>
+      <label for="pp-name">Nombre</label>
       <input id="pp-name" type="text" required placeholder="Ej. Ana María Rosario">
     </div>
     <div class="field full">
-      <label for="pp-type">Tipo profesional</label>
+      <label for="pp-type">Tipo de perfil</label>
       <select id="pp-type" required>
         <option value="">Selecciona una opción</option>
         <option value="arquitecto">Arquitecto/a</option>
         <option value="interiorista">Interiorista</option>
         <option value="disenador">Diseñador/a</option>
         <option value="estudio">Estudio</option>
+        <option value="particular">Propietario / particular</option>
         <option value="otro">Otro</option>
       </select>
+      <p class="card-meta" id="pp-type-hint" style="margin:8px 0 0;" hidden></p>
     </div>
     <div class="field full">
       <label for="pp-city">Ciudad</label>
@@ -85,7 +87,7 @@
       <input id="pp-studio" type="text" placeholder="Ej. Rosario Arquitectos">
     </div>
     <div class="field full">
-      <label for="pp-phone">Teléfono <span class="hint">(opcional)</span></label>
+      <label for="pp-phone">Teléfono <span class="hint" id="pp-phone-optional">(opcional)</span></label>
       <input id="pp-phone" type="tel" placeholder="+1 (809) 000 0000">
     </div>
     <div class="field full">
@@ -153,8 +155,8 @@
 
     <div class="account-section" style="margin-bottom:0;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px;">
-        <h2 style="margin:0;">Información profesional</h2>
-        <button type="button" class="icon-btn-muted" id="professional-edit-btn" aria-label="Editar información profesional" title="Editar información profesional">
+        <h2 style="margin:0;">Información de perfil</h2>
+        <button type="button" class="icon-btn-muted" id="professional-edit-btn" aria-label="Editar información de perfil" title="Editar información de perfil">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
         </button>
       </div>
@@ -165,7 +167,7 @@
           <p id="professional-view-studio" style="margin:0;">—</p>
         </div>
         <div>
-          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Cargo o función</p>
+          <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Tipo de perfil</p>
           <p id="professional-view-type" style="margin:0;">—</p>
         </div>
         <div>
@@ -188,14 +190,16 @@
           <input id="professional-edit-studio" type="text">
         </div>
         <div class="field" style="margin-bottom:0;">
-          <label for="professional-edit-type">Cargo o función</label>
+          <label for="professional-edit-type">Tipo de perfil</label>
           <select id="professional-edit-type" required>
             <option value="arquitecto">Arquitecto/a</option>
             <option value="interiorista">Interiorista</option>
             <option value="disenador">Diseñador/a</option>
             <option value="estudio">Estudio</option>
+            <option value="particular">Propietario / particular</option>
             <option value="otro">Otro</option>
           </select>
+          <p class="card-meta" id="professional-edit-type-hint" style="margin:8px 0 0;" hidden></p>
         </div>
         <div class="field" style="margin-bottom:0;">
           <label for="professional-edit-city">Ciudad</label>
@@ -256,6 +260,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-client.js"></script>
+<script src="perfil-profesional.js"></script>
 <script src="nav-session.js"></script>
 <script src="proyectos-data.js"></script>
 <script src="seleccion-data.js"></script>
@@ -265,13 +270,38 @@
   let isUpdate = false;
   let profile = null; // última fila real de professional_profiles, se mantiene al día tras cada guardado
 
-  const PROFESSIONAL_TYPE_LABELS = {
-    arquitecto: "Arquitecto/a",
-    interiorista: "Interiorista",
-    disenador: "Diseñador/a",
-    estudio: "Estudio",
-    otro: "Otro"
-  };
+  /* Modo alta (Punto 35A-1b): ?paso=perfil. Respaldo del alta cuando la
+     cuenta ya tiene sesión pero no perfil (enlace abierto en otro dispositivo,
+     borrador caducado, cuenta antigua sin perfil). Mismo formulario, con
+     teléfono obligatorio y "Continuar" hacia el siguiente paso
+     (MobauAccess.resolveNext). Sin ?paso=perfil la página funciona como
+     antes. El plan de la URL solo decide la navegación y se valida con la
+     lista blanca. Validación compartida: MobauPerfil (perfil-profesional.js). */
+  const pageParams = new URLSearchParams(window.location.search);
+  const isOnboarding = pageParams.get("paso") === "perfil";
+  const onboardingPlan = MobauAccess.normalizePlan(pageParams.get("plan"));
+
+  /* Siguiente paso del alta (activación del plan) o destino final. */
+  async function continueOnboarding(){
+    const destination = await MobauAccess.resolveNext(session, { explicitPlan: onboardingPlan });
+    window.location.replace(destination.url);
+  }
+
+  function setupOnboardingView(){
+    document.getElementById("page-eyebrow").textContent = "Crear cuenta · Perfil";
+    document.getElementById("page-title").textContent = "Completa tu perfil";
+    document.getElementById("page-subtitle").textContent = "Tu correo ya está confirmado. Con estos datos te identificamos ante los distribuidores cuando solicites una cotización. Podrás editarlos después desde Mi perfil.";
+    document.getElementById("pp-phone").required = true;
+    document.getElementById("pp-phone-optional").hidden = true;
+    document.getElementById("pp-submit-btn").textContent = "Continuar";
+    const metadata = session.user.user_metadata || {};
+    const nameInput = document.getElementById("pp-name");
+    if (!nameInput.value && typeof metadata.name === "string") nameInput.value = metadata.name.trim().slice(0, 120);
+  }
+
+  /* Ayuda bajo el tipo de perfil (p. ej. "Propietario / particular"). */
+  MobauPerfil.bindTypeHint(document.getElementById("pp-type"), document.getElementById("pp-type-hint"));
+  const refreshEditTypeHint = MobauPerfil.bindTypeHint(document.getElementById("professional-edit-type"), document.getElementById("professional-edit-type-hint"));
 
   function fieldValue(id){
     return document.getElementById(id).value.trim();
@@ -284,12 +314,18 @@
     const btn = document.getElementById("pp-submit-btn");
     errorEl.style.display = "none";
 
-    const professional_name = fieldValue("pp-name");
-    const professional_type = document.getElementById("pp-type").value;
-    const city = fieldValue("pp-city");
+    const result = MobauPerfil.validate({
+      professional_name: fieldValue("pp-name"),
+      professional_type: document.getElementById("pp-type").value,
+      city: fieldValue("pp-city"),
+      studio_name: fieldValue("pp-studio"),
+      phone: fieldValue("pp-phone"),
+      website: fieldValue("pp-website"),
+      instagram: fieldValue("pp-instagram")
+    }, { requirePhone: isOnboarding });
 
-    if (!professional_name || !professional_type || !city){
-      errorEl.textContent = "Completa nombre profesional, tipo profesional y ciudad para continuar.";
+    if (!result.ok){
+      errorEl.textContent = result.error;
       errorEl.style.display = "block";
       return;
     }
@@ -297,15 +333,7 @@
     btn.disabled = true;
     btn.textContent = "Guardando…";
 
-    const record = {
-      professional_name,
-      professional_type,
-      city,
-      studio_name: fieldValue("pp-studio") || null,
-      phone: fieldValue("pp-phone") || null,
-      website: fieldValue("pp-website") || null,
-      instagram: fieldValue("pp-instagram") || null
-    };
+    const record = result.record;
 
     const { error } = await supabaseClient
       .from("professional_profiles")
@@ -315,15 +343,16 @@
       errorEl.textContent = error.message || "No pudimos guardar tu perfil. Intenta de nuevo.";
       errorEl.style.display = "block";
       btn.disabled = false;
-      btn.textContent = "Guardar perfil";
+      btn.textContent = isOnboarding ? "Continuar" : "Guardar perfil";
       return;
     }
 
     isUpdate = true;
 
-    const despues = new URLSearchParams(window.location.search).get("despues");
-    if (despues === "crear-proyecto"){
-      window.location.href = "seleccion.html?despues=crear-proyecto";
+    if (isOnboarding){
+      MobauPerfil.clearDraft(); // el perfil ya existe: ningún borrador pendiente
+      btn.textContent = "Continuando…";
+      await continueOnboarding();
       return;
     }
 
@@ -349,7 +378,7 @@
     document.getElementById("personal-view-phone").textContent = profile.phone || "No indicado";
 
     document.getElementById("professional-view-studio").textContent = profile.studio_name || "No indicado";
-    document.getElementById("professional-view-type").textContent = PROFESSIONAL_TYPE_LABELS[profile.professional_type] || profile.professional_type || "No indicado";
+    document.getElementById("professional-view-type").textContent = MobauPerfil.typeLabel(profile.professional_type) || profile.professional_type || "No indicado";
     document.getElementById("professional-view-city").textContent = profile.city || "No indicado";
     document.getElementById("professional-view-website").textContent = profile.website || "No indicado";
     document.getElementById("professional-view-instagram").textContent = profile.instagram || "No indicado";
@@ -424,6 +453,7 @@
     enterEditMode("professional", () => {
       document.getElementById("professional-edit-studio").value = profile.studio_name || "";
       document.getElementById("professional-edit-type").value = profile.professional_type || "";
+      refreshEditTypeHint();
       document.getElementById("professional-edit-city").value = profile.city || "";
       document.getElementById("professional-edit-website").value = profile.website || "";
       document.getElementById("professional-edit-instagram").value = profile.instagram || "";
@@ -438,7 +468,12 @@
     const professional_type = document.getElementById("professional-edit-type").value;
     const city = fieldValue("professional-edit-city");
     if (!professional_type || !city){
-      errorEl.textContent = "Completa el cargo/función y la ciudad para continuar.";
+      errorEl.textContent = "Completa el tipo de perfil y la ciudad para continuar.";
+      errorEl.style.display = "block";
+      return;
+    }
+    if (!MobauPerfil.typeLabel(professional_type)){
+      errorEl.textContent = "Selecciona un tipo de perfil de la lista.";
       errorEl.style.display = "block";
       return;
     }
@@ -467,7 +502,7 @@
     profile = { ...profile, professional_type, city, studio_name, website, instagram };
     renderProfileView();
     exitEditMode("professional");
-    showToast("Información profesional guardada.");
+    showToast("Información de perfil guardada.");
   });
 
   /* Único punto que decide qué se muestra. Separado en una función (en
@@ -498,6 +533,14 @@
       return;
     }
 
+    /* En el alta, un perfil que ya existe no se vuelve a pedir: se sigue
+       directamente al siguiente paso. */
+    if (existing && isOnboarding){
+      document.getElementById("pp-loading").style.display = "block";
+      await continueOnboarding();
+      return;
+    }
+
     if (existing){
       isUpdate = true;
       profile = existing;
@@ -511,6 +554,7 @@
     /* Sin perfil de verdad (data === null y error === null) — nunca se
        crea nada aquí, solo se muestra el formulario de alta de siempre
        para que el usuario decida completarlo. */
+    if (isOnboarding) setupOnboardingView();
     document.getElementById("pp-form").style.display = "block";
   }
 
@@ -523,7 +567,17 @@
        arranca después de tener "session" resuelta de verdad, nunca
        antes. */
     session = await MobauAuth.requireSession();
-    if (!session) return; // ya redirigió a login.html
+    if (!session) return; // ya redirigió a acceso.html
+
+    /* El alta profesional nunca se ofrece a una cuenta de distribuidor. */
+    if (isOnboarding){
+      const facts = await MobauAccess.accountFacts(session);
+      if (facts.isSupplier){
+        MobauPerfil.clearDraft();
+        window.location.replace("perfil-distribuidor.html");
+        return;
+      }
+    }
 
     await loadProfile();
   })();

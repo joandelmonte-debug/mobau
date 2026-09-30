@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crear cuenta — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* Estilos locales de esta página (nunca styles.css), con los mismos
+     tokens de diseño del resto del sitio. */
+  .cc-wrap{ padding-top: 56px; padding-bottom: 100px; } /* solo vertical: el lateral es el de .wrap */
+  .cc-head{ max-width: 640px; }
+  .cc-head h1{ font-size: 32px; margin: 0 0 12px; }
+  .cc-head p{ margin: 0 0 32px; }
+  .cc-grid{ display:grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 48px; align-items:start; }
+  .cc-form-card .field:last-of-type{ margin-bottom: 8px; }
+  .cc-save-note{ font-size: 13px; color: var(--ink-soft); margin: 18px 0 16px; max-width: none; }
+  .cc-error{ color: var(--danger); font-size: 13.5px; margin: 0 0 14px; }
+  .cc-hint{ font-size: 13px; color: var(--ink-soft); margin: 10px 0 0; }
+  .cc-type-hint{ font-size: 13px; color: var(--ink-soft); margin: 8px 0 0; }
+  .cc-discard{ background:none; border:none; padding:0; margin-top: 16px; font-size: 13px; color: var(--ink-soft); text-decoration: underline; cursor:pointer; }
+  .cc-discard:hover{ color: var(--ink); }
+  .cc-discarded{ font-size: 13px; color: var(--accent-ink); margin: 0 0 16px; }
+  .cc-links{ font-size: 13.5px; color: var(--ink-soft); margin-top: 24px; max-width: none; }
+  .cc-links a, .cc-state p a, .cc-aside-link{ color: var(--accent); text-decoration: underline; }
+
+  /* Plan elegido (contexto del alta) y pasos. */
+  .cc-aside{ position: sticky; top: 96px; }
+  .cc-plan-card{ border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); padding: 22px 22px 20px; }
+  .cc-label{ font-size: 12.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; }
+  .cc-plan-name{ font-family: var(--f-head); font-size: 20px; font-weight: 600; color: var(--ink); margin: 0; }
+  .cc-plan-price{ font-size: 14px; color: var(--ink); margin: 4px 0 0; }
+  .cc-plan-text{ font-size: 13.5px; margin: 10px 0 0; }
+  .cc-change{ background:none; border:none; padding:0; margin-top: 14px; font-size: 13.5px; font-weight: 600; color: var(--accent); cursor:pointer; }
+  .cc-change:hover{ text-decoration: underline; }
+  .cc-picker{ margin: 16px 0 0; }
+  .cc-picker legend{ font-size: 13.5px; padding: 0 0 10px; margin-bottom: 10px; }
+  .cc-option{ display:flex; align-items:baseline; gap:10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); margin-bottom: 8px; cursor:pointer; font-size: 14px; }
+  .cc-option:hover{ border-color: var(--line-strong); }
+  .cc-option:has(input:checked){ border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .cc-option:has(input:focus-visible){ outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cc-option input{ margin: 0; align-self: center; }
+  .cc-option-name{ font-weight: 600; color: var(--ink); }
+  .cc-option-price{ margin-left:auto; color: var(--ink-soft); font-size: 13px; }
+  .cc-compare{ font-size: 13px; margin: 6px 0 0; }
+  .cc-steps{ margin: 22px 0 0; padding: 0; counter-reset: cc-step; }
+  .cc-steps li{ counter-increment: cc-step; display:flex; align-items:center; gap: 10px; padding: 9px 0; font-size: 13.5px; color: var(--ink-faint); border-top: 1px solid var(--line); }
+  .cc-steps li::before{ content: counter(cc-step); display:inline-flex; align-items:center; justify-content:center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); font-size: 12px; }
+  .cc-steps li[aria-current="step"]{ color: var(--ink); font-weight: 600; }
+  .cc-steps li[aria-current="step"]::before{ background: var(--accent); border-color: var(--accent); color: var(--white); }
+
+  .cc-state{ max-width: 520px; }
+  .cc-state h2{ font-size: 20px; margin: 0 0 8px; }
+  .cc-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 20px; }
+  @media (max-width: 900px){
+    .cc-wrap{ padding-top: 32px; padding-bottom: 80px; }
+    .cc-head h1{ font-size: 26px; }
+    .cc-head p{ margin-bottom: 24px; }
+    .cc-grid{ grid-template-columns: 1fr; gap: 24px; }
+    .cc-aside{ position: static; order: -1; } /* en móvil, el plan va primero */
+    .cc-steps{ display:none; }
+    .cc-form-card{ padding: 24px; }
+    .cc-actions .btn{ width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap cc-wrap">
+  <div class="cc-head">
+    <div class="eyebrow" id="cc-eyebrow">Crear cuenta · Paso 1</div>
+    <h1>Tu perfil</h1>
+    <p>Con estos datos te identificamos ante los distribuidores cuando prepares una solicitud. Al final te pediremos tu correo para confirmar la cuenta.</p>
+  </div>
+
+  <!-- Estado: perfil (sin email). Sin un plan válido no se puede continuar. -->
+  <div class="cc-grid" id="cc-state-form">
+    <section aria-label="Datos del perfil">
+      <p class="cc-discarded" id="cc-discarded-msg" role="status" hidden>Datos descartados. Este dispositivo ya no guarda tu perfil.</p>
+      <form class="form-card cc-form-card" id="cc-form">
+        <div class="field full">
+          <label for="cc-name">Nombre</label>
+          <input id="cc-name" type="text" autocomplete="name" required maxlength="120" placeholder="Ej. Ana María Rosario">
+        </div>
+        <div class="field full">
+          <label for="cc-type">Tipo de perfil</label>
+          <select id="cc-type" required>
+            <option value="">Selecciona una opción</option>
+          </select>
+          <p class="cc-type-hint" id="cc-type-hint" hidden></p>
+        </div>
+        <div class="field full">
+          <label for="cc-city">Ciudad</label>
+          <input id="cc-city" type="text" autocomplete="address-level2" required maxlength="80" placeholder="Ej. Santo Domingo">
+        </div>
+        <div class="field full">
+          <label for="cc-studio">Estudio o empresa <span class="hint">(opcional)</span></label>
+          <input id="cc-studio" type="text" autocomplete="organization" maxlength="120" placeholder="Ej. Rosario Arquitectos">
+        </div>
+        <div class="field full">
+          <label for="cc-phone">Teléfono de contacto</label>
+          <input id="cc-phone" type="tel" autocomplete="tel" required maxlength="40" placeholder="+1 (809) 000 0000">
+        </div>
+        <p class="cc-save-note" id="cc-save-note">Tus datos se guardan temporalmente en este dispositivo hasta que confirmes tu correo.</p>
+        <p class="cc-error" id="cc-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn-primary btn-block" id="cc-submit-btn" aria-describedby="cc-save-note cc-plan-hint">Continuar</button>
+        <p class="cc-hint" id="cc-plan-hint">Elige un plan para continuar.</p>
+        <button type="button" class="cc-discard" id="cc-discard-btn" hidden>Descartar estos datos</button>
+      </form>
+      <p class="cc-links">¿Ya tienes cuenta? <a href="acceso.html">Inicia sesión</a> · ¿Eres distribuidor? <a href="ficha-distribuidor.html">Muestra tu catálogo en Mobau</a></p>
+    </section>
+
+    <aside class="cc-aside" aria-label="Plan elegido">
+      <div class="cc-plan-card">
+        <p class="cc-label">Plan elegido</p>
+        <div id="cc-plan-summary" hidden>
+          <p class="cc-plan-name" id="cc-plan-name"></p>
+          <p class="cc-plan-price" id="cc-plan-price"></p>
+          <p class="cc-plan-text" id="cc-plan-text"></p>
+        </div>
+        <p class="cc-plan-text" id="cc-plan-empty" hidden>Todavía no has elegido un plan.</p>
+        <button type="button" class="cc-change" id="cc-change-btn" aria-expanded="false" aria-controls="cc-picker">Cambiar plan</button>
+        <fieldset class="cc-picker" id="cc-picker" hidden>
+          <legend>Elige tu plan</legend>
+          <label class="cc-option"><input type="radio" name="cc-plan" value="gratis"><span class="cc-option-name">Gratis</span><span class="cc-option-price">0 USD</span></label>
+          <label class="cc-option"><input type="radio" name="cc-plan" value="individual"><span class="cc-option-name">Individual</span><span class="cc-option-price">18 USD/mes</span></label>
+          <label class="cc-option"><input type="radio" name="cc-plan" value="estudio"><span class="cc-option-name">Estudio</span><span class="cc-option-price">39 USD/mes</span></label>
+          <p class="cc-compare"><a href="planes.html" class="cc-aside-link">Comparar planes</a></p>
+        </fieldset>
+      </div>
+      <ol class="cc-steps" id="cc-steps">
+        <li aria-current="step">Tu perfil</li>
+        <li>Tu correo</li>
+        <li id="cc-step-activation" hidden>Activación del plan</li>
+      </ol>
+    </aside>
+  </div>
+
+  <!-- Estado: ya hay una sesión iniciada en este navegador. -->
+  <section class="form-card cc-state" id="cc-state-signed-in" hidden>
+    <h2>Ya tienes una sesión iniciada</h2>
+    <p>Estás conectado como <strong id="cc-signed-email"></strong>.</p>
+    <p id="cc-signed-supplier" hidden>Esta sesión es de una cuenta de distribuidor.</p>
+    <div class="cc-actions">
+      <a href="inscripcion-profesional.html?paso=perfil" class="btn btn-primary" id="cc-profile-link" hidden>Completar tu perfil</a>
+      <a href="activar-plan.html" class="btn btn-primary" id="cc-activate-link" hidden>Solicitar activación</a>
+      <a href="perfil-distribuidor.html" class="btn btn-primary" id="cc-supplier-link" hidden>Ir a tu perfil de distribuidor</a>
+      <a href="index.html" class="btn btn-outline" id="cc-home-link">Ir a Mobau</a>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="ficha-distribuidor.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="ficha-distribuidor.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="perfil-profesional.js"></script>
+<script src="nav-session.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  /* Alta profesional (Punto 35A-1b), paso 1: perfil SIN email.
+     planes.html -> crear-cuenta.html?plan=... -> verificar-correo.html ->
+     enlace mágico -> (activar-plan.html si el plan lo requiere) -> destino.
+     Esta página no llama a Supabase para escribir nada: el perfil validado
+     queda como borrador en este dispositivo (MobauPerfil) y se crea al
+     volver del enlace. El plan, el motivo y el next de la URL solo se
+     aceptan si están en las listas blancas de MobauAccess; nunca se muestra
+     ningún valor recibido. */
+  const PLAN_INFO = {
+    gratis:     { name: "Gratis", price: "0 USD", text: "Guarda tu selección y solicita hasta 3 cotizaciones al mes." },
+    individual: { name: "Individual", price: "18 USD/mes · o 144 USD el primer año", text: "Diseñado para hasta 2 proyectos activos. Activación directa con Mobau durante el piloto." },
+    estudio:    { name: "Estudio", price: "39 USD/mes · o 312 USD el primer año", text: "Diseñado para hasta 10 proyectos activos y cowork para hasta 3 personas. Activación directa con Mobau durante el piloto." }
+  };
+  const FIELDS = {
+    professional_name: "cc-name",
+    professional_type: "cc-type",
+    city: "cc-city",
+    studio_name: "cc-studio",
+    phone: "cc-phone"
+  };
+
+  const params = new URLSearchParams(window.location.search);
+  const urlPlan = MobauAccess.normalizePlan(params.get("plan"));
+  const urlMotivo = MobauAccess.normalizeMotivo(params.get("motivo"));
+  const urlNext = MobauAccess.sanitizeNext(params.get("next"));
+
+  const $ = (id) => document.getElementById(id);
+  const radios = Array.from(document.querySelectorAll('input[name="cc-plan"]'));
+  const submitBtn = $("cc-submit-btn");
+
+  const draft = MobauPerfil.readDraft();
+  let plan = urlPlan || (draft && draft.plan) || null;
+
+  /* Opciones del tipo de perfil desde la lista compartida. */
+  MobauPerfil.TYPES.forEach((label, value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    $("cc-type").appendChild(option);
+  });
+
+  /* Al volver para editar, el formulario se rellena con el borrador. */
+  if (draft){
+    Object.keys(FIELDS).forEach(key => { $(FIELDS[key]).value = draft.profile[key] || ""; });
+    $("cc-discard-btn").hidden = false;
+  }
+  const refreshTypeHint = MobauPerfil.bindTypeHint($("cc-type"), $("cc-type-hint"));
+
+  function openPicker(open){
+    $("cc-picker").hidden = !open;
+    $("cc-change-btn").setAttribute("aria-expanded", open ? "true" : "false");
+    $("cc-change-btn").textContent = open ? "Ocultar opciones" : "Cambiar plan";
+  }
+
+  /* La URL refleja el plan elegido (para recargar o volver atrás), siempre
+     reconstruida desde valores ya validados. */
+  function syncUrl(){
+    const out = new URLSearchParams();
+    if (plan) out.set("plan", plan);
+    if (urlMotivo) out.set("motivo", urlMotivo);
+    if (urlNext) out.set("next", urlNext);
+    const query = out.toString();
+    history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
+  }
+
+  function renderPlan(){
+    const info = plan ? PLAN_INFO[plan] : null;
+    $("cc-plan-summary").hidden = !info;
+    $("cc-plan-empty").hidden = !!info;
+    if (info){
+      $("cc-plan-name").textContent = info.name;
+      $("cc-plan-price").textContent = info.price;
+      $("cc-plan-text").textContent = info.text;
+    }
+    radios.forEach(radio => { radio.checked = radio.value === plan; });
+    const totalSteps = MobauAccess.planRequiresActivation(plan) ? 3 : 2;
+    $("cc-eyebrow").textContent = plan ? `Crear cuenta · Paso 1 de ${totalSteps}` : "Crear cuenta · Paso 1";
+    $("cc-step-activation").hidden = totalSteps !== 3;
+    submitBtn.disabled = !plan;
+    $("cc-plan-hint").hidden = !!plan;
+  }
+
+  radios.forEach(radio => radio.addEventListener("change", () => {
+    plan = MobauAccess.normalizePlan(radio.value);
+    renderPlan();
+    syncUrl();
+  }));
+  $("cc-change-btn").addEventListener("click", () => openPicker($("cc-picker").hidden));
+
+  if (!plan){
+    $("cc-change-btn").hidden = true;
+    openPicker(true);
+  }
+  renderPlan();
+  syncUrl();
+
+  $("cc-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errorEl = $("cc-error");
+    errorEl.hidden = true;
+    $("cc-discarded-msg").hidden = true;
+    if (!plan){
+      renderPlan();
+      openPicker(true);
+      return;
+    }
+    const input = {};
+    Object.keys(FIELDS).forEach(key => { input[key] = $(FIELDS[key]).value; });
+    const result = MobauPerfil.validate(input, { requirePhone: true });
+    if (!result.ok){
+      errorEl.textContent = result.error;
+      errorEl.hidden = false;
+      return;
+    }
+    if (!MobauPerfil.saveDraft({ plan, profile: result.record })){
+      errorEl.textContent = "Este navegador no permite guardar datos temporales. Revisa si estás en modo privado o prueba con otro navegador.";
+      errorEl.hidden = false;
+      return;
+    }
+    /* La intención (motivo/next de una acción anterior) se conserva y se le
+       añade el plan: solo decide la navegación, nunca da permisos. */
+    const current = MobauAccess.peekIntent();
+    MobauAccess.saveIntent({
+      motivo: urlMotivo || (current && current.motivo),
+      next: urlNext || (current && current.next),
+      plan
+    });
+    window.location.href = `verificar-correo.html?plan=${plan}`;
+  });
+
+  $("cc-discard-btn").addEventListener("click", () => {
+    MobauPerfil.clearDraft();
+    $("cc-form").reset();
+    refreshTypeHint();
+    $("cc-error").hidden = true;
+    $("cc-discard-btn").hidden = true;
+    $("cc-discarded-msg").hidden = false;
+    $("cc-name").focus();
+  });
+
+  /* Con sesión ya iniciada no se crea otra cuenta, y un borrador que hubiera
+     en este dispositivo no es de esta cuenta: se descarta. Se ofrece el paso
+     que le falte a la cuenta actual. */
+  (async () => {
+    const session = await MobauAuth.getSession();
+    if (!session) return;
+    MobauPerfil.clearDraft();
+    const facts = await MobauAccess.accountFacts(session);
+    $("cc-signed-email").textContent = session.user.email || "";
+    if (facts.isSupplier){
+      $("cc-signed-supplier").hidden = false;
+      $("cc-supplier-link").hidden = false;
+    } else if (!facts.hasProfessionalProfile){
+      $("cc-profile-link").href = `inscripcion-profesional.html?paso=perfil${plan ? `&plan=${plan}` : ""}`;
+      $("cc-profile-link").hidden = false;
+    } else if (MobauAccess.planRequiresActivation(plan)){
+      const link = $("cc-activate-link");
+      link.href = `activar-plan.html?plan=${plan}`;
+      link.textContent = `Solicitar activación de ${PLAN_INFO[plan].name}`;
+      link.hidden = false;
+    }
+    $("cc-state-form").hidden = true;
+    $("cc-state-signed-in").hidden = false;
+  })();
+</script>
+</body>
+</html>

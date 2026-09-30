@@ -717,7 +717,7 @@
        (archivar + redirigir sigue exactamente igual). */
     const { saved: profileSaved } = await saveProfessionalProfileFromRfq(session.user.id, contactName, contactCompany, contactPhone);
     if (!profileSaved){
-      alert("La solicitud se ha enviado, pero no hemos podido guardar los datos del perfil. Completa tu perfil profesional desde Mi cuenta para reutilizarlos en futuras solicitudes.");
+      alert("La solicitud se ha enviado, pero no hemos podido guardar los datos del perfil. Completa tu perfil desde Mi cuenta para reutilizarlos en futuras solicitudes.");
     }
 
     const { error: statusError } = await MobauProjects.setStatus(project.id, "archived");

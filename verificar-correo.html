@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Confirma tu correo — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* Estilos locales de esta página (nunca styles.css), con los mismos
+     tokens de diseño del resto del sitio. */
+  .vc-wrap{ padding-top: 56px; padding-bottom: 100px; max-width: 640px; } /* solo vertical: el lateral es el de .wrap */
+  .vc-wrap h1{ font-size: 30px; margin: 0 0 12px; }
+  .vc-lead{ margin: 0 0 28px; }
+  .vc-summary{ border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); padding: 18px 20px; margin-bottom: 24px; display:grid; grid-template-columns: 1fr auto; gap: 14px 16px; align-items: baseline; }
+  .vc-sum-label{ font-size: 12.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 2px; }
+  .vc-sum-value{ margin: 0; font-size: 14.5px; color: var(--ink); overflow-wrap: anywhere; }
+  .vc-summary a{ font-size: 13.5px; font-weight: 600; color: var(--accent); }
+  .vc-summary a:hover{ text-decoration: underline; }
+  .vc-small{ font-size: 12.5px; color: var(--ink-faint); margin: 14px 0 0; }
+  .vc-error{ color: var(--danger); font-size: 13.5px; margin: 0 0 16px; }
+  .vc-discard{ background:none; border:none; padding:0; margin-top: 18px; font-size: 13px; color: var(--ink-soft); text-decoration: underline; cursor:pointer; }
+  .vc-discard:hover{ color: var(--ink); }
+  .vc-state h2{ font-size: 22px; margin: 0 0 10px; }
+  .vc-state p a{ color: var(--accent); text-decoration: underline; }
+  .vc-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 22px; }
+  @media (max-width: 900px){
+    .vc-wrap{ padding-top: 32px; padding-bottom: 80px; }
+    .vc-wrap h1{ font-size: 25px; }
+    .vc-summary{ padding: 16px; }
+    .vc-form-card{ padding: 24px; }
+    .vc-actions .btn{ width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="index.html">Inicio</a>
+      <a href="catalogo.html">Catálogo</a>
+      <a href="distribuidores.html">Distribuidores</a>
+      <a href="index.html#contacto">Contacto</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap vc-wrap" aria-live="polite">
+
+  <p id="vc-loading" class="card-meta">Cargando…</p>
+
+  <!-- Estado: pedir el email (último paso antes del enlace mágico). -->
+  <section id="vc-state-form" hidden>
+    <div class="eyebrow" id="vc-eyebrow">Crear cuenta · Paso 2</div>
+    <h1>Confirma tu correo</h1>
+    <p class="vc-lead">Es el último paso. Te enviaremos un enlace para crear tu cuenta, sin contraseña.</p>
+    <div class="vc-summary">
+      <div><p class="vc-sum-label">Plan</p><p class="vc-sum-value" id="vc-sum-plan"></p></div>
+      <a href="planes.html" id="vc-change-plan" aria-label="Cambiar plan">Cambiar</a>
+      <div><p class="vc-sum-label">Perfil</p><p class="vc-sum-value" id="vc-sum-profile"></p></div>
+      <a href="crear-cuenta.html" id="vc-edit-profile" aria-label="Editar perfil">Editar</a>
+    </div>
+    <form class="form-card vc-form-card" id="vc-form">
+      <div class="field full"><label for="vc-email">Email</label><input id="vc-email" type="email" autocomplete="email" required maxlength="254" placeholder="nombre@tuestudio.do"></div>
+      <p class="vc-error" id="vc-send-error" role="alert" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block" id="vc-submit-btn">Enviarme el enlace</button>
+      <p class="vc-small">Ábrelo en este mismo dispositivo y navegador: tus datos de perfil se guardan aquí temporalmente hasta que confirmes tu correo.</p>
+    </form>
+    <button type="button" class="vc-discard" id="vc-discard-btn">Descartar estos datos</button>
+  </section>
+
+  <!-- Estado: enlace enviado. Con la creación de cuenta permitida, Supabase
+       responde igual exista o no el email, así que el texto no revela nada. -->
+  <section class="form-card vc-state" id="vc-state-sent" hidden>
+    <h2>Revisa tu correo</h2>
+    <p>Te enviamos un enlace a <strong id="vc-sent-email"></strong>. Ábrelo en este mismo dispositivo y navegador para terminar de crear tu cuenta. Si ya tenías una cuenta Mobau con este email, el enlace te dará acceso a ella.</p>
+    <p class="vc-small">Si no lo ves en unos minutos, revisa la carpeta de spam. Si tu app de correo abre el enlace en otro navegador, podrás completar tu perfil allí.</p>
+    <div class="vc-actions">
+      <button type="button" class="btn btn-outline" id="vc-change-email-btn">Usar otro email</button>
+    </div>
+  </section>
+
+  <!-- Estado: procesando el enlace mágico y creando el perfil. -->
+  <section class="form-card vc-state" id="vc-state-processing" hidden>
+    <h2>Iniciando sesión…</h2>
+    <p>Un momento, estamos confirmando tu enlace y preparando tu cuenta.</p>
+  </section>
+
+  <!-- Estado: enlace usado, caducado o no válido. -->
+  <section class="form-card vc-state" id="vc-state-link-error" hidden>
+    <h2>El enlace no es válido o ya se usó</h2>
+    <p>Los enlaces caducan y solo sirven una vez.</p>
+    <div class="vc-actions">
+      <button type="button" class="btn btn-primary" id="vc-new-link-btn" hidden>Pedir un nuevo enlace</button>
+      <a href="acceso.html" class="btn btn-outline" id="vc-login-link">Iniciar sesión</a>
+      <a href="planes.html" class="btn btn-outline" id="vc-restart-link">Empezar de nuevo</a>
+    </div>
+  </section>
+
+  <!-- Estado: ya hay sesión (visita directa, o enlace abierto en otra pestaña). -->
+  <section class="form-card vc-state" id="vc-state-signed-in" hidden>
+    <h2 id="vc-signed-title">Sesión iniciada</h2>
+    <p>Estás conectado como <strong id="vc-signed-email"></strong>.</p>
+    <div class="vc-actions">
+      <button type="button" class="btn btn-primary" id="vc-signed-continue-btn">Continuar</button>
+      <button type="button" class="btn btn-outline" id="vc-other-account-btn">Usar otra cuenta</button>
+    </div>
+  </section>
+
+  <!-- Estado: cuenta lista (perfil creado, o ya existía). Sin redirección
+       automática: el usuario decide cuándo continuar. -->
+  <section class="form-card vc-state" id="vc-state-ready" hidden>
+    <div class="eyebrow">Cuenta confirmada</div>
+    <h2>Tu cuenta está lista</h2>
+    <p id="vc-ready-text"></p>
+    <p id="vc-ready-existing" hidden>Ya tenías un perfil en esta cuenta: lo mantenemos tal como estaba. Puedes editarlo desde Mi perfil.</p>
+    <div class="vc-actions">
+      <button type="button" class="btn btn-primary" id="vc-ready-continue-btn">Continuar</button>
+    </div>
+  </section>
+
+  <!-- Estado: sesión iniciada pero sin borrador en este dispositivo. -->
+  <section class="form-card vc-state" id="vc-state-missing" hidden>
+    <h2>Completa tu perfil</h2>
+    <p>Tu correo está confirmado, pero en este dispositivo no encontramos los datos de perfil que rellenaste (quizá abriste el enlace en otro navegador o pasaron más de 2 horas). Complétalos para terminar.</p>
+    <div class="vc-actions">
+      <a href="inscripcion-profesional.html?paso=perfil" class="btn btn-primary" id="vc-missing-link">Completar perfil</a>
+    </div>
+  </section>
+
+  <!-- Estado: la cuenta es de distribuidor. -->
+  <section class="form-card vc-state" id="vc-state-supplier" hidden>
+    <h2>Esta es una cuenta de distribuidor</h2>
+    <p>Las cuentas de distribuidor tienen su propio proceso de alta. No hemos guardado ningún perfil en ella.</p>
+    <div class="vc-actions">
+      <a href="perfil-distribuidor.html" class="btn btn-primary">Ir a tu perfil de distribuidor</a>
+    </div>
+  </section>
+
+  <!-- Estado: error al consultar o crear el perfil (el borrador se conserva). -->
+  <section class="form-card vc-state" id="vc-state-error" hidden>
+    <h2>No pudimos terminar de crear tu perfil</h2>
+    <p>Tu sesión está iniciada y tus datos siguen guardados en este dispositivo. Intenta de nuevo en un momento.</p>
+    <div class="vc-actions">
+      <button type="button" class="btn btn-primary" id="vc-retry-btn">Reintentar</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  /* Antes de cargar Supabase: si la URL trae el enlace mágico, se muestra
+     "Iniciando sesión…" desde el primer momento. */
+  if (window.location.hash.indexOf("access_token") !== -1) {
+    document.getElementById("vc-loading").hidden = true;
+    document.getElementById("vc-state-processing").hidden = false;
+  }
+</script>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="distribuidores.html">Distribuidores</a></li>
+          <li><a href="proyectos.html">Mis proyectos</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Para distribuidores</h4>
+        <ul>
+          <li><a href="ficha-distribuidor.html">Cómo mostrar tu catálogo</a></li>
+          <li><a href="ficha-distribuidor.html">Ficha de distribuidor</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="perfil-profesional.js"></script>
+<script src="nav-session.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  /* Alta profesional (Punto 35A-1b), paso 2: email y enlace mágico.
+     - Antes del enlace: necesita un borrador válido (MobauPerfil); sin él
+       vuelve a crear-cuenta.html. Envía SOLO { name, requested_plan } y
+       nunca account_type (el alta de distribuidores es aparte).
+     - Al volver del enlace (esta misma página): crea el perfil con el
+       borrador (MobauPerfil.completeSignup) y muestra el resultado con un
+       botón explícito. Sin temporizadores ni redirecciones automáticas.
+     El plan de la URL solo se usa si pasa la lista blanca; nunca se muestra
+     ningún valor recibido. */
+  const PLAN_NAMES = { gratis: "Gratis", individual: "Individual", estudio: "Estudio" };
+  const STATES = ["vc-state-form", "vc-state-sent", "vc-state-processing", "vc-state-link-error", "vc-state-signed-in", "vc-state-ready", "vc-state-missing", "vc-state-supplier", "vc-state-error"];
+
+  const params = new URLSearchParams(window.location.search);
+  const urlPlan = MobauAccess.normalizePlan(params.get("plan"));
+  const hasToken = window.location.hash.indexOf("access_token") !== -1;
+  const hasAuthError = /(^#|&)error(_code|_description)?=/.test(window.location.hash) || params.has("error") || params.has("error_code");
+
+  const $ = (id) => document.getElementById(id);
+  let currentSession = null;
+  let readyPlan = null;
+
+  function showState(id){
+    $("vc-loading").hidden = true;
+    STATES.forEach(stateId => { $(stateId).hidden = stateId !== id; });
+  }
+
+  /* Quita el fragmento del enlace (token o error) de la barra de direcciones. */
+  function clearAuthFragment(){
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+
+  function crearCuentaUrl(plan){
+    return `crear-cuenta.html${plan ? `?plan=${plan}` : ""}`;
+  }
+
+  function renderForm(draft){
+    const totalSteps = MobauAccess.planRequiresActivation(draft.plan) ? 3 : 2;
+    $("vc-eyebrow").textContent = `Crear cuenta · Paso 2 de ${totalSteps}`;
+    $("vc-sum-plan").textContent = PLAN_NAMES[draft.plan];
+    const p = draft.profile;
+    $("vc-sum-profile").textContent = `${p.professional_name} · ${MobauPerfil.typeLabel(p.professional_type)} · ${p.city}`;
+    $("vc-edit-profile").href = crearCuentaUrl(draft.plan);
+    showState("vc-state-form");
+  }
+
+  function showLinkError(){
+    clearAuthFragment();
+    const draft = MobauPerfil.readDraft();
+    $("vc-new-link-btn").hidden = !draft;
+    $("vc-restart-link").hidden = !!draft;
+    showState("vc-state-link-error");
+  }
+
+  /* Cierra el alta con la sesión ya iniciada. */
+  async function finishSignup(session){
+    showState("vc-state-processing");
+    const result = await MobauPerfil.completeSignup(session);
+
+    if (result.status === "supplier"){
+      showState("vc-state-supplier");
+      return;
+    }
+    if (result.status === "error"){
+      showState("vc-state-error");
+      return;
+    }
+    const intent = MobauAccess.peekIntent();
+    if (result.status === "missing"){
+      const plan = MobauAccess.planForNavigation({ intent, session, hasProfessionalProfile: false });
+      $("vc-missing-link").href = `inscripcion-profesional.html?paso=perfil${plan ? `&plan=${plan}` : ""}`;
+      showState("vc-state-missing");
+      return;
+    }
+    /* "created" o "existing": el plan del borrador o, si no, el de la
+       intención de este navegador. Solo decide el siguiente paso. */
+    readyPlan = result.plan || (intent && intent.plan) || null;
+    const needsActivation = MobauAccess.planRequiresActivation(readyPlan);
+    $("vc-ready-text").textContent = needsActivation
+      ? `Siguiente paso: solicitar la activación del plan ${PLAN_NAMES[readyPlan]}. Durante esta etapa piloto, la activación se gestiona directamente antes de iniciar cualquier suscripción o cobro.`
+      : "Ya puedes guardar tu selección y preparar solicitudes de cotización.";
+    $("vc-ready-existing").hidden = !(result.status === "existing" && result.plan);
+    $("vc-ready-continue-btn").textContent = needsActivation ? "Continuar a la activación" : "Continuar";
+    $("vc-ready-continue-btn").disabled = false;
+    showState("vc-state-ready");
+  }
+
+  function showSignedIn(session, fromOtherTab){
+    currentSession = session;
+    $("vc-signed-title").textContent = fromOtherTab ? "Correo confirmado en otra pestaña" : "Sesión iniciada";
+    $("vc-signed-email").textContent = session.user.email || "";
+    $("vc-signed-continue-btn").disabled = false;
+    showState("vc-state-signed-in");
+  }
+
+  $("vc-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const draft = MobauPerfil.readDraft();
+    if (!draft){
+      window.location.replace(crearCuentaUrl(urlPlan));
+      return;
+    }
+    const email = $("vc-email").value.trim();
+    if (!email) return;
+    const btn = $("vc-submit-btn");
+    const errorEl = $("vc-send-error");
+    errorEl.hidden = true;
+    btn.disabled = true;
+    btn.textContent = "Enviando…";
+
+    /* Se renueva la intención (motivo/next de antes + plan) para que dure
+       lo mismo que el enlace. requested_plan solo sirve para navegar. */
+    const intent = MobauAccess.peekIntent();
+    MobauAccess.saveIntent({ motivo: intent && intent.motivo, next: intent && intent.next, plan: draft.plan });
+    const { error } = await MobauAuth.sendMagicLink(
+      email,
+      { name: draft.profile.professional_name, requested_plan: draft.plan },
+      "verificar-correo.html"
+    );
+
+    btn.disabled = false;
+    btn.textContent = "Enviarme el enlace";
+    if (error){
+      const isNetworkFailure = error.name === "AuthRetryableFetchError" || !error.status;
+      errorEl.textContent = isNetworkFailure
+        ? "No pudimos conectar con el servicio de acceso. Revisa tu conexión e intenta de nuevo."
+        : "No pudimos enviar el enlace. Revisa el email o espera un momento e intenta de nuevo.";
+      errorEl.hidden = false;
+      return;
+    }
+    $("vc-sent-email").textContent = email;
+    showState("vc-state-sent");
+  });
+
+  $("vc-change-email-btn").addEventListener("click", () => {
+    const draft = MobauPerfil.readDraft();
+    if (!draft){
+      window.location.replace(crearCuentaUrl(urlPlan));
+      return;
+    }
+    renderForm(draft);
+    $("vc-email").focus();
+  });
+
+  $("vc-new-link-btn").addEventListener("click", () => {
+    const draft = MobauPerfil.readDraft();
+    if (!draft){
+      window.location.replace(crearCuentaUrl(urlPlan));
+      return;
+    }
+    renderForm(draft);
+    $("vc-email").focus();
+  });
+
+  $("vc-discard-btn").addEventListener("click", () => {
+    MobauPerfil.clearDraft();
+    window.location.replace(crearCuentaUrl(urlPlan));
+  });
+
+  $("vc-signed-continue-btn").addEventListener("click", async () => {
+    $("vc-signed-continue-btn").disabled = true;
+    const session = await MobauAuth.getSession();
+    if (!session){
+      window.location.replace(crearCuentaUrl(urlPlan));
+      return;
+    }
+    await finishSignup(session);
+  });
+
+  $("vc-other-account-btn").addEventListener("click", () => MobauAuth.signOut());
+
+  $("vc-retry-btn").addEventListener("click", async () => {
+    const session = await MobauAuth.getSession();
+    if (!session){
+      showLinkError();
+      return;
+    }
+    await finishSignup(session);
+  });
+
+  /* Siguiente paso con la regla única de MobauAccess.resolveNext():
+     activación del plan si la requiere, o el destino final (que consume
+     la intención y une la selección anónima a la de la cuenta). */
+  $("vc-ready-continue-btn").addEventListener("click", async () => {
+    $("vc-ready-continue-btn").disabled = true;
+    const session = await MobauAuth.getSession();
+    if (!session){
+      window.location.replace("acceso.html");
+      return;
+    }
+    const destination = await MobauAccess.resolveNext(session, { explicitPlan: readyPlan });
+    window.location.replace(destination.url);
+  });
+
+  /* Si el enlace se abre en otra pestaña, esta (que sigue en "Revisa tu
+     correo") se entera por Supabase y ofrece continuar desde aquí. */
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" && session && !$("vc-state-sent").hidden) showSignedIn(session, true);
+  });
+
+  (async () => {
+    if (hasAuthError){
+      showLinkError();
+      return;
+    }
+    if (hasToken){
+      const session = await MobauAuth.getSessionFromRedirect();
+      clearAuthFragment();
+      if (!session){
+        showLinkError();
+        return;
+      }
+      await finishSignup(session);
+      return;
+    }
+    const session = await MobauAuth.getSession();
+    if (session){
+      showSignedIn(session, false);
+      return;
+    }
+    const draft = MobauPerfil.readDraft();
+    if (!draft){
+      window.location.replace(crearCuentaUrl(urlPlan));
+      return;
+    }
+    renderForm(draft);
+  })();
+</script>
+</body>
+</html>
