@@ -3,3 +3,6 @@
 !.env.example
 .DS_Store
 node_modules/
+/images/acceso/alta-1.jpg
+/images/acceso/alta-2.jpg
+/images/acceso/alta-3.jpg
