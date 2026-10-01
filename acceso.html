@@ -51,39 +51,69 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    background: rgba(28, 31, 30, 0.5);
+    background: rgba(13, 15, 14, 0.50);   /* velo medido: contraste ≥ 4,5:1 en todos los estados */
   }
   /* width:100%: en un <main> flex en columna, el margin:auto de .wrap
      encogería el bloque a su contenido y lo centraría. */
   main[data-modo="login"] .acc-switch-wrap{ width: 100%; }
   main[data-modo="login"] .acc-login{ width: 100%; flex: 1 0 auto; display: flex; align-items: center; padding-top: 32px; padding-bottom: 56px; }
   main[data-modo="login"] .acc-login-inner{ width: 100%; }
-  /* Tarjeta del login: superficie translúcida sobria sobre el velo oscuro
-     liso. Sin backdrop-filter (navegadores antiguos) se usa una versión más
-     opaca para que el detalle de la foto no se lea detrás del texto. */
+
+  /* Variante oscura del login (solo modo login): superficie oscura muy
+     translúcida, textos blancos y el botón verde de siempre. Sin
+     backdrop-filter, o con transparencia reducida, la superficie es más
+     opaca. */
   main[data-modo="login"] .acc-login .form-card{
-    background: rgba(255, 255, 255, 0.90);
-    border: 1px solid rgba(255, 255, 255, 0.58);
-    box-shadow:
-      0 18px 45px rgba(20, 24, 22, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.42);
+    background: rgba(18, 21, 20, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: none;
+    color: #fff;
   }
-  /* Contraste sobre la superficie translúcida (medido sobre la foto):
-     los errores llevan una superficie interior sutil y la nota pequeña usa
-     el gris secundario del sitio (el gris tenue no llega a 4,5:1). */
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+    main[data-modo="login"] .acc-login .form-card{
+      background: rgba(18, 21, 20, 0.30);
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+    }
+  }
+  @media (prefers-reduced-transparency: reduce){
+    main[data-modo="login"] .acc-login .form-card{
+      background: rgba(18, 21, 20, 0.92);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+  main[data-modo="login"] .acc-panel h1,
+  main[data-modo="login"] .acc-panel h2,
+  main[data-modo="login"] .acc-panel .field label,
+  main[data-modo="login"] .acc-panel strong{ color: #fff; }
+  main[data-modo="login"] .acc-panel p,
+  main[data-modo="login"] .acc-links{ color: rgba(255, 255, 255, 0.88); }
+  main[data-modo="login"] .acc-panel p a,
+  main[data-modo="login"] .acc-links a{ color: #fff; }
+  main[data-modo="login"] .acc-panel .acc-small{ color: rgba(255, 255, 255, 0.80); }
   main[data-modo="login"] .acc-login .acc-error{
-    background: rgba(255, 255, 255, 0.55);
+    background: var(--danger);
+    color: #fff;
     padding: 8px 10px;
     border-radius: var(--radius);
   }
-  main[data-modo="login"] .acc-login .acc-small{ color: var(--ink-soft); }
-  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
-    main[data-modo="login"] .acc-login .form-card{
-      background: rgba(255, 255, 255, 0.76);
-      -webkit-backdrop-filter: blur(18px) saturate(108%);
-      backdrop-filter: blur(18px) saturate(108%);
-    }
+  main[data-modo="login"] .acc-login .field input{
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.60);   /* ≥ 3:1 frente al fondo (control no textual) */
+    color: #fff;
   }
+  main[data-modo="login"] .acc-login .field input::placeholder{ color: rgba(255, 255, 255, 0.82); }
+  main[data-modo="login"] .acc-login .field input:focus{ border-color: #fff; }
+  main[data-modo="login"] .acc-login .btn-outline{ color: #fff; border-color: rgba(255, 255, 255, 0.50); }
+  main[data-modo="login"] .acc-login .btn-outline:hover{ border-color: #fff; }
+  main[data-modo="login"] .acc-login-links{ border-top-color: rgba(255, 255, 255, 0.18); }
+  main[data-modo="login"] :focus-visible{ outline-color: #fff; }
+  /* Selector Iniciar sesión / Crear cuenta sobre la foto */
+  main[data-modo="login"] .acc-switch{ background: rgba(18, 21, 20, 0.55); border-color: rgba(255, 255, 255, 0.18); }
+  main[data-modo="login"] .acc-switch [role="tab"]{ color: rgba(255, 255, 255, 0.88); }
+  main[data-modo="login"] .acc-switch [role="tab"]:hover{ color: #fff; }
+  main[data-modo="login"] .acc-switch [role="tab"][aria-selected="true"]{ background: rgba(255, 255, 255, 0.94); color: var(--ink); box-shadow: none; }
 
   /* ---------- modo crear cuenta: recorrido editorial vertical ----------
      Tres bloques seguidos (imagen + texto) y el CTA final. El DOM de los
