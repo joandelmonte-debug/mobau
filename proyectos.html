@@ -356,6 +356,7 @@
 
     session = await MobauAuth.requireSession();
     if (!session) return;
+    if (await MobauAccess.redirectSupplierToPanel()) return; // Punto 38-A: distribuidor -> panel
     if (!(await whenCatalogReady())) return;
     currentPlan = await MobauProjects.myPlan(session.user.id);
 

@@ -19,7 +19,18 @@
    navegación de página completa (Inicio/Catálogo/Distribuidores/...)
    se veía como si el menú "desapareciera y volviera a aparecer".
 
-   No guarda ni cachea nada — cada carga de página vuelve a preguntar.
+   Cada carga de página vuelve a preguntar la sesión y el rol. Lo único
+   que se guarda (Punto 38-A) es la pista estética "mobau_account_kind"
+   de localStorage (MobauAccountHint, supabase-client.js): solo evita el
+   destello de la cabecera de profesional a un distribuidor en las
+   páginas con nav-account-hint.js; nunca concede permisos ni decide
+   accesos. El rol confirmado (MobauAccess.accountKind()) la corrige.
+
+   Cuenta de distribuidor (Punto 38-A): experiencia B2B separada. La
+   cabecera pasa a Resumen · Mis productos · Catálogo, el logo lleva al
+   panel, el menú de cuenta solo tiene "Perfil de empresa" y "Cerrar
+   sesión", y desaparecen "Mi selección", Inicio, Distribuidores,
+   Contacto y los enlaces de proyectos (también los del pie).
    ============================================================ */
 
 (async () => {
@@ -31,6 +42,11 @@
      sola vez), nunca vuelve a montar el menú ni duplica listeners. */
   if (slot.dataset.navSessionMounted) return;
   slot.dataset.navSessionMounted = "1";
+
+  /* Tipo de cuenta confirmado (una sola consulta por página, compartida con
+     script.js y las redirecciones): se pide ya, en paralelo con la sesión.
+     Sin sesión resuelve "anon" y borra la pista estética. */
+  const accountKindPromise = MobauAccess.accountKind();
 
   const session = await MobauAuth.getSession();
 
@@ -133,30 +149,69 @@
     .catch(() => {});
 
   /* Cuentas de distribuidor (profiles.role = 'supplier'): en segundo plano,
-     como el nombre — el menú ya es usable. "Mi perfil" pasa a
-     perfil-distribuidor.html y se quitan los enlaces solo de arquitecto.
-     Hasta que llega el rol (fracción de segundo) se ven los de arquitecto;
-     si la consulta falla, el menú queda como el de siempre. */
-  supabaseClient
-    .from("profiles")
-    .select("role")
-    .eq("id", session.user.id)
-    .maybeSingle()
-    .then(({ data }) => {
-      if (!data || data.role !== "supplier") return;
-      const profileLink = document.getElementById("account-menu-profile");
-      if (profileLink){
-        profileLink.href = "perfil-distribuidor.html";
-        const productsLink = document.createElement("a");
-        productsLink.href = "distribuidor-productos.html";
-        productsLink.setAttribute("role", "menuitem");
-        productsLink.textContent = "Mis productos";
-        productsLink.addEventListener("click", () => closeMenu());
-        profileLink.after(productsLink);
+     como el nombre — el menú ya es usable. Hasta que llega el rol se ve la
+     cabecera de siempre, salvo en las páginas con nav-account-hint.js y
+     pista guardada, donde lo de cliente ya está oculto por CSS. Si la
+     consulta falla ("unknown"), la cabecera queda como la de siempre. */
+  accountKindPromise.then(kind => {
+    if (kind !== "supplier") return;
+    applySupplierHeader();
+
+    const profileLink = document.getElementById("account-menu-profile");
+    if (profileLink){
+      profileLink.href = "perfil-distribuidor.html";
+      profileLink.textContent = "Perfil de empresa";
+    }
+    panel.querySelectorAll("[data-architect-only]").forEach(el => el.remove());
+
+    /* Nombre comercial (fila propia de distributor_profiles), si ya existe. */
+    supabaseClient
+      .from("distributor_profiles")
+      .select("nombre_comercial")
+      .eq("user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data && data.nombre_comercial){
+          const nameEl = document.getElementById("account-menu-name");
+          if (nameEl) nameEl.textContent = data.nombre_comercial;
+        }
+      })
+      .catch(() => {});
+  });
+
+  /* Cabecera y pie de distribuidor sobre el HTML estático de cada página
+     (sin reescribir las ~21 cabeceras): idempotente — los enlaces propios
+     llevan data-supplier-nav y no se duplican (panel-distribuidor.html ya
+     los trae escritos). */
+  function applySupplierHeader(){
+    const home = MobauAccess.SUPPLIER_HOME;
+    document.querySelectorAll(".site-header .brand").forEach(a => { a.href = home; });
+
+    const selectionLink = document.getElementById("selection-count-link");
+    if (selectionLink) selectionLink.remove();
+
+    const links = document.querySelector(".site-header .nav-links");
+    if (links){
+      links.querySelectorAll(":scope > a:not([data-supplier-nav])").forEach(a => {
+        if (a.getAttribute("href") !== "catalogo.html") a.remove();
+      });
+      if (!links.querySelector("[data-supplier-nav]")){
+        const productsHref = MobauAccess.SUPPLIER_PRODUCTS_ENABLED ? "distribuidor-productos.html" : `${home}#mis-productos`;
+        const items = [["Resumen", home], ["Mis productos", productsHref]].map(([label, href]) => {
+          const a = document.createElement("a");
+          a.href = href;
+          a.textContent = label;
+          a.setAttribute("data-supplier-nav", "");
+          return a;
+        });
+        links.prepend(...items);
       }
-      panel.querySelectorAll("[data-architect-only]").forEach(el => el.remove());
-    })
-    .catch(() => {});
+    }
+
+    document.querySelectorAll('.site-footer a[href="distribuidores.html"], .site-footer a[href="proyectos.html"]').forEach(a => {
+      (a.closest("li") || a).remove();
+    });
+  }
 
   /* Punto 27 — "Mi proyecto activo".
 

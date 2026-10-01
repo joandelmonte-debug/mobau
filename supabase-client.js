@@ -41,6 +41,28 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
    acepta una ruta fuera de este array, ver sendMagicLink() más abajo. */
 const MAGIC_LINK_NEXT_PAGES = ["index.html", "perfil-distribuidor.html", "acceso.html", "verificar-correo.html"];
 
+/* ---------- pista estética del tipo de cuenta (Punto 38-A) ----------
+   localStorage "mobau_account_kind" = "supplier" sirve SOLO para que
+   nav-account-hint.js (en el <head> de algunas páginas) oculte la cabecera
+   de profesional desde la primera pintura, sin el destello de "Mi
+   selección"/"Distribuidores" mientras llega el rol real. No concede
+   permisos, no sustituye a la sesión y nunca decide un acceso ni una
+   redirección: eso lo hace siempre el rol leído de Supabase
+   (MobauAccess.accountKind() / accountFacts()), y la protección real de los
+   datos son las políticas RLS. Se escribe cuando se confirma el rol y se
+   borra al cerrar sesión, sin sesión o con un rol distinto de supplier. */
+const MobauAccountHint = {
+  KEY: "mobau_account_kind",
+  remember(isSupplier) {
+    try {
+      if (isSupplier) localStorage.setItem(this.KEY, "supplier");
+      else localStorage.removeItem(this.KEY);
+    } catch (e) {
+      /* sin localStorage: solo se pierde la pista, nunca nada funcional */
+    }
+  }
+};
+
 /* ---------- acceso profesional: motivos y retorno seguro (Punto 35A) ----------
    acceso.html es la puerta de entrada y también la página donde aterriza el
    enlace mágico. Desde ahí se decide adónde volver, SIEMPRE a partir de
@@ -238,13 +260,77 @@ const MobauAccess = {
     }
   },
 
+  /* Punto 38-A: destino único de toda cuenta de distribuidor tras iniciar
+     sesión, y de cualquier ruta de cliente que abra. */
+  SUPPLIER_HOME: "panel-distribuidor.html",
+
+  /* Punto 38-A: la gestión de productos (distribuidor-productos.html y
+     distribuidor-producto.html) exige un plan activo, y ese dato todavía no
+     existe (llega en 38-C) — así que, por ahora, queda cerrada para todas
+     las cuentas de distribuidor. Solo interfaz: RLS sigue permitiendo hoy la
+     escritura a un distribuidor verificado (pendiente de 38-B). */
+  SUPPLIER_PRODUCTS_ENABLED: false,
+
+  /* Avisos que el panel sabe mostrar (?aviso=...). Cualquier otro valor se
+     ignora; nunca se pinta un texto recibido en la URL. */
+  SUPPLIER_AVISOS: ["solo-profesionales", "plan"],
+
+  /* Tipo de cuenta de la sesión actual, con una sola consulta por página:
+     "anon" (sin sesión), "supplier", "client" o "unknown" (no se pudo leer
+     el rol). Lo comparten la cabecera (nav-session.js), las tarjetas del
+     catálogo y las redirecciones de distribuidor. Al resolverse, marca
+     <html data-account="supplier"> y avisa con el evento
+     "mobau:account-kind". Es lógica de interfaz: la protección real de los
+     datos son las políticas RLS. */
+  _accountKindPromise: null,
+  confirmedKind: null,
+  accountKind() {
+    if (!this._accountKindPromise) {
+      this._accountKindPromise = (async () => {
+        const session = await MobauAuth.getSession();
+        if (!session) {
+          MobauAccountHint.remember(false);
+          return "anon";
+        }
+        const { data, error } = await supabaseClient
+          .from("profiles").select("role").eq("id", session.user.id).maybeSingle();
+        if (error) return "unknown";
+        const isSupplier = !!data && data.role === "supplier";
+        MobauAccountHint.remember(isSupplier);
+        return isSupplier ? "supplier" : "client";
+      })().catch(() => "unknown").then((kind) => {
+        this.confirmedKind = kind;
+        /* "unknown" no cambia nada: se queda lo que hubiera pintado la pista. */
+        if (kind !== "unknown") {
+          if (kind === "supplier") document.documentElement.setAttribute("data-account", "supplier");
+          else document.documentElement.removeAttribute("data-account");
+        }
+        document.dispatchEvent(new CustomEvent("mobau:account-kind", { detail: { kind } }));
+        return kind;
+      });
+    }
+    return this._accountKindPromise;
+  },
+
+  /* Rutas de cliente (selección, proyectos, cotización, cuenta profesional):
+     una cuenta de distribuidor se envía a su panel con location.replace()
+     (Atrás no vuelve a la ruta bloqueada). Devuelve true si redirige, para
+     que la página detenga su script. Si el rol no se pudo leer, no redirige.
+     Solo interfaz: hasta 38-B, RLS no impide estas operaciones a un supplier. */
+  async redirectSupplierToPanel({ aviso = "solo-profesionales" } = {}) {
+    if (await this.accountKind() !== "supplier") return false;
+    const safeAviso = this.SUPPLIER_AVISOS.includes(aviso) ? aviso : null;
+    window.location.replace(safeAviso ? `${this.SUPPLIER_HOME}?aviso=${safeAviso}` : this.SUPPLIER_HOME);
+    return true;
+  },
+
   /* Paso pendiente del alta profesional, o null si no queda ninguno:
-     1) distribuidor -> perfil-distribuidor.html (nunca pasa por el alta profesional)
+     1) distribuidor -> panel-distribuidor.html (nunca pasa por el alta profesional)
      2) sin perfil profesional -> inscripcion-profesional.html?paso=perfil
      3) plan que requiere activación -> activar-plan.html?plan=...
      "plan" solo decide qué pantalla se ve; nunca da permisos. */
   resolveOnboardingStep({ isSupplier, hasProfessionalProfile, plan }) {
-    if (isSupplier) return { url: "perfil-distribuidor.html" };
+    if (isSupplier) return { url: this.SUPPLIER_HOME };
     const safePlan = this.normalizePlan(plan);
     if (!hasProfessionalProfile) {
       return { url: `inscripcion-profesional.html?paso=perfil${safePlan ? `&plan=${safePlan}` : ""}` };
@@ -254,13 +340,13 @@ const MobauAccess = {
   },
 
   /* Destino final (una vez completado el alta, si hacía falta), por prioridad:
-     1) distribuidor -> perfil-distribuidor.html
+     1) distribuidor -> panel-distribuidor.html
      2) intención con motivo -> ruta del motivo (selección vacía -> seleccion.html con aviso)
      3) next válido (de la intención o de la URL)
      4) hay selección -> seleccion.html
      5) index.html */
   resolveDestination({ isSupplier, intent, urlNext, selectionCount }) {
-    if (isSupplier) return { url: "perfil-distribuidor.html" };
+    if (isSupplier) return { url: this.SUPPLIER_HOME };
     const motivo = intent ? this.normalizeMotivo(intent.motivo) : null;
     if (motivo) {
       if (!selectionCount) return { url: "seleccion.html", emptySelection: true };
@@ -292,6 +378,9 @@ const MobauAccess = {
     const { data: account, error: roleError } = await supabaseClient
       .from("profiles").select("role").eq("id", userId).maybeSingle();
     const isSupplier = !roleError && !!account && account.role === "supplier";
+    /* Tras iniciar sesión es el primer momento en que se conoce el rol:
+       deja la pista estética lista para la página siguiente. */
+    if (!roleError) MobauAccountHint.remember(isSupplier);
     if (isSupplier) return { isSupplier: true, hasProfessionalProfile: false };
     const { data: profile, error: profileError } = await supabaseClient
       .from("professional_profiles").select("user_id").eq("user_id", userId).maybeSingle();
@@ -317,7 +406,7 @@ const MobauAccess = {
        que no la herede otra cuenta que inicie sesión en este navegador. */
     if (facts.isSupplier) {
       this.clearIntent();
-      return { url: "perfil-distribuidor.html" };
+      return { url: this.SUPPLIER_HOME };
     }
     const intent = this.peekIntent() || fallbackIntent;
     const plan = this.normalizePlan(explicitPlan)
@@ -392,6 +481,7 @@ const MobauAuth = {
   async signOut() {
     const { error } = await supabaseClient.auth.signOut();
     if (error) console.error("Error cerrando sesión:", error);
+    MobauAccountHint.remember(false);
     window.location.href = "acceso.html";
   },
 
@@ -440,12 +530,13 @@ const MobauAuth = {
    - SIGNED_IN / INITIAL_SESSION: une la selección anónima (sessionStorage)
      a la de la cuenta (localStorage), sin duplicar productos.
    - SIGNED_OUT: la selección temporal del usuario, ya anónimo de
-     nuevo, queda vacía. */
+     nuevo, queda vacía, y se borra la pista estética de tipo de cuenta. */
 supabaseClient.auth.onAuthStateChange((event) => {
   if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && typeof migrateAnonymousSelectionToAccount === "function") {
     migrateAnonymousSelectionToAccount();
   }
-  if (event === "SIGNED_OUT" && typeof clearAnonymousSelection === "function") {
-    clearAnonymousSelection();
+  if (event === "SIGNED_OUT") {
+    MobauAccountHint.remember(false);
+    if (typeof clearAnonymousSelection === "function") clearAnonymousSelection();
   }
 });

@@ -106,6 +106,11 @@ function saveSelection(items){
    cantidad y unidad iniciales. No duplica: si ya estaba, devuelve
    alreadyExists: true sin tocar la cantidad que ya tuviera. */
 function addToSelection(productId, initialQuantity, initialUnit){
+  /* Punto 38-A: una cuenta de distribuidor (rol confirmado, nunca la pista
+     estética) no usa la selección. No borra nada de lo que ya hubiera. */
+  if (typeof MobauAccess !== "undefined" && MobauAccess.confirmedKind === "supplier") {
+    return { success: false, error: "Las cuentas de distribuidor no usan la selección." };
+  }
   if (typeof PRODUCTS !== "undefined" && !PRODUCTS.some(p => p.id === productId)) {
     return { success: false, error: "Este producto no existe en el catálogo." };
   }

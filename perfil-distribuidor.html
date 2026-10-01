@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Perfil de distribuidor — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<script src="nav-account-hint.js"></script>
 </head>
 <body>
 
@@ -28,6 +29,7 @@
 
 <div class="page-head">
   <div class="wrap">
+    <p class="card-meta" style="margin:0 0 14px;"><a href="panel-distribuidor.html" id="dp-back-panel">← Volver al panel</a></p>
     <div class="eyebrow">Distribuidor</div>
     <h1 id="page-title">Perfil de distribuidor</h1>
     <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Datos legales de tu empresa. Los revisamos manualmente antes de habilitar la carga de productos.</p>
@@ -65,7 +67,7 @@
     <p id="dp-status-text" style="margin:0;"></p>
     <p id="dp-status-reason" style="display:none; margin:12px 0 0; color:var(--danger);"></p>
     <div id="dp-status-actions" style="display:none; margin-top:16px;">
-      <a href="distribuidor-productos.html" class="btn btn-primary" id="dp-products-btn">Mis productos</a>
+      <a href="panel-distribuidor.html" class="btn btn-primary" id="dp-panel-btn">Ir al panel</a>
     </div>
   </div>
 
@@ -225,7 +227,9 @@
     } else {
       reasonEl.style.display = "none";
     }
-    $("dp-status-actions").style.display = profile.verification_status === "verified" ? "block" : "none";
+    /* Punto 38-A: la gestión de productos vive en el panel (y necesita plan
+       activo); desde aquí siempre se vuelve al panel. */
+    $("dp-status-actions").style.display = "block";
   }
 
   function renderView(){
@@ -354,6 +358,7 @@
       return;
     }
     if (!account || account.role !== "supplier"){
+      $("dp-back-panel").parentElement.hidden = true;
       const email = session.user.email;
       $("dp-not-supplier-detail").textContent = email
         ? `Tu cuenta (${email}) está registrada como profesional. Un distribuidor es una cuenta separada e independiente en Mobau — te recomendamos usar un correo corporativo distinto.`

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ficha de producto — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<script src="nav-account-hint.js"></script>
 </head>
 <body>
 
@@ -137,6 +138,13 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+/* Punto 38-A: una cuenta de distribuidor ve la ficha en solo lectura —
+   sin cantidad ni "Añadir a la selección" (addToSelection() también lo
+   rechaza). Solo interfaz; la protección de servidor llega en 38-B. */
+MobauAccess.accountKind().then(kind => {
+  if (kind === "supplier") document.querySelector(".product-selection-actions").hidden = true;
+});
+
 runWithCatalog(async () => {
   const params = new URLSearchParams(window.location.search);
   const id = params.get("id") || "p1";

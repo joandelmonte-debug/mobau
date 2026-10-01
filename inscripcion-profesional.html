@@ -569,14 +569,12 @@
     session = await MobauAuth.requireSession();
     if (!session) return; // ya redirigió a acceso.html
 
-    /* El alta profesional nunca se ofrece a una cuenta de distribuidor. */
-    if (isOnboarding){
-      const facts = await MobauAccess.accountFacts(session);
-      if (facts.isSupplier){
-        MobauPerfil.clearDraft();
-        window.location.replace("perfil-distribuidor.html");
-        return;
-      }
+    /* El alta profesional nunca se ofrece a una cuenta de distribuidor, y
+       (Punto 38-A) tampoco "Mi perfil" profesional: va a su panel. */
+    if (await MobauAccess.accountKind() === "supplier"){
+      if (isOnboarding) MobauPerfil.clearDraft();
+      window.location.replace(MobauAccess.SUPPLIER_HOME);
+      return;
     }
 
     await loadProfile();

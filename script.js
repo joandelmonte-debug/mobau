@@ -1144,12 +1144,40 @@ function isValidQuantity(q){
 let isLoggedIn = false;
 let myActiveProjects = [];
 
+/* Punto 38-A — cuenta de distribuidor (rol ya confirmado por
+   MobauAccess.accountKind(), nunca por la pista estética): el catálogo es
+   de solo lectura. Las tarjetas no llevan "Añadir a la selección" ni el
+   botón de proyecto activo (que catalogo.html añade dentro de
+   .card-actions): se pinta otro contenedor con solo "Ver ficha". Solo
+   interfaz — la protección de servidor llega en 38-B. */
+function isSupplierAccount(){
+  return typeof MobauAccess !== "undefined" && MobauAccess.confirmedKind === "supplier";
+}
+
+function readOnlyCardActionsHtml(fichaUrl){
+  return `<div class="card-actions-readonly" style="margin-top:auto;">
+          <a class="btn btn-outline btn-sm btn-block" href="${fichaUrl}">Ver ficha</a>
+        </div>`;
+}
+
+/* Si el rol llega después de pintar las tarjetas, se pasan a solo lectura. */
+document.addEventListener("mobau:account-kind", (e) => {
+  if (e.detail.kind !== "supplier") return;
+  document.querySelectorAll(".product-card .card-actions").forEach(actions => {
+    const card = actions.closest(".product-card");
+    const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(card.dataset.productId)}`);
+    actions.insertAdjacentHTML("afterend", readOnlyCardActionsHtml(fichaUrl));
+    actions.remove();
+  });
+});
+
 function renderProductCard(p){
   const dist = DISTRIBUTORS[p.distribuidor];
   const marcaLabel = escapeHtml(LABELS.marca[p.marca]);
   const inSel = inSelection(p.id);
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
+  const actionsHtml = isSupplierAccount() ? readOnlyCardActionsHtml(fichaUrl) : null;
   const selectButton = p.status === "archived"
     ? `<button type="button" class="btn btn-added" disabled>No disponible actualmente</button>`
     : `
@@ -1167,10 +1195,10 @@ function renderProductCard(p){
         <span class="card-name">${escapeHtml(p.nombre)}</span>
         <span class="card-meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.categoria[p.categoria])}</span>
         ${cardPriceLineHtml(p.id, "card-price")}
-        <div class="card-actions">
+        ${actionsHtml || `<div class="card-actions">
           <a class="btn btn-outline" href="${fichaUrl}">Ver ficha</a>
           ${selectButton}
-        </div>
+        </div>`}
       </div>
     </article>`;
 }

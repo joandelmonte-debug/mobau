@@ -236,6 +236,12 @@
       .from("profiles").select("role").eq("id", session.user.id).maybeSingle();
     if (roleError) throw roleError;
     if (!account || account.role !== "supplier"){ window.location.href = "index.html"; return null; }
+    /* Punto 38-A: sin plan activo no se crean ni editan productos (ver
+       MobauAccess.SUPPLIER_PRODUCTS_ENABLED) -> sus productos, en el panel. */
+    if (!MobauAccess.SUPPLIER_PRODUCTS_ENABLED){
+      window.location.replace(`${MobauAccess.SUPPLIER_HOME}?aviso=plan#mis-productos`);
+      return null;
+    }
 
     const { data: dp, error: dpError } = await supabaseClient
       .from("distributor_profiles").select("verification_status, distributor_id").eq("user_id", session.user.id).maybeSingle();

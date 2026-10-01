@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de distribuidor — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="distribuidor.css">
+</head>
+<body>
+
+<!-- Punto 38-A: cabecera de distribuidor escrita directamente (no necesita
+     nav-account-hint.js: aquí no hay nada de cliente que ocultar). Una
+     cuenta que no es de distribuidor se envía a index.html. -->
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="panel-distribuidor.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="panel-distribuidor.html" class="active" aria-current="page" data-supplier-nav>Resumen</a>
+      <a href="panel-distribuidor.html#mis-productos" data-supplier-nav>Mis productos</a>
+      <a href="catalogo.html">Catálogo</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head pd-head">
+  <div class="wrap">
+    <div class="eyebrow">Panel de distribuidor</div>
+    <h1 id="pd-title">Tu empresa en Mobau</h1>
+    <p id="pd-subtitle" class="pd-subtitle">Estado de tu cuenta, tus productos y el catálogo.</p>
+  </div>
+</div>
+
+<main class="wrap pd-main">
+
+  <p id="pd-aviso" class="pd-aviso" role="status" hidden></p>
+
+  <p id="pd-loading" class="card-meta">Cargando tu panel…</p>
+
+  <div id="pd-error" class="cart-empty" hidden>
+    <p class="pd-empty-title">No pudimos cargar tu panel.</p>
+    <p id="pd-error-detail" class="pd-empty-text">Ocurrió un error al consultar tus datos. Intenta de nuevo.</p>
+    <button type="button" class="btn btn-primary" id="pd-retry-btn">Reintentar</button>
+  </div>
+
+  <div id="pd-content" hidden>
+
+    <!-- Estado de la cuenta: tres pasos con datos reales (empresa) o
+         informativos (plan: todavía no existe en la web). -->
+    <section class="pd-section" aria-labelledby="pd-steps-title">
+      <h2 class="pd-label" id="pd-steps-title">Estado de la cuenta</h2>
+      <ol class="pd-steps">
+        <li class="pd-step" id="pd-step-company">
+          <span class="pd-step__num">01</span>
+          <div class="pd-step__head">
+            <h3>Empresa</h3>
+            <span class="pd-chip" id="pd-company-chip"></span>
+          </div>
+          <p id="pd-company-text"></p>
+          <p id="pd-company-reason" class="pd-reason" hidden></p>
+          <a class="btn btn-sm" id="pd-company-cta" href="perfil-distribuidor.html"></a>
+        </li>
+        <li class="pd-step" id="pd-step-plan">
+          <span class="pd-step__num">02</span>
+          <div class="pd-step__head">
+            <h3>Plan Distribuidor Fundador</h3>
+            <span class="pd-chip pd-chip--neutral">Activación no disponible</span>
+          </div>
+          <p><strong class="pd-figure-inline">59 USD</strong> al mes durante el piloto. La activación del plan todavía no está disponible en la web.</p>
+        </li>
+        <li class="pd-step" id="pd-step-products">
+          <span class="pd-step__num">03</span>
+          <div class="pd-step__head">
+            <h3>Gestión de productos</h3>
+            <span class="pd-chip pd-chip--neutral" id="pd-products-chip"></span>
+          </div>
+          <p id="pd-products-text"></p>
+        </li>
+      </ol>
+    </section>
+
+    <div class="pd-layout">
+      <div class="pd-primary">
+
+        <section class="pd-section" id="resumen" aria-labelledby="pd-summary-title">
+          <h2 class="pd-label" id="pd-summary-title">Resumen</h2>
+          <dl class="pd-figures" id="pd-figures" hidden>
+            <div class="pd-figure"><dt>Productos activos</dt><dd id="pd-fig-active">—</dd></div>
+            <div class="pd-figure"><dt>Archivados</dt><dd id="pd-fig-archived">—</dd></div>
+            <div class="pd-figure"><dt>Con precio publicado</dt><dd id="pd-fig-priced">—</dd></div>
+            <div class="pd-figure"><dt>Con datos por completar</dt><dd id="pd-fig-incomplete">—</dd></div>
+          </dl>
+          <p class="pd-meta" id="pd-last-update" hidden></p>
+          <div class="pd-empty" id="pd-summary-empty" hidden>
+            <p class="pd-empty-title" id="pd-summary-empty-title"></p>
+            <p class="pd-empty-text" id="pd-summary-empty-text"></p>
+          </div>
+          <p class="pd-note">Mobau todavía no mide visitas, selecciones ni solicitudes por producto, así que este panel no muestra cifras de audiencia ni estimaciones.</p>
+        </section>
+
+        <section class="pd-section" id="mis-productos" aria-labelledby="pd-products-title">
+          <h2 class="pd-label" id="pd-products-title">Mis productos</h2>
+          <!-- 38-A: gestión bloqueada para toda empresa verificada (no existe
+               todavía el dato de plan). Sin "Añadir producto". -->
+          <div class="pd-locked" id="pd-products-locked" hidden>
+            <p class="pd-locked__title">La gestión de productos se activará después de la aprobación de tu plan.</p>
+            <p class="pd-locked__text">Mientras tanto, puedes pedir a Mobau la carga inicial de tus productos.</p>
+            <div class="pd-actions">
+              <a class="btn btn-primary btn-sm" id="pd-locked-cta" href="#">Solicitar carga inicial</a>
+              <a class="btn btn-outline btn-sm" id="pd-locked-catalog" href="catalogo.html">Ver catálogo</a>
+            </div>
+          </div>
+          <p class="pd-meta" id="pd-products-intro" hidden>Solo lectura: así figuran hoy tus productos en Mobau. Los datos por completar son orientativos; los accesorios decorativos no necesitan dimensiones, acabados ni archivos descargables.</p>
+          <div class="pd-table-wrap" id="pd-products-table" hidden>
+            <table class="pd-table">
+              <thead>
+                <tr><th scope="col">Producto</th><th scope="col">Estado</th><th scope="col">Precio</th><th scope="col">Datos por completar</th></tr>
+              </thead>
+              <tbody id="pd-products-body"></tbody>
+            </table>
+          </div>
+          <div class="pd-empty" id="pd-products-empty" hidden>
+            <p class="pd-empty-title" id="pd-products-empty-title"></p>
+            <p class="pd-empty-text" id="pd-products-empty-text"></p>
+          </div>
+          <div class="pd-future" role="note">
+            <p class="pd-future__title">Próxima fase: revisión individual de productos</p>
+            <p>Cada producto se revisará por separado antes de publicarse. La meta de Mobau es responder cada solicitud de revisión en un máximo de 48 horas; la revisión no garantiza la aprobación ni la publicación. Esta función todavía no está activa.</p>
+          </div>
+        </section>
+
+        <section class="pd-section" id="catalogo" aria-labelledby="pd-catalog-title">
+          <h2 class="pd-label" id="pd-catalog-title">Catálogo</h2>
+          <p class="pd-body">Consulta el catálogo de Mobau tal como lo ven los profesionales, en modo lectura.</p>
+          <div class="pd-actions">
+            <a class="btn btn-outline btn-sm" href="catalogo.html">Ver catálogo</a>
+            <a class="btn btn-outline btn-sm" id="pd-catalog-own" href="catalogo.html" hidden>Ver mis productos en el catálogo</a>
+          </div>
+        </section>
+
+      </div>
+
+      <aside class="pd-aside" aria-label="Empresa y ayuda">
+        <section class="pd-card" aria-labelledby="pd-company-card-title">
+          <h2 class="pd-label" id="pd-company-card-title">Empresa</h2>
+          <dl class="pd-facts" id="pd-company-facts"></dl>
+          <a class="pd-link" href="perfil-distribuidor.html" id="pd-company-edit">Ver o editar datos de empresa</a>
+        </section>
+
+        <section class="pd-card" aria-labelledby="pd-plan-card-title">
+          <h2 class="pd-label" id="pd-plan-card-title">Condiciones del plan</h2>
+          <ul class="pd-list">
+            <li>Plan Distribuidor Fundador: 59 USD al mes durante el piloto.</li>
+            <li>Mobau revisa la empresa antes de cualquier cobro. Si la empresa no se aprueba, no se cobra nada.</li>
+            <li>El plan no garantiza que todos los productos se publiquen.</li>
+            <li>Un producto que requiere cambios se corrige y se reenvía; eso no implica reembolso de la mensualidad.</li>
+          </ul>
+        </section>
+
+        <section class="pd-card" aria-labelledby="pd-help-title">
+          <h2 class="pd-label" id="pd-help-title">Ayuda</h2>
+          <p class="pd-body">La carga inicial de productos es manual: Mobau puede incorporar tus primeros productos por ti.</p>
+          <a class="btn btn-primary btn-sm btn-block" id="pd-help-cta" href="#" hidden>Solicitar carga inicial</a>
+          <p class="pd-meta" id="pd-help-cta-note" hidden>Disponible cuando tu empresa esté verificada.</p>
+          <p class="pd-meta">Para cualquier duda, escríbenos a <a class="pd-link" href="mailto:hola@mobau.do">hola@mobau.do</a>.</p>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <h4>Mobau</h4>
+        <p>Plataforma de diseño multi-categoría para arquitectos e interioristas en República Dominicana — actualmente en piloto.</p>
+      </div>
+      <div>
+        <h4>Plataforma</h4>
+        <ul>
+          <li><a href="catalogo.html">Catálogo</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Tu cuenta</h4>
+        <ul>
+          <li><a href="panel-distribuidor.html">Panel de distribuidor</a></li>
+          <li><a href="perfil-distribuidor.html">Perfil de empresa</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contacto</h4>
+        <p>hola@mobau.do<br>+1 (809) 555 0142<br>Santo Domingo, RD</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Hecho para arquitectos e interioristas en RD</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="proyectos-data.js"></script>
+<script src="seleccion-data.js"></script>
+<script src="script.js"></script>
+<script>
+  /* Panel de distribuidor (Punto 38-A). Solo lee datos reales con las
+     políticas actuales: la fila propia de distributor_profiles y, si la
+     empresa está verificada, sus productos (products, lectura pública),
+     sus precios (product_prices, lectura autenticada) y los nombres de
+     categoría. No escribe nada, no muestra métricas de audiencia y no
+     simula funciones que aún no existen (plan, revisión de productos). */
+  const $ = (id) => document.getElementById(id);
+  let session = null;
+
+  const AVISOS = {
+    "solo-profesionales": "Esa sección es para cuentas profesionales. Desde aquí gestionas tu empresa y consultas tus productos.",
+    "plan": "La gestión de productos necesita el plan activo, que todavía no se puede activar en la web. Aquí tienes tus productos en modo lectura."
+  };
+
+  const COMPANY = {
+    none: {
+      chip: "Sin ficha", chipClass: "neutral",
+      title: "Completa los datos de tu empresa",
+      text: "Para empezar, envía los datos fiscales y de contacto de tu empresa. Mobau los revisa antes de cualquier cobro.",
+      cta: "Completar datos de empresa", ctaClass: "btn-primary"
+    },
+    pending_verification: {
+      chip: "En revisión", chipClass: "wait",
+      title: "Empresa en revisión",
+      text: "Estamos revisando los datos de tu empresa. No se realiza ningún cobro mientras tanto.",
+      cta: "Ver datos enviados", ctaClass: "btn-outline"
+    },
+    rejected: {
+      chip: "Rechazada", chipClass: "alert",
+      title: "Tu empresa necesita correcciones",
+      text: "Necesitamos que corrijas algunos datos. Al guardarlos, vuelven a revisión automáticamente.",
+      cta: "Corregir datos", ctaClass: "btn-primary"
+    },
+    verified: {
+      chip: "Verificada", chipClass: "ok",
+      title: "Empresa verificada",
+      text: "Tu empresa está verificada en Mobau.",
+      cta: "Ver datos de empresa", ctaClass: "btn-outline"
+    }
+  };
+
+  const PRICE_LABELS = {
+    published: "Precio publicado",
+    quote_required: "A consultar",
+    pending_confirmation: "Por confirmar",
+    unavailable: "No disponible"
+  };
+
+  /* Datos por completar (orientativo): la imagen siempre; dimensiones,
+     acabados y archivo descargable (ficha técnica o CAD/BIM) salvo en
+     accesorios decorativos. Solo columnas reales de products. */
+  function missingData(p){
+    const out = [];
+    if (!p.image_url) out.push("imagen");
+    if (p.category_id !== "accesorios-decorativos"){
+      if (!p.measurements) out.push("dimensiones");
+      if (!p.finishes) out.push("acabados");
+      if (!p.technical_sheet_url && !p.cad_bim_3d_url) out.push("archivo descargable");
+    }
+    return out;
+  }
+
+  function formatDate(value){
+    if (!value) return "";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
+  }
+
+  function chip(el, text, kind){
+    el.textContent = text;
+    el.className = `pd-chip pd-chip--${kind}`;
+  }
+
+  function showState(id){
+    ["pd-loading", "pd-error", "pd-content"].forEach(x => { $(x).hidden = x !== id; });
+  }
+
+  /* "Solicitar carga inicial": canal de contacto ya existente en el sitio
+     (mailto:hola@mobau.do, como activar-plan.html). Asunto y cuerpo fijos y
+     editables por el distribuidor: nunca se autocompletan datos de la cuenta
+     ni de la empresa. Solo se ofrece a empresas verificadas. */
+  const INITIAL_LOAD_SUBJECT = "Solicitud de carga inicial de productos — Mobau";
+  const INITIAL_LOAD_BODY = [
+    "Hola,",
+    "",
+    "Quiero solicitar apoyo para incorporar los primeros productos de mi empresa en Mobau.",
+    "",
+    "Empresa:",
+    "Categorías de producto:",
+    "Cantidad aproximada de referencias:",
+    "Enlaces a catálogos, fichas o archivos:"
+  ].join("\r\n");
+  const INITIAL_LOAD_MAILTO = `mailto:hola@mobau.do?subject=${encodeURIComponent(INITIAL_LOAD_SUBJECT)}&body=${encodeURIComponent(INITIAL_LOAD_BODY)}`;
+
+  function renderAviso(){
+    const params = new URLSearchParams(window.location.search);
+    const aviso = params.get("aviso");
+    if (!aviso || !MobauAccess.SUPPLIER_AVISOS.includes(aviso) || !AVISOS[aviso]) return;
+    $("pd-aviso").textContent = AVISOS[aviso];
+    $("pd-aviso").hidden = false;
+    /* El aviso se muestra una vez: se quita de la URL sin recargar. */
+    params.delete("aviso");
+    const query = params.toString();
+    history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }
+
+  function renderCompany(profile){
+    const key = profile ? profile.verification_status : "none";
+    const info = COMPANY[key] || COMPANY.pending_verification;
+    const name = profile && profile.nombre_comercial;
+
+    $("pd-title").textContent = name || "Tu empresa en Mobau";
+    $("pd-subtitle").textContent = `${info.title}.`;
+    document.title = `${name ? `${name} — ` : ""}Panel de distribuidor — Mobau`;
+
+    chip($("pd-company-chip"), info.chip, info.chipClass);
+    let text = info.text;
+    if (key === "verified" && profile.verified_at) text = `Verificada el ${formatDate(profile.verified_at)}.`;
+    $("pd-company-text").textContent = text;
+
+    const reasonEl = $("pd-company-reason");
+    if (key === "rejected" && profile.rejection_reason){
+      reasonEl.textContent = `Motivo: ${profile.rejection_reason}`;
+      reasonEl.hidden = false;
+    } else {
+      reasonEl.hidden = true;
+    }
+    const cta = $("pd-company-cta");
+    cta.textContent = info.cta;
+    cta.className = `btn btn-sm ${info.ctaClass}`;
+
+    const facts = $("pd-company-facts");
+    facts.replaceChildren();
+    const rows = profile
+      ? [["Nombre comercial", profile.nombre_comercial], ["Razón social", profile.razon_social], ["RNC", profile.rnc], ["Contacto", profile.nombre_contacto], ["Correo", profile.email_contacto]]
+      : [["Estado", "Sin datos de empresa todavía"]];
+    rows.forEach(([label, value]) => {
+      const row = document.createElement("div");
+      const dt = document.createElement("dt"); dt.textContent = label;
+      const dd = document.createElement("dd"); dd.textContent = value || "No indicado";
+      row.append(dt, dd);
+      facts.appendChild(row);
+    });
+    $("pd-company-edit").textContent = profile ? "Ver o editar datos de empresa" : "Completar datos de empresa";
+
+    const verified = key === "verified";
+    $("pd-help-cta").hidden = !verified;
+    $("pd-help-cta-note").hidden = verified;
+    if (verified) $("pd-help-cta").href = INITIAL_LOAD_MAILTO;
+
+    /* "Mis productos" bloqueado (38-A): solo para empresas verificadas. */
+    $("pd-products-locked").hidden = !verified;
+    if (verified) $("pd-locked-cta").href = INITIAL_LOAD_MAILTO;
+  }
+
+  function renderProductsStep(verified){
+    if (verified){
+      chip($("pd-products-chip"), "Requiere plan activo", "neutral");
+      $("pd-products-text").textContent = "Sin plan activo no puedes crear ni editar productos. Puedes consultar abajo los que ya tienes y solicitar a Mobau la carga inicial.";
+    } else {
+      chip($("pd-products-chip"), "No disponible", "neutral");
+      $("pd-products-text").textContent = "Se habilitará cuando tu empresa esté verificada y el plan esté activo.";
+    }
+  }
+
+  function renderNotVerified(profile){
+    const key = profile ? profile.verification_status : "none";
+    $("pd-figures").hidden = true;
+    $("pd-last-update").hidden = true;
+    $("pd-summary-empty").hidden = false;
+    $("pd-summary-empty-title").textContent = "Todavía no hay datos que resumir";
+    $("pd-summary-empty-text").textContent = key === "none"
+      ? "El resumen de tus productos aparecerá cuando tu empresa esté registrada y verificada."
+      : "El resumen de tus productos aparecerá cuando tu empresa esté verificada.";
+
+    $("pd-products-intro").hidden = true;
+    $("pd-products-table").hidden = true;
+    $("pd-products-empty").hidden = false;
+    $("pd-products-empty-title").textContent = "Tus productos aparecerán aquí";
+    $("pd-products-empty-text").textContent = "Podrás consultarlos cuando tu empresa esté verificada.";
+    $("pd-catalog-own").hidden = true;
+  }
+
+  function renderProducts(profile, products, prices, categoryNames){
+    const active = products.filter(p => p.status === "active");
+    const archived = products.filter(p => p.status === "archived");
+    const priced = products.filter(p => prices.get(p.id) && prices.get(p.id).price_status === "published");
+    const incomplete = products.filter(p => missingData(p).length > 0);
+
+    $("pd-summary-empty").hidden = true;
+    $("pd-figures").hidden = false;
+    $("pd-fig-active").textContent = String(active.length);
+    $("pd-fig-archived").textContent = String(archived.length);
+    $("pd-fig-priced").textContent = products.length ? `${priced.length} de ${products.length}` : "0";
+    $("pd-fig-incomplete").textContent = String(incomplete.length);
+
+    const last = products.map(p => p.updated_at || p.created_at).filter(Boolean).sort().pop();
+    $("pd-last-update").hidden = !last;
+    if (last) $("pd-last-update").textContent = `Última actualización de un producto: ${formatDate(last)}.`;
+
+    $("pd-catalog-own").hidden = !active.length;
+    $("pd-catalog-own").href = `catalogo.html?distribuidor=${encodeURIComponent(profile.distributor_id)}`;
+
+    if (!products.length){
+      $("pd-products-intro").hidden = true;
+      $("pd-products-table").hidden = true;
+      $("pd-products-empty").hidden = false;
+      $("pd-products-empty-title").textContent = "Aún no tienes productos en Mobau";
+      $("pd-products-empty-text").textContent = "Cuando Mobau incorpore tus primeros productos, aparecerán aquí en modo lectura.";
+      return;
+    }
+
+    $("pd-products-empty").hidden = true;
+    $("pd-products-intro").hidden = false;
+    $("pd-products-table").hidden = false;
+    const sorted = [...products].sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+    $("pd-products-body").innerHTML = sorted.map(p => {
+      const isActive = p.status === "active";
+      const price = prices.get(p.id);
+      const priceLabel = price ? (PRICE_LABELS[price.price_status] || "Sin precio") : "Sin precio";
+      const missing = missingData(p);
+      const category = categoryNames.get(p.category_id) || "";
+      return `
+        <tr>
+          <td data-label="Producto"><span class="pd-product-name">${escapeHtml(p.name)}</span>${category ? `<span class="pd-meta">${escapeHtml(category)}</span>` : ""}</td>
+          <td data-label="Estado"><span class="pd-chip pd-chip--${isActive ? "ok" : "neutral"}">${isActive ? "Activo" : "Archivado"}</span></td>
+          <td data-label="Precio">${escapeHtml(priceLabel)}</td>
+          <td data-label="Datos por completar">${missing.length ? escapeHtml(missing.join(", ")) : "Completos"}</td>
+        </tr>`;
+    }).join("");
+  }
+
+  async function loadPanel(){
+    showState("pd-loading");
+
+    const kind = await MobauAccess.accountKind();
+    if (kind === "client"){ window.location.replace("index.html"); return; }
+    if (kind !== "supplier"){
+      $("pd-error-detail").textContent = "No pudimos comprobar tu tipo de cuenta. Intenta de nuevo.";
+      showState("pd-error");
+      return;
+    }
+
+    const { data: profile, error } = await supabaseClient
+      .from("distributor_profiles")
+      .select("nombre_comercial, razon_social, rnc, nombre_contacto, email_contacto, verification_status, rejection_reason, verified_at, distributor_id")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    if (error){
+      $("pd-error-detail").textContent = error.message || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
+      showState("pd-error");
+      return;
+    }
+
+    const verified = !!profile && profile.verification_status === "verified" && !!profile.distributor_id;
+    renderCompany(profile);
+    renderProductsStep(verified);
+
+    if (!verified){
+      renderNotVerified(profile);
+      showState("pd-content");
+      return;
+    }
+
+    const { data: products, error: productsError } = await supabaseClient
+      .from("products")
+      .select("id, name, category_id, status, image_url, measurements, finishes, technical_sheet_url, cad_bim_3d_url, created_at, updated_at")
+      .eq("distributor_id", profile.distributor_id);
+    if (productsError){
+      $("pd-error-detail").textContent = productsError.message || "No pudimos cargar tus productos. Intenta de nuevo.";
+      showState("pd-error");
+      return;
+    }
+
+    const prices = new Map();
+    const categoryNames = new Map();
+    if (products.length){
+      const [{ data: priceRows }, { data: categories }] = await Promise.all([
+        supabaseClient.from("product_prices").select("product_id, price_status").in("product_id", products.map(p => p.id)),
+        supabaseClient.from("categories").select("id, name")
+      ]);
+      (priceRows || []).forEach(r => prices.set(r.product_id, r));
+      (categories || []).forEach(c => categoryNames.set(c.id, c.name));
+    }
+
+    renderProducts(profile, products, prices, categoryNames);
+    showState("pd-content");
+  }
+
+  $("pd-retry-btn").addEventListener("click", loadPanel);
+
+  (async () => {
+    session = await MobauAuth.requireSession();
+    if (!session) return; // ya redirigió a acceso.html
+    renderAviso();
+    await loadPanel();
+    /* Con el contenido ya pintado, el ancla (#mis-productos) apunta a su sitio. */
+    if (window.location.hash === "#mis-productos") $("mis-productos").scrollIntoView();
+  })();
+</script>
+</body>
+</html>

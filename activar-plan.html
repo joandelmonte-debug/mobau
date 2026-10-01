@@ -176,6 +176,8 @@
   (async () => {
     const session = await MobauAuth.requireSession();
     if (!session) return; // ya redirigió a acceso.html
+    /* Punto 38-A: los planes de esta página son profesionales -> panel. */
+    if (await MobauAccess.redirectSupplierToPanel()) return;
 
     if (!MobauAccess.planRequiresActivation(plan)){
       show("ap-state-invalid");
@@ -184,7 +186,7 @@
 
     const facts = await MobauAccess.accountFacts(session);
     if (facts.isSupplier){
-      window.location.replace("perfil-distribuidor.html");
+      window.location.replace(MobauAccess.SUPPLIER_HOME);
       return;
     }
     if (!facts.hasProfessionalProfile){

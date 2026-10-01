@@ -228,6 +228,7 @@
   (async () => {
     const session = await MobauAuth.requireSession();
     if (!session) return; // ya redirigió a login.html
+    if (await MobauAccess.redirectSupplierToPanel()) return; // Punto 38-A: distribuidor -> panel
 
     document.getElementById("session-info").textContent =
       `Sesión iniciada como ${session.user.email}`;
