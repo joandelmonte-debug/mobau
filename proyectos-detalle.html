@@ -46,6 +46,33 @@
   .project-info-col .spec-table{ margin-bottom:20px; }
   .project-info-col .spec-row{ padding:9px 0; font-size:13.5px; }
 
+  /* Tarea 36 — separación editorial acromática de la columna izquierda
+     (ficha, gestión y "Añadir productos"): solo una línea vertical fina,
+     sin fondo, sombra ni efectos. El área de productos (columna derecha)
+     no cambia y sigue siendo la protagonista.
+     Alternativa de superficie mínima, si hiciera falta:
+       background: rgba(255, 255, 255, 0.12);
+       border-right: 1px solid rgba(40, 40, 40, 0.08); */
+  .project-info-col{
+    background:transparent;
+    border-right:1px solid rgba(40, 40, 40, 0.09);
+    padding-right:28px;
+    box-shadow:none;
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+  }
+  /* Una sola columna (el grid se apila a partir de 1080px: tablet y móvil):
+     sin línea vertical; una línea inferior tenue separa la ficha de los
+     productos. */
+  @media (max-width: 1080px){
+    .project-info-col{
+      border-right:none;
+      padding-right:0;
+      border-bottom:1px solid rgba(40, 40, 40, 0.08);
+      padding-bottom:28px;
+    }
+  }
+
   /* Punto 28 — "Añadir productos" en la columna izquierda, debajo de
      la ficha y de Archivar/Volver a mis proyectos: sigue siendo el
      mismo <div> de columna izquierda del grid (nunca una tercera
