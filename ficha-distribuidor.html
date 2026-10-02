@@ -3,16 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ficha de distribuidor — Mobau</title>
+<title>Plan Distribuidor Fundador — Mobau</title>
 <link rel="stylesheet" href="styles.css">
 <style>
-  /* Pasos del proceso — local a esta página (nunca styles.css). El
-     componente global .steps/.step (styles.css) está pensado para
-     exactamente 3 elementos en una sola fila; aquí son 4, así que se
-     define una cuadrícula 2×2 propia en vez de forzar ese componente
-     a un conteo para el que no fue pensado. Mismos tokens de diseño
-     que ya usa el resto del sitio (var(--line), var(--radius-lg),
-     var(--brass), var(--f-head)) — ningún color ni fuente nueva. */
+  /* Plan Distribuidor Fundador — estilos locales a esta página (nunca
+     styles.css). Mismos tokens de diseño que el resto del sitio
+     (var(--line), var(--radius-lg), var(--brass), var(--f-head)): ningún
+     color ni fuente nueva. La cuadrícula de pasos es propia (4 pasos)
+     porque el componente global .steps/.step está pensado para 3. */
+  .dp-main{ max-width:760px; padding-top:32px; padding-bottom:100px; }
+  .dp-plan{
+    border:1px solid var(--line); border-radius:var(--radius-lg);
+    background: var(--white); padding:26px 28px; margin: 0 0 44px;
+  }
+  .dp-plan__name{ font-family: var(--f-head); font-size:20px; font-weight:600; color: var(--ink); margin:0; }
+  .dp-plan__price{ font-family: var(--f-head); font-size:30px; color: var(--ink); margin:8px 0 2px; }
+  .dp-plan__price small{ font-size:15px; color: var(--ink-soft); font-family: inherit; }
+  .dp-plan__list{ margin:18px 0 0; padding:0 0 0 18px; }
+  .dp-plan__list li{ font-size:14.5px; color: var(--ink-soft); margin-bottom:8px; }
+  .dp-plan__note{ font-size:13.5px; color: var(--ink-soft); margin:16px 0 0; padding-top:14px; border-top:1px solid var(--line); }
+  .dp-actions{ display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
+  .dp-list{ margin:0; padding:0 0 0 18px; }
+  .dp-list li{ margin-bottom:8px; color: var(--ink-soft); }
   .dp-steps{
     display:grid; grid-template-columns: repeat(2, 1fr); gap:20px;
     margin: 22px 0 8px;
@@ -28,6 +40,10 @@
   .dp-step p{ font-size:13.5px; margin:0; color:var(--ink-soft); }
   @media (max-width:900px){
     .dp-steps{ grid-template-columns:1fr; }
+  }
+  @media (max-width:520px){
+    .dp-plan{ padding:22px 20px; }
+    .dp-actions .btn{ width:100%; justify-content:center; }
   }
 </style>
 </head>
@@ -54,55 +70,89 @@
 <div class="page-head">
   <div class="wrap">
     <div class="eyebrow">Para distribuidores</div>
-    <h1>Muestra tu catálogo en Mobau</h1>
-    <p style="margin-top:14px; max-width:60ch;">Mobau es una plataforma en fase piloto que reúne productos de distintas categorías — iluminación, mobiliario, revestimientos, baño, cocina y accesorios decorativos — para que arquitectos e interioristas los encuentren en un mismo lugar.</p>
+    <h1>Plan Distribuidor Fundador</h1>
+    <p style="margin-top:14px; max-width:62ch;">Presenta tus productos, con su información técnica, a los arquitectos e interioristas que preparan proyectos en Mobau. Mobau es una plataforma de diseño en fase piloto en República Dominicana.</p>
   </div>
 </div>
 
-<main class="wrap" style="max-width:680px; padding: 32px 0 100px;">
+<main class="wrap dp-main">
+
+  <section class="dp-plan" aria-labelledby="dp-plan-name">
+    <p class="dp-plan__name" id="dp-plan-name">Plan Distribuidor Fundador</p>
+    <p class="dp-plan__price">59 USD <small>al mes, ITBIS incluido</small></p>
+    <ul class="dp-plan__list">
+      <li>Pensado para catálogos de hasta 200 productos publicados.</li>
+      <li>Carga inicial acompañada: durante el piloto, Mobau coordina contigo la carga inicial.</li>
+      <li>Panel de distribuidor para consultar tus productos y su estado de publicación.</li>
+    </ul>
+    <p class="dp-plan__note"><strong>Registrarte no tiene ningún coste.</strong> Durante el piloto no se cobra nada: el pago online todavía no está disponible. Mobau revisa tu empresa antes de cualquier cobro futuro.</p>
+    <div class="dp-actions">
+      <a href="registro.html?tipo=distribuidor" class="btn btn-primary">Elegir Plan Distribuidor</a>
+      <a href="acceso.html" class="btn btn-outline">Ya tengo cuenta · Iniciar sesión</a>
+    </div>
+  </section>
 
   <div class="account-section">
-    <h2>¿Qué es Mobau?</h2>
-    <p>Mobau es un catálogo multicategoría dirigido a arquitectos e interioristas en República Dominicana, actualmente en fase piloto. Reúne productos de distintos distribuidores locales en un mismo lugar, para que un profesional pueda armar un proyecto con piezas de varias categorías y solicitar cotización sin tener que contactar a cada proveedor por separado.</p>
+    <h2>Qué incluye</h2>
+    <ul class="dp-list">
+      <li><strong>Incorporación de tus productos al catálogo de Mobau, sujeta a revisión</strong>, junto a los de otras categorías, para que los profesionales los encuentren, los guarden en sus proyectos y soliciten cotización.</li>
+      <li><strong>Catálogos de hasta 200 productos publicados:</strong> es la dimensión para la que está pensado el Plan Distribuidor Fundador. Los productos que Mobau incorpore durante el piloto se revisan antes de publicarse. La incorporación no es automática ni garantiza la publicación de todos los productos.</li>
+      <li><strong>Carga inicial acompañada:</strong> nos envías tus catálogos, fichas y enlaces, y preparamos contigo las primeras fichas de producto.</li>
+      <li><strong>Panel de distribuidor</strong> con el estado de tu empresa, tus productos y su estado de publicación.</li>
+    </ul>
   </div>
 
   <div class="account-section">
-    <h2>¿Cómo participa un distribuidor?</h2>
-    <p>Si tu empresa distribuye productos para proyectos de arquitectura o interiorismo, puedes crear una ficha con tus datos legales. Una vez aprobada, coordinamos contigo la carga de tu catálogo — esos productos se presentan directamente ante los arquitectos e interioristas que están armando sus proyectos en la plataforma.</p>
-    <p>Completar la ficha no implica publicación automática ni ningún acuerdo comercial con Mobau, y no garantiza resultados, contactos ni ventas: es el primer paso para que evaluemos tu información antes de habilitar la carga de productos.</p>
+    <h2>Qué puede tener cada ficha de producto</h2>
+    <p>Nombre, marca, categoría, medidas, materiales, acabados, disponibilidad y plazo de entrega. Además, una imagen, la ficha técnica y archivos CAD, BIM o 3D, que hoy se incorporan como enlaces.</p>
+    <p>Cada producto puede mostrar un precio publicado o aparecer como «Precio bajo cotización». Los precios no se muestran a los visitantes sin sesión.</p>
   </div>
 
-  <div class="account-section" style="margin-bottom:36px;">
-    <h2>El proceso</h2>
+  <div class="account-section">
+    <h2>Cómo funciona</h2>
     <div class="dp-steps">
       <div class="dp-step">
-        <div class="num">01</div>
-        <h3>Crear la ficha</h3>
-        <p>Completa o actualiza los datos legales de tu empresa: razón social, RNC, dirección fiscal y un contacto responsable.</p>
+        <div class="num">01 · Cuenta</div>
+        <h3>Crea tu cuenta</h3>
+        <p>Con tu nombre y un correo de tu empresa. Es una cuenta independiente de cualquier cuenta profesional.</p>
       </div>
       <div class="dp-step">
-        <div class="num">02</div>
-        <h3>Revisar la información</h3>
-        <p>Mobau revisa tu información y decide si encaja en esta fase piloto — no es un paso automático.</p>
+        <div class="num">02 · Empresa</div>
+        <h3>Completa los datos de tu empresa</h3>
+        <p>Razón social, RNC, dirección fiscal y un contacto responsable.</p>
       </div>
       <div class="dp-step">
-        <div class="num">03</div>
-        <h3>Coordinar productos y materiales</h3>
-        <p>Con la ficha aprobada, coordinamos contigo qué productos, imágenes, fichas técnicas y materiales vas a cargar.</p>
+        <div class="num">03 · Revisión</div>
+        <h3>Mobau revisa tu empresa</h3>
+        <p>Es una revisión manual: Mobau puede aprobarla, pedir correcciones o no aprobarla. Con la empresa verificada, consultas tus productos en el panel.</p>
       </div>
       <div class="dp-step">
-        <div class="num">04</div>
-        <h3>Publicar cuando esté aprobado</h3>
-        <p>Solo se publica la información ya aprobada — nunca antes de esa revisión.</p>
+        <div class="num">04 · Plan</div>
+        <h3>Activa el plan desde tu panel</h3>
+        <p>Cuando el pago online esté disponible, lo activarás desde tu panel. Hasta entonces no se cobra nada.</p>
       </div>
     </div>
   </div>
 
-  <div class="confirm-actions">
-    <a href="registro.html?tipo=distribuidor" class="btn btn-primary">Crear mi ficha de distribuidor</a>
-    <a href="distribuidores.html" class="btn btn-outline">Volver a Distribuidores</a>
+  <div class="account-section">
+    <h2>Qué puedes hacer hoy</h2>
+    <p>Durante el piloto, en tu panel consultas tus productos y su estado de publicación. Las propuestas de altas y cambios desde el panel llegarán más adelante; mientras tanto, Mobau te acompaña en la carga inicial.</p>
   </div>
 
+  <div class="account-section">
+    <h2>Lo que conviene saber</h2>
+    <ul class="dp-list">
+      <li>Completar el registro no garantiza la aprobación de tu empresa ni la publicación de tus productos.</li>
+      <li>Mobau no garantiza ventas, contactos ni plazos concretos de revisión o publicación.</li>
+      <li>Mobau revisa tu empresa antes de cualquier cobro futuro.</li>
+    </ul>
+    <p style="margin-top:16px;">¿Tienes dudas? Escríbenos a <a href="mailto:hola@mobau.do">hola@mobau.do</a>.</p>
+  </div>
+
+  <div class="confirm-actions">
+    <a href="registro.html?tipo=distribuidor" class="btn btn-primary">Elegir Plan Distribuidor</a>
+    <a href="acceso.html" class="btn btn-outline">Ya tengo cuenta · Iniciar sesión</a>
+  </div>
 </main>
 
 <footer class="site-footer" id="contacto">

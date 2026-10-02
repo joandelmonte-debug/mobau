@@ -50,8 +50,10 @@
 
   <div id="pd-content" hidden>
 
-    <!-- Estado de la cuenta: tres pasos con datos reales (empresa) o
-         informativos (plan: todavía no existe en la web). -->
+    <!-- Estado de la cuenta: tres ejes independientes. Empresa (verificación,
+         dato real de distributor_profiles), plan (informativo: el pago online
+         llega en el punto 40; aquí no hay ninguna lógica de pago) y
+         productos (consulta, según la verificación). -->
     <section class="pd-section" aria-labelledby="pd-steps-title">
       <h2 class="pd-label" id="pd-steps-title">Estado de la cuenta</h2>
       <ol class="pd-steps">
@@ -69,14 +71,21 @@
           <span class="pd-step__num">02</span>
           <div class="pd-step__head">
             <h3>Plan Distribuidor Fundador</h3>
-            <span class="pd-chip pd-chip--neutral">Activación no disponible</span>
+            <span class="pd-chip pd-chip--neutral">Pago online no disponible</span>
           </div>
-          <p><strong class="pd-figure-inline">59 USD</strong> al mes durante el piloto. La activación del plan todavía no está disponible en la web.</p>
+          <p><strong class="pd-figure-inline">59 USD</strong> al mes, ITBIS incluido. El plan está pensado para catálogos de hasta 200 productos publicados. Durante el piloto, Mobau coordina contigo la carga inicial.</p>
+          <p>El pago online aún no está disponible: durante el piloto no se cobra nada. Mobau revisa tu empresa antes de cualquier cobro futuro.</p>
+          <!-- Lugar reservado para el punto 40: solo texto, sin botón, enlace
+               ni lógica de pago. El texto depende de la verificación. -->
+          <div style="border-top:1px solid var(--line); padding-top:12px; width:100%;">
+            <p><strong>Activación online próximamente</strong></p>
+            <p id="pd-plan-soon-text">Cuando Mobau verifique tu empresa podrás usar el panel de consulta. Cuando el pago online esté disponible, podrás activar el plan desde aquí.</p>
+          </div>
         </li>
         <li class="pd-step" id="pd-step-products">
           <span class="pd-step__num">03</span>
           <div class="pd-step__head">
-            <h3>Gestión de productos</h3>
+            <h3>Tus productos</h3>
             <span class="pd-chip pd-chip--neutral" id="pd-products-chip"></span>
           </div>
           <p id="pd-products-text"></p>
@@ -105,11 +114,11 @@
 
         <section class="pd-section" id="mis-productos" aria-labelledby="pd-products-title">
           <h2 class="pd-label" id="pd-products-title">Productos recientes</h2>
-          <!-- 38-A: gestión bloqueada para toda empresa verificada (no existe
-               todavía el dato de plan). Sin "Añadir producto". -->
+          <!-- Empresa verificada: carga inicial acompañada por Mobau (mailto).
+               Sin "Añadir producto": no hay escritura de productos desde el panel. -->
           <div class="pd-locked" id="pd-products-locked" hidden>
-            <p class="pd-locked__title">La gestión de productos se activará después de la aprobación de tu plan.</p>
-            <p class="pd-locked__text">Mientras tanto, puedes pedir a Mobau la carga inicial de tus productos.</p>
+            <p class="pd-locked__title">Carga inicial acompañada por Mobau</p>
+            <p class="pd-locked__text">Envíanos tus catálogos, fichas y enlaces y preparamos contigo las fichas de producto. Las propuestas de altas y cambios desde el panel llegarán más adelante.</p>
             <div class="pd-actions">
               <a class="btn btn-primary btn-sm" id="pd-locked-cta" href="#">Solicitar carga inicial</a>
               <a class="btn btn-outline btn-sm" id="pd-locked-catalog" href="catalogo.html">Ver catálogo</a>
@@ -159,16 +168,18 @@
         <section class="pd-card" aria-labelledby="pd-plan-card-title">
           <h2 class="pd-label" id="pd-plan-card-title">Condiciones del plan</h2>
           <ul class="pd-list">
-            <li>Plan Distribuidor Fundador: 59 USD al mes durante el piloto.</li>
+            <li>Plan Distribuidor Fundador: 59 USD al mes, ITBIS incluido.</li>
+            <li>Pensado para catálogos de hasta 200 productos publicados.</li>
+            <li>Durante el piloto, Mobau coordina contigo la carga inicial.</li>
             <li>Mobau revisa la empresa antes de cualquier cobro. Si la empresa no se aprueba, no se cobra nada.</li>
-            <li>El plan no garantiza que todos los productos se publiquen.</li>
-            <li>Un producto que requiere cambios se corrige y se reenvía; eso no implica reembolso de la mensualidad.</li>
+            <li>El pago online aún no está disponible: durante el piloto no se cobra nada.</li>
+            <li>Los productos que Mobau incorpore durante el piloto se revisan antes de publicarse; el plan no garantiza que todos se publiquen.</li>
           </ul>
         </section>
 
         <section class="pd-card" aria-labelledby="pd-help-title">
           <h2 class="pd-label" id="pd-help-title">Ayuda</h2>
-          <p class="pd-body">La carga inicial de productos es manual: Mobau puede incorporar tus primeros productos por ti.</p>
+          <p class="pd-body">La carga inicial está acompañada por Mobau: te ayudamos a incorporar tus primeros productos.</p>
           <a class="btn btn-primary btn-sm btn-block" id="pd-help-cta" href="#" hidden>Solicitar carga inicial</a>
           <p class="pd-meta" id="pd-help-cta-note" hidden>Disponible cuando tu empresa esté verificada.</p>
           <p class="pd-meta">Para cualquier duda, escríbenos a <a class="pd-link" href="mailto:hola@mobau.do">hola@mobau.do</a>.</p>
@@ -229,7 +240,7 @@
 
   const AVISOS = {
     "solo-profesionales": "Esa sección es para cuentas profesionales. Desde aquí gestionas tu empresa y consultas tus productos.",
-    "plan": "La gestión de productos necesita el plan activo, que todavía no se puede activar en la web. Aquí tienes tus productos en modo lectura."
+    "plan": "La edición directa de productos no está disponible. Aquí tienes tus productos en modo consulta; las propuestas de altas y cambios llegarán más adelante."
   };
 
   const COMPANY = {
@@ -387,12 +398,16 @@
   }
 
   function renderProductsStep(verified){
+    /* Texto del bloque "Activación online próximamente" (sin lógica de pago). */
+    $("pd-plan-soon-text").textContent = verified
+      ? "Tu empresa ya puede usar el panel de consulta durante el piloto. Cuando el pago online esté disponible, podrás activar el plan desde aquí."
+      : "Cuando Mobau verifique tu empresa podrás usar el panel de consulta. Cuando el pago online esté disponible, podrás activar el plan desde aquí.";
     if (verified){
-      chip($("pd-products-chip"), "Requiere plan activo", "neutral");
-      $("pd-products-text").textContent = "Sin plan activo no puedes crear ni editar productos. Puedes consultar abajo los que ya tienes y solicitar a Mobau la carga inicial.";
+      chip($("pd-products-chip"), "Consulta", "ok");
+      $("pd-products-text").textContent = "Consulta abajo tus productos y su estado de publicación. Las propuestas de altas y cambios llegarán más adelante; mientras tanto, Mobau te acompaña en la carga inicial.";
     } else {
-      chip($("pd-products-chip"), "No disponible", "neutral");
-      $("pd-products-text").textContent = "Se habilitará cuando tu empresa esté verificada y el plan esté activo.";
+      chip($("pd-products-chip"), "Tras la verificación", "neutral");
+      $("pd-products-text").textContent = "Podrás consultar tus productos cuando Mobau verifique tu empresa.";
     }
   }
 

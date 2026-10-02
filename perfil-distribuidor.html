@@ -6,6 +6,26 @@
 <title>Perfil de distribuidor — Mobau</title>
 <link rel="stylesheet" href="styles.css">
 <script src="nav-account-hint.js"></script>
+<style>
+  /* Pasos del Plan Distribuidor (Cuenta, Empresa, Revisión, Plan) — local a
+     las páginas del alta de distribuidor (registro.html y
+     perfil-distribuidor.html), nunca styles.css. Solo tokens existentes. */
+  .dist-progress{
+    list-style:none; margin:18px 0 0; padding:0; counter-reset: dist-step;
+    display:flex; flex-wrap:wrap; gap:8px 18px;
+    font-size:13px; color: var(--ink-faint);
+  }
+  .dist-progress li{ counter-increment: dist-step; display:flex; align-items:center; gap:7px; }
+  .dist-progress li::before{
+    content: counter(dist-step);
+    width:22px; height:22px; border-radius:50%; border:1px solid var(--line);
+    display:inline-grid; place-items:center;
+    font-family: var(--f-mono); font-size:11.5px; font-weight:600;
+  }
+  .dist-progress li[aria-current="step"]{ color: var(--ink); font-weight:600; }
+  .dist-progress li[aria-current="step"]::before{ border-color: var(--brass); color: var(--brass); }
+  .dist-progress li.is-done::before{ content:"✓"; border-color:transparent; background: var(--accent-soft); color: var(--accent-ink); }
+</style>
 </head>
 <body>
 
@@ -30,9 +50,15 @@
 <div class="page-head">
   <div class="wrap">
     <p class="card-meta" style="margin:0 0 14px;"><a href="panel-distribuidor.html" id="dp-back-panel">← Volver al panel</a></p>
-    <div class="eyebrow">Distribuidor</div>
+    <div class="eyebrow" id="dp-eyebrow">Plan Distribuidor Fundador</div>
     <h1 id="page-title">Perfil de distribuidor</h1>
-    <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Datos legales de tu empresa. Los revisamos manualmente antes de habilitar la carga de productos.</p>
+    <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Datos legales de tu empresa. Mobau los revisa manualmente antes de cualquier cobro.</p>
+    <ol class="dist-progress" id="dp-progress" aria-label="Pasos del Plan Distribuidor" hidden>
+      <li>Cuenta</li>
+      <li>Empresa</li>
+      <li>Revisión</li>
+      <li>Plan</li>
+    </ol>
   </div>
 </div>
 
@@ -116,6 +142,7 @@
       <label for="dp-cargo-contacto">Cargo del contacto</label>
       <input id="dp-cargo-contacto" type="text" required placeholder="Ej. Gerente comercial">
     </div>
+    <p class="card-meta" id="dp-form-note" style="margin:0 0 18px;">Al enviar, Mobau revisará los datos de tu empresa manualmente. Enviarlos no tiene ningún coste: durante el piloto no se cobra nada.</p>
     <p id="dp-form-error" style="display:none; color:var(--danger); font-size:13px; margin:-8px 0 14px;"></p>
     <div style="display:flex; gap:10px;">
       <button type="submit" class="btn btn-primary btn-block" id="dp-submit-btn">Enviar a verificación</button>
@@ -184,19 +211,22 @@
 
   const STATUS_INFO = {
     pending_verification: {
-      title: "Tu perfil está en revisión",
+      title: "Tu empresa está en revisión",
       chip: "En revisión", chipClass: "review",
-      text: "Estamos verificando tu RNC manualmente. Hasta que sea aprobado no podrás subir productos."
+      text: "Mobau está revisando los datos de tu empresa manualmente. Puedes consultar el estado en tu panel. No se realiza ningún cobro.",
+      step: 3
     },
     verified: {
-      title: "Perfil verificado",
-      chip: "Verificado", chipClass: "quoted",
-      text: "Tu empresa está verificada en Mobau."
+      title: "Empresa verificada",
+      chip: "Verificada", chipClass: "quoted",
+      text: "Tu empresa está verificada en Mobau y ya puedes consultar tus productos en el panel. El plan se activará desde el panel cuando el pago online esté disponible; hasta entonces no se cobra nada.",
+      step: 4
     },
     rejected: {
-      title: "Perfil rechazado",
-      chip: "Rechazado", chipClass: "closed",
-      text: "Corrige tus datos y guárdalos para volver a enviarlos a revisión."
+      title: "Tu empresa necesita correcciones",
+      chip: "Requiere correcciones", chipClass: "closed",
+      text: "Corrige tus datos y guárdalos para volver a enviarlos a revisión. No se realiza ningún cobro.",
+      step: 2
     }
   };
 
@@ -204,6 +234,19 @@
 
   function normalizeRnc(value){
     return value.replace(/[\s-]/g, "");
+  }
+
+  /* Paso actual del Plan Distribuidor (1 Cuenta, 2 Empresa, 3 Revisión,
+     4 Plan): solo presentación, a partir del estado ya leído. 0 = ocultar. */
+  function setProgress(step){
+    const list = $("dp-progress");
+    list.hidden = !step;
+    $("dp-eyebrow").textContent = step ? `Plan Distribuidor Fundador · Paso ${step} de 4` : "Distribuidor";
+    Array.from(list.children).forEach((li, i) => {
+      li.classList.toggle("is-done", i + 1 < step);
+      if (i + 1 === step) li.setAttribute("aria-current", "step");
+      else li.removeAttribute("aria-current");
+    });
   }
 
   function showOnly(...visibleIds){
@@ -219,6 +262,7 @@
     chip.textContent = info.chip;
     chip.className = `status-chip ${info.chipClass}`;
     $("dp-status-text").textContent = info.text;
+    setProgress(info.step);
 
     const reasonEl = $("dp-status-reason");
     if (profile.verification_status === "rejected" && profile.rejection_reason){
@@ -263,10 +307,14 @@
     $("dp-form-error").style.display = "none";
     $("dp-submit-btn").textContent = editing ? "Guardar cambios" : "Enviar a verificación";
     $("dp-cancel-btn").style.display = editing ? "inline-flex" : "none";
+    /* La nota de revisión es del primer envío; al editar, solo RNC o razón
+       social devuelven la empresa a revisión (se avisa con confirm()). */
+    $("dp-form-note").style.display = editing ? "none" : "block";
     if (editing){
       showOnly("dp-status", "dp-form");
     } else {
-      $("page-subtitle").textContent = "Completa los datos legales de tu empresa para enviarlos a verificación.";
+      $("page-subtitle").textContent = "Completa los datos legales de tu empresa para enviarlos a revisión. Mobau los revisa manualmente antes de cualquier cobro.";
+      setProgress(2);
       showOnly("dp-form");
     }
   }
@@ -308,7 +356,7 @@
        (lo hace un trigger en la base de datos); se avisa antes de guardar. */
     if (profile && profile.verification_status === "verified"
         && (values.rnc !== profile.rnc || values.razon_social !== profile.razon_social)){
-      const ok = confirm("Cambiar el RNC o la razón social enviará tu perfil de nuevo a revisión y no podrás subir productos hasta que sea aprobado. ¿Continuar?");
+      const ok = confirm("Cambiar el RNC o la razón social enviará tu empresa de nuevo a revisión. Hasta que Mobau la verifique no podrás consultar tus productos en el panel. ¿Continuar?");
       if (!ok) return;
     }
 
@@ -359,6 +407,7 @@
     }
     if (!account || account.role !== "supplier"){
       $("dp-back-panel").parentElement.hidden = true;
+      setProgress(0);
       const email = session.user.email;
       $("dp-not-supplier-detail").textContent = email
         ? `Tu cuenta (${email}) está registrada como profesional. Un distribuidor es una cuenta separada e independiente en Mobau — te recomendamos usar un correo corporativo distinto.`
