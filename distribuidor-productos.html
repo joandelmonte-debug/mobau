@@ -5,22 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mis productos — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="distribuidor.css">
 </head>
 <body>
 
+<!-- Página de distribuidor (como panel-distribuidor.html): cabecera de
+     distribuidor escrita directamente. Una cuenta que no es de distribuidor
+     se envía a index.html. -->
 <header class="site-header">
   <div class="wrap nav">
-    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <a href="panel-distribuidor.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
     <nav class="nav-links" aria-label="Principal">
-      <a href="index.html">Inicio</a>
+      <a href="panel-distribuidor.html" data-supplier-nav>Resumen</a>
+      <a href="distribuidor-productos.html" class="active" aria-current="page" data-supplier-nav>Mis productos</a>
       <a href="catalogo.html">Catálogo</a>
-      <a href="distribuidores.html">Distribuidores</a>
-      <a href="index.html#contacto">Contacto</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -31,11 +33,11 @@
     <p class="card-meta" style="margin:0 0 14px;"><a href="panel-distribuidor.html">← Volver al panel</a></p>
     <div class="eyebrow">Distribuidor</div>
     <h1>Mis productos</h1>
-    <p style="margin-top:14px; max-width:60ch;">Gestiona los productos de tu empresa: crea, edita y archiva.</p>
+    <p style="margin-top:14px; max-width:60ch;">Los productos de tu empresa y su estado de publicación en Mobau.</p>
   </div>
 </div>
 
-<main class="wrap" style="padding: 40px 0 100px;">
+<main class="wrap pd-main">
 
   <p id="pl-loading" class="card-meta">Cargando tus productos…</p>
 
@@ -48,7 +50,7 @@
   <div id="pl-content" style="display:none;">
 
     <p class="card-meta" style="border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); padding:12px 16px; margin:0 0 24px;">
-      Piloto: los cambios aún no se reflejan en el catálogo público.
+      Solo lectura: así figuran hoy tus productos en Mobau. Todavía no se pueden crear ni editar productos desde aquí.
     </p>
 
     <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:8px;">
@@ -64,13 +66,15 @@
         <div class="field" style="margin:0;">
           <label for="pl-status">Estado</label>
           <select id="pl-status">
-            <option value="active">Activos</option>
-            <option value="archived">Archivados</option>
             <option value="">Todos</option>
+            <option value="published">Publicado</option>
+            <option value="in_review">En revisión</option>
+            <option value="changes_requested">Cambios solicitados</option>
+            <option value="draft">Borrador</option>
+            <option value="archived">Archivado</option>
           </select>
         </div>
       </div>
-      <a href="distribuidor-producto.html" class="btn btn-primary">Añadir producto</a>
     </div>
 
     <p id="pl-count" class="card-meta" style="margin:14px 0 12px;"></p>
@@ -96,15 +100,13 @@
         <h4>Plataforma</h4>
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
-          <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>
-        <h4>Para distribuidores</h4>
+        <h4>Tu cuenta</h4>
         <ul>
-          <li><a href="ficha-distribuidor.html">Cómo mostrar tu catálogo</a></li>
-          <li><a href="ficha-distribuidor.html">Ficha de distribuidor</a></li>
+          <li><a href="panel-distribuidor.html">Panel de distribuidor</a></li>
+          <li><a href="perfil-distribuidor.html">Perfil de empresa</a></li>
         </ul>
       </div>
       <div>
@@ -126,8 +128,21 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
+/* Mis productos (fase 1): solo lectura. Lee los productos de la
+   empresa verificada (products, incluidos los no publicados: 38-B), sus
+   precios y los nombres de categoría. No escribe nada: crear, editar o
+   archivar productos queda fuera de esta página. */
 (() => {
   const $ = (id) => document.getElementById(id);
+
+  /* Estado de publicación (products.publication_status, 38-B). */
+  const PUBLICATION = {
+    draft:             { label: "Borrador",            kind: "neutral" },
+    in_review:         { label: "En revisión",         kind: "wait" },
+    changes_requested: { label: "Cambios solicitados", kind: "alert" },
+    published:         { label: "Publicado",           kind: "ok" },
+    archived:          { label: "Archivado",           kind: "neutral" }
+  };
 
   const AVAILABILITY = {
     "en-stock":      { label: "En stock",      cls: "quoted" },
@@ -156,18 +171,14 @@
       .from("profiles").select("role").eq("id", session.user.id).maybeSingle();
     if (roleError) throw roleError;
     if (!account || account.role !== "supplier"){ window.location.href = "index.html"; return null; }
-    /* Punto 38-A: sin plan activo no hay gestión de productos (ver
-       MobauAccess.SUPPLIER_PRODUCTS_ENABLED) -> sus productos, en el panel. */
-    if (!MobauAccess.SUPPLIER_PRODUCTS_ENABLED){
-      window.location.replace(`${MobauAccess.SUPPLIER_HOME}?aviso=plan#mis-productos`);
-      return null;
-    }
 
     const { data: dp, error: dpError } = await supabaseClient
       .from("distributor_profiles").select("verification_status, distributor_id").eq("user_id", session.user.id).maybeSingle();
     if (dpError) throw dpError;
+    /* Sin empresa verificada no hay productos que mostrar: el panel explica
+       en qué punto está la verificación. */
     if (!dp || dp.verification_status !== "verified" || !dp.distributor_id){
-      window.location.href = "perfil-distribuidor.html";
+      window.location.replace(MobauAccess.SUPPLIER_HOME);
       return null;
     }
     return dp.distributor_id;
@@ -228,25 +239,15 @@
       statusLine
     );
 
+    const publication = PUBLICATION[product.publication_status] || { label: "Sin estado", kind: "neutral" };
     const chip = document.createElement("span");
-    const isActive = product.status === "active";
-    chip.className = `status-chip ${isActive ? "sent" : "closed"}`;
-    chip.textContent = isActive ? "Activo" : "Archivado";
+    chip.className = `pd-chip pd-chip--${publication.kind}`;
+    chip.textContent = publication.label;
 
     /* .c-qty ya ocupa todo el ancho en móvil (regla existente de .cart-row). */
     const actions = document.createElement("div");
     actions.className = "c-qty";
-    actions.style.cssText = "flex-wrap:wrap; gap:8px;";
-    const edit = document.createElement("a");
-    edit.className = "btn btn-outline btn-sm";
-    edit.href = `distribuidor-producto.html?id=${encodeURIComponent(product.id)}`;
-    edit.textContent = "Editar";
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "btn btn-outline btn-sm";
-    toggle.textContent = isActive ? "Archivar" : "Reactivar";
-    toggle.addEventListener("click", () => toggleStatus(product, toggle));
-    actions.append(chip, edit, toggle);
+    actions.append(chip);
 
     row.append(makeThumb(product), info, actions);
     return row;
@@ -258,7 +259,7 @@
     const status = $("pl-status").value;
 
     const visible = products.filter(p =>
-      (!status || p.status === status) &&
+      (!status || p.publication_status === status) &&
       (!category || p.category_id === category) &&
       (!query || `${p.name} ${p.brand || ""}`.toLowerCase().includes(query))
     );
@@ -272,27 +273,8 @@
     if (empty){
       const noProductsAtAll = products.length === 0;
       $("pl-empty-title").textContent = noProductsAtAll ? "Todavía no tienes productos." : "Ningún producto coincide con los filtros.";
-      $("pl-empty-text").textContent = noProductsAtAll ? "Usa “Añadir producto” para crear el primero." : "Prueba con otra búsqueda, categoría o estado.";
+      $("pl-empty-text").textContent = noProductsAtAll ? "Cuando Mobau incorpore tus primeros productos, aparecerán aquí." : "Prueba con otra búsqueda, categoría o estado.";
     }
-  }
-
-  async function toggleStatus(product, button){
-    const next = product.status === "active" ? "archived" : "active";
-    if (next === "archived" && !confirm(`¿Archivar “${product.name}”? Los proyectos que ya lo incluyen no se ven afectados.`)) return;
-
-    button.disabled = true;
-    const { data, error } = await supabaseClient
-      .from("products").update({ status: next }).eq("id", product.id)
-      .select("id, name, brand, category_id, subcategory, availability, status, image_url, updated_at").single();
-    button.disabled = false;
-
-    if (error || !data){
-      showToast("No pudimos cambiar el estado. Intenta de nuevo.");
-      return;
-    }
-    products = products.map(p => p.id === data.id ? data : p);
-    render();
-    showToast(next === "archived" ? "Producto archivado." : "Producto reactivado.");
   }
 
   async function load(){
@@ -303,7 +285,7 @@
 
       const [productsRes, categoriesRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, category_id, subcategory, availability, status, image_url, updated_at")
+          .select("id, name, brand, category_id, subcategory, availability, publication_status, image_url, updated_at")
           .eq("distributor_id", distributorId).order("updated_at", { ascending: false }),
         supabaseClient.from("categories").select("id, name").order("name")
       ]);
@@ -327,12 +309,6 @@
 
       showOnly("pl-content");
       render();
-
-      const saved = new URLSearchParams(window.location.search).get("guardado");
-      if (saved){
-        showToast(saved === "creado" ? "Producto creado." : "Cambios guardados.");
-        history.replaceState(null, "", window.location.pathname);
-      }
     } catch (error){
       $("pl-load-error-detail").textContent = (error && error.message) || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
       showOnly("pl-load-error");

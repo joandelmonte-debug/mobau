@@ -196,8 +196,7 @@
         if (a.getAttribute("href") !== "catalogo.html") a.remove();
       });
       if (!links.querySelector("[data-supplier-nav]")){
-        const productsHref = MobauAccess.SUPPLIER_PRODUCTS_ENABLED ? "distribuidor-productos.html" : `${home}#mis-productos`;
-        const items = [["Resumen", home], ["Mis productos", productsHref]].map(([label, href]) => {
+        const items = [["Resumen", home], ["Mis productos", "distribuidor-productos.html"]].map(([label, href]) => {
           const a = document.createElement("a");
           a.href = href;
           a.textContent = label;

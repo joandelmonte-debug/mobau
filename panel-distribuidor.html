@@ -17,7 +17,7 @@
     <a href="panel-distribuidor.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
     <nav class="nav-links" aria-label="Principal">
       <a href="panel-distribuidor.html" class="active" aria-current="page" data-supplier-nav>Resumen</a>
-      <a href="panel-distribuidor.html#mis-productos" data-supplier-nav>Mis productos</a>
+      <a href="distribuidor-productos.html" data-supplier-nav>Mis productos</a>
       <a href="catalogo.html">Catálogo</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
@@ -90,8 +90,8 @@
         <section class="pd-section" id="resumen" aria-labelledby="pd-summary-title">
           <h2 class="pd-label" id="pd-summary-title">Resumen</h2>
           <dl class="pd-figures" id="pd-figures" hidden>
-            <div class="pd-figure"><dt>Productos activos</dt><dd id="pd-fig-active">—</dd></div>
-            <div class="pd-figure"><dt>Archivados</dt><dd id="pd-fig-archived">—</dd></div>
+            <div class="pd-figure"><dt>Publicados</dt><dd id="pd-fig-published">—</dd></div>
+            <div class="pd-figure"><dt>Sin publicar</dt><dd id="pd-fig-unpublished">—</dd></div>
             <div class="pd-figure"><dt>Con precio publicado</dt><dd id="pd-fig-priced">—</dd></div>
             <div class="pd-figure"><dt>Con datos por completar</dt><dd id="pd-fig-incomplete">—</dd></div>
           </dl>
@@ -104,7 +104,7 @@
         </section>
 
         <section class="pd-section" id="mis-productos" aria-labelledby="pd-products-title">
-          <h2 class="pd-label" id="pd-products-title">Mis productos</h2>
+          <h2 class="pd-label" id="pd-products-title">Productos recientes</h2>
           <!-- 38-A: gestión bloqueada para toda empresa verificada (no existe
                todavía el dato de plan). Sin "Añadir producto". -->
           <div class="pd-locked" id="pd-products-locked" hidden>
@@ -115,7 +115,7 @@
               <a class="btn btn-outline btn-sm" id="pd-locked-catalog" href="catalogo.html">Ver catálogo</a>
             </div>
           </div>
-          <p class="pd-meta" id="pd-products-intro" hidden>Solo lectura: así figuran hoy tus productos en Mobau. Los datos por completar son orientativos; los accesorios decorativos no necesitan dimensiones, acabados ni archivos descargables.</p>
+          <p class="pd-meta" id="pd-products-intro" hidden>Solo lectura: tus productos actualizados más recientemente. Los datos por completar son orientativos; los accesorios decorativos no necesitan dimensiones, acabados ni archivos descargables.</p>
           <div class="pd-table-wrap" id="pd-products-table" hidden>
             <table class="pd-table">
               <thead>
@@ -128,9 +128,13 @@
             <p class="pd-empty-title" id="pd-products-empty-title"></p>
             <p class="pd-empty-text" id="pd-products-empty-text"></p>
           </div>
+          <div class="pd-actions" id="pd-products-all" style="margin-top:16px; align-items:center;" hidden>
+            <a class="btn btn-primary btn-sm" href="distribuidor-productos.html">Ver todos mis productos</a>
+            <p class="pd-meta" id="pd-products-count" style="margin:0;"></p>
+          </div>
           <div class="pd-future" role="note">
-            <p class="pd-future__title">Próxima fase: revisión individual de productos</p>
-            <p>Cada producto se revisará por separado antes de publicarse. La meta de Mobau es responder cada solicitud de revisión en un máximo de 48 horas; la revisión no garantiza la aprobación ni la publicación. Esta función todavía no está activa.</p>
+            <p class="pd-future__title">Próxima fase: solicitudes de revisión de productos</p>
+            <p>Próximamente podrás enviar a Mobau una propuesta de alta o cambio para cada producto. La revisión no garantiza la aprobación ni la publicación. Por ahora, para solicitar una carga inicial o un cambio, escríbenos a <a class="pd-link" href="mailto:hola@mobau.do">hola@mobau.do</a>.</p>
           </div>
         </section>
 
@@ -254,6 +258,19 @@
       cta: "Ver datos de empresa", ctaClass: "btn-outline"
     }
   };
+
+  /* Estado de publicación (products.publication_status, 38-B). */
+  const PUBLICATION = {
+    draft:             { label: "Borrador",            kind: "neutral" },
+    in_review:         { label: "En revisión",         kind: "wait" },
+    changes_requested: { label: "Cambios solicitados", kind: "alert" },
+    published:         { label: "Publicado",           kind: "ok" },
+    archived:          { label: "Archivado",           kind: "neutral" }
+  };
+
+  /* Productos que muestra el resumen; la lista completa está en
+     distribuidor-productos.html. */
+  const RECENT_LIMIT = 5;
 
   const PRICE_LABELS = {
     published: "Precio publicado",
@@ -394,19 +411,19 @@
     $("pd-products-empty").hidden = false;
     $("pd-products-empty-title").textContent = "Tus productos aparecerán aquí";
     $("pd-products-empty-text").textContent = "Podrás consultarlos cuando tu empresa esté verificada.";
+    $("pd-products-all").hidden = true;
     $("pd-catalog-own").hidden = true;
   }
 
   function renderProducts(profile, products, prices, categoryNames){
-    const active = products.filter(p => p.status === "active");
-    const archived = products.filter(p => p.status === "archived");
+    const published = products.filter(p => p.publication_status === "published");
     const priced = products.filter(p => prices.get(p.id) && prices.get(p.id).price_status === "published");
     const incomplete = products.filter(p => missingData(p).length > 0);
 
     $("pd-summary-empty").hidden = true;
     $("pd-figures").hidden = false;
-    $("pd-fig-active").textContent = String(active.length);
-    $("pd-fig-archived").textContent = String(archived.length);
+    $("pd-fig-published").textContent = String(published.length);
+    $("pd-fig-unpublished").textContent = String(products.length - published.length);
     $("pd-fig-priced").textContent = products.length ? `${priced.length} de ${products.length}` : "0";
     $("pd-fig-incomplete").textContent = String(incomplete.length);
 
@@ -414,7 +431,7 @@
     $("pd-last-update").hidden = !last;
     if (last) $("pd-last-update").textContent = `Última actualización de un producto: ${formatDate(last)}.`;
 
-    $("pd-catalog-own").hidden = !active.length;
+    $("pd-catalog-own").hidden = !published.length;
     $("pd-catalog-own").href = `catalogo.html?distribuidor=${encodeURIComponent(profile.distributor_id)}`;
 
     if (!products.length){
@@ -423,15 +440,20 @@
       $("pd-products-empty").hidden = false;
       $("pd-products-empty-title").textContent = "Aún no tienes productos en Mobau";
       $("pd-products-empty-text").textContent = "Cuando Mobau incorpore tus primeros productos, aparecerán aquí en modo lectura.";
+      $("pd-products-all").hidden = true;
       return;
     }
 
     $("pd-products-empty").hidden = true;
     $("pd-products-intro").hidden = false;
     $("pd-products-table").hidden = false;
-    const sorted = [...products].sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
-    $("pd-products-body").innerHTML = sorted.map(p => {
-      const isActive = p.status === "active";
+    const recent = [...products]
+      .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+      .slice(0, RECENT_LIMIT);
+    $("pd-products-all").hidden = false;
+    $("pd-products-count").textContent = `Mostrando ${recent.length} de ${products.length} ${products.length === 1 ? "producto" : "productos"}.`;
+    $("pd-products-body").innerHTML = recent.map(p => {
+      const publication = PUBLICATION[p.publication_status] || { label: "Sin estado", kind: "neutral" };
       const price = prices.get(p.id);
       const priceLabel = price ? (PRICE_LABELS[price.price_status] || "Sin precio") : "Sin precio";
       const missing = missingData(p);
@@ -439,7 +461,7 @@
       return `
         <tr>
           <td data-label="Producto"><span class="pd-product-name">${escapeHtml(p.name)}</span>${category ? `<span class="pd-meta">${escapeHtml(category)}</span>` : ""}</td>
-          <td data-label="Estado"><span class="pd-chip pd-chip--${isActive ? "ok" : "neutral"}">${isActive ? "Activo" : "Archivado"}</span></td>
+          <td data-label="Estado"><span class="pd-chip pd-chip--${publication.kind}">${escapeHtml(publication.label)}</span></td>
           <td data-label="Precio">${escapeHtml(priceLabel)}</td>
           <td data-label="Datos por completar">${missing.length ? escapeHtml(missing.join(", ")) : "Completos"}</td>
         </tr>`;
@@ -480,7 +502,7 @@
 
     const { data: products, error: productsError } = await supabaseClient
       .from("products")
-      .select("id, name, category_id, status, image_url, measurements, finishes, technical_sheet_url, cad_bim_3d_url, created_at, updated_at")
+      .select("id, name, category_id, publication_status, image_url, measurements, finishes, technical_sheet_url, cad_bim_3d_url, created_at, updated_at")
       .eq("distributor_id", profile.distributor_id);
     if (productsError){
       $("pd-error-detail").textContent = productsError.message || "No pudimos cargar tus productos. Intenta de nuevo.";

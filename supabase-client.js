@@ -264,11 +264,12 @@ const MobauAccess = {
      sesión, y de cualquier ruta de cliente que abra. */
   SUPPLIER_HOME: "panel-distribuidor.html",
 
-  /* Punto 38-A: la gestión de productos (distribuidor-productos.html y
-     distribuidor-producto.html) exige un plan activo, y ese dato todavía no
-     existe (llega en 38-C) — así que, por ahora, queda cerrada para todas
-     las cuentas de distribuidor. Solo interfaz: RLS sigue permitiendo hoy la
-     escritura a un distribuidor verificado (pendiente de 38-B). */
+  /* Punto 38-A: la edición de productos (distribuidor-producto.html) exige
+     un plan activo, y ese dato todavía no existe (llega en 38-C) — así que,
+     por ahora, queda cerrada para todas las cuentas de distribuidor. La
+     lista de solo lectura (distribuidor-productos.html) no depende de esto.
+     Desde 38-B, además, RLS no permite escribir en products ni en
+     product_prices desde el cliente. */
   SUPPLIER_PRODUCTS_ENABLED: false,
 
   /* Avisos que el panel sabe mostrar (?aviso=...). Cualquier otro valor se
