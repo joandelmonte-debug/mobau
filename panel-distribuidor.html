@@ -71,16 +71,13 @@
           <span class="pd-step__num">02</span>
           <div class="pd-step__head">
             <h3>Plan Distribuidor Fundador</h3>
-            <span class="pd-chip pd-chip--neutral">Pago online no disponible</span>
+            <span class="pd-chip pd-chip--neutral">Pago online próximamente</span>
           </div>
-          <p><strong class="pd-figure-inline">59 USD</strong> al mes, ITBIS incluido. El plan está pensado para catálogos de hasta 200 productos publicados. Durante el piloto, Mobau coordina contigo la carga inicial.</p>
-          <p>El pago online aún no está disponible: durante el piloto no se cobra nada. Mobau revisa tu empresa antes de cualquier cobro futuro.</p>
-          <!-- Lugar reservado para el punto 40: solo texto, sin botón, enlace
-               ni lógica de pago. El texto depende de la verificación. -->
-          <div style="border-top:1px solid var(--line); padding-top:12px; width:100%;">
-            <p><strong>Activación online próximamente</strong></p>
-            <p id="pd-plan-soon-text">Cuando Mobau verifique tu empresa podrás usar el panel de consulta. Cuando el pago online esté disponible, podrás activar el plan desde aquí.</p>
-          </div>
+          <p><strong class="pd-figure-inline">59 USD</strong> al mes, ITBIS incluido.</p>
+          <!-- Resumen: las condiciones del plan se consultan en el perfil.
+               Sin botón ni lógica de pago (punto 40). El enlace lleva al perfil
+               (bloque "Tu plan"), no a la página pública de captación. -->
+          <a class="pd-link" style="margin-top:auto;" href="perfil-distribuidor.html">Ver mi plan</a>
         </li>
         <li class="pd-step" id="pd-step-products">
           <span class="pd-step__num">03</span>
@@ -89,6 +86,8 @@
             <span class="pd-chip pd-chip--neutral" id="pd-products-chip"></span>
           </div>
           <p id="pd-products-text"></p>
+          <!-- Solo con empresa verificada: sin verificar, la lista vuelve al panel. -->
+          <a class="pd-link" style="margin-top:auto;" id="pd-products-link" href="distribuidor-productos.html" hidden>Ver mis productos</a>
         </li>
       </ol>
     </section>
@@ -398,13 +397,10 @@
   }
 
   function renderProductsStep(verified){
-    /* Texto del bloque "Activación online próximamente" (sin lógica de pago). */
-    $("pd-plan-soon-text").textContent = verified
-      ? "Tu empresa ya puede usar el panel de consulta durante el piloto. Cuando el pago online esté disponible, podrás activar el plan desde aquí."
-      : "Cuando Mobau verifique tu empresa podrás usar el panel de consulta. Cuando el pago online esté disponible, podrás activar el plan desde aquí.";
+    $("pd-products-link").hidden = !verified;
     if (verified){
       chip($("pd-products-chip"), "Consulta", "ok");
-      $("pd-products-text").textContent = "Consulta abajo tus productos y su estado de publicación. Las propuestas de altas y cambios llegarán más adelante; mientras tanto, Mobau te acompaña en la carga inicial.";
+      $("pd-products-text").textContent = "Consulta tus productos y su estado de publicación.";
     } else {
       chip($("pd-products-chip"), "Tras la verificación", "neutral");
       $("pd-products-text").textContent = "Podrás consultar tus productos cuando Mobau verifique tu empresa.";

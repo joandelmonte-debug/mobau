@@ -25,6 +25,13 @@
   .dist-progress li[aria-current="step"]{ color: var(--ink); font-weight:600; }
   .dist-progress li[aria-current="step"]::before{ border-color: var(--brass); color: var(--brass); }
   .dist-progress li.is-done::before{ content:"✓"; border-color:transparent; background: var(--accent-soft); color: var(--accent-ink); }
+  /* Contenedor principal: mismo ancho y espaciado vertical que antes; en
+     móvil recupera el margen lateral de .wrap (20px), que el padding propio
+     anulaba y dejaba el contenido pegado al borde. */
+  .dp-main{ max-width:640px; padding:28px 0 100px; }
+  @media (max-width: 900px){
+    .dp-main{ padding-left:20px; padding-right:20px; }
+  }
 </style>
 </head>
 <body>
@@ -62,7 +69,7 @@
   </div>
 </div>
 
-<main class="wrap" style="max-width:640px; padding: 28px 0 100px;">
+<main class="wrap dp-main">
 
   <p id="dp-loading" class="card-meta">Cargando tu perfil…</p>
 
@@ -149,6 +156,24 @@
       <button type="button" class="btn btn-outline" id="dp-cancel-btn" style="display:none;">Cancelar</button>
     </div>
   </form>
+
+  <!-- Tu plan: solo lectura, para cualquier cuenta de distribuidor (sin ficha,
+       pendiente, verificada o con correcciones). Sin botones, enlaces ni lógica
+       de pago (punto 40): no afirma ninguna suscripción activa. -->
+  <section id="dp-plan" class="account-section" style="display:none; margin:44px 0 0;" aria-labelledby="dp-plan-title">
+    <div style="display:flex; align-items:center; gap:10px 12px; flex-wrap:wrap; margin-bottom:14px;">
+      <h2 style="margin:0;" id="dp-plan-title">Tu plan</h2>
+      <span class="status-chip closed">Pago online próximamente</span>
+    </div>
+    <p style="margin:0; font-weight:600; color:var(--ink);">Plan Distribuidor Fundador</p>
+    <p style="margin:4px 0 14px;">59 USD al mes · ITBIS incluido</p>
+    <ul style="margin:0; padding-left:18px;">
+      <li>Pensado para catálogos de hasta 200 productos publicados.</li>
+      <li>Carga inicial acompañada por Mobau.</li>
+      <li>Durante el piloto no se cobra nada.</li>
+    </ul>
+    <p style="margin:14px 0 0;">Mobau revisa tu empresa antes de cualquier cobro futuro.</p>
+  </section>
 
 </main>
 
@@ -250,7 +275,7 @@
   }
 
   function showOnly(...visibleIds){
-    ["dp-loading", "dp-load-error", "dp-not-supplier", "dp-status", "dp-view", "dp-form"].forEach(id => {
+    ["dp-loading", "dp-load-error", "dp-not-supplier", "dp-status", "dp-view", "dp-form", "dp-plan"].forEach(id => {
       $(id).style.display = visibleIds.includes(id) ? "block" : "none";
     });
   }
@@ -297,7 +322,7 @@
     $("page-subtitle").textContent = "Consulta tus datos legales y el estado de tu verificación.";
     renderStatus();
     renderView();
-    showOnly("dp-status", "dp-view");
+    showOnly("dp-status", "dp-view", "dp-plan");
     $("dp-status").style.display = "block";
     $("dp-view").style.display = "block";
   }
@@ -311,11 +336,11 @@
        social devuelven la empresa a revisión (se avisa con confirm()). */
     $("dp-form-note").style.display = editing ? "none" : "block";
     if (editing){
-      showOnly("dp-status", "dp-form");
+      showOnly("dp-status", "dp-form", "dp-plan");
     } else {
       $("page-subtitle").textContent = "Completa los datos legales de tu empresa para enviarlos a revisión. Mobau los revisa manualmente antes de cualquier cobro.";
       setProgress(2);
-      showOnly("dp-form");
+      showOnly("dp-form", "dp-plan");
     }
   }
 
