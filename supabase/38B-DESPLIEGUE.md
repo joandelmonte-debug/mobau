@@ -1,11 +1,53 @@
 # 38-B · Seguridad de servidor y visibilidad de productos
 
-> **PROPUESTA NO EJECUTADA.** Ninguna migración, rollback, prueba ni SQL
-> de moderación de esta carpeta se ha ejecutado contra Supabase. Cada
-> bloque del plan necesita aprobación explícita antes de ejecutarse.
+> **EJECUTADO el 2026-10-02.** Ver "Estado de ejecución" a continuación.
+> El resto del documento describe el plan tal como se aprobó y ejecutó.
 
 Despliegue, validación y rollback de las migraciones de 38-B en Supabase
 (proyecto del piloto).
+
+## Estado de ejecución — 2026-10-02
+
+**Migraciones**
+- 01, 02, 03 y 04 aplicadas en producción el 2026-10-02.
+- Las cuatro figuran registradas una sola vez en
+  `supabase_migrations.schema_migrations`, con la versión y el nombre de
+  su archivo (`20261002090000` a `20261002090300`).
+- Los SQL de migraciones y rollbacks se conservan sin cambios, incluida
+  su cabecera "PROPUESTA NO EJECUTADA": son el artefacto que se aprobó y
+  se ejecutó. Esta sección es la constancia de la ejecución.
+
+**Pruebas RLS** (`tests/38b_rls_checks.sql`)
+- 50 casos: **50 PASS, 0 FAIL**.
+- Ejecutadas en una sola transacción que terminó en `ROLLBACK`.
+- Huellas (recuento y MD5) idénticas antes y después de la prueba para:
+  `products`, `product_prices`, `projects`, `project_products`, `rfqs`,
+  `rfq_distributors` y `profiles`; las políticas de `pg_policies` del
+  esquema `public`; y los permisos de tabla y de columna de `anon` y
+  `authenticated` sobre las seis tablas de 38-B.
+- No quedaron filas de prueba ni cambios persistentes.
+
+**Copias de seguridad**
+- Las copias previas a 38-B están fuera del repositorio porque contienen
+  datos personales. No se versionan.
+
+**Efectos funcionales confirmados por las pruebas**
+
+| Efecto | Casos |
+|---|---|
+| Productos `published`: visibles para anónimos, profesionales y distribuidores | V01, V04, V06, V09, V11, M03 |
+| Productos no publicados: no visibles para anónimos ni profesionales; visibles, con su precio, para el distribuidor verificado propietario | V02, V03, V07, V08, V10, V12–V14, P02–P04 |
+| Productos y precios: `anon` y `authenticated` no pueden crearlos ni modificarlos | S07–S11, C11, C12, N03 |
+| Profesionales: añaden a su proyecto solo productos publicados, editan cantidad y selección de sus líneas sin cambiar el producto, y crean RFQ solo sobre un proyecto propio sin líneas no publicadas seleccionadas | C01–C09, C14 |
+| Distribuidores: no crean ni modifican proyectos ni líneas de proyecto, y no crean RFQs | S01–S04, S06 |
+| `rfq_distributors`: sin escrituras de cliente | S12, C13 |
+| Anónimos: no crean proyectos ni RFQs | N01, N02 |
+
+**No cubierto por estas pruebas**
+- Visibilidad para otro distribuidor verificado o para uno no
+  verificado (las pruebas con identidades temporales quedaron excluidas).
+- `DELETE` de productos y precios desde cliente, `UPDATE` de RFQs y
+  acceso de un profesional a líneas de proyectos ajenos.
 
 ## Archivos
 

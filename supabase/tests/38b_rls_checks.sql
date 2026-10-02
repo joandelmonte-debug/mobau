@@ -137,7 +137,10 @@ begin
       ('P04 profesional: ningún precio de producto no visible', 'authenticated', v_pro::text, null,
          'select count(*) from public.product_prices pp where not exists (select 1 from public.products p where p.id = pp.product_id)', 'count', '0'),
       -- Distribuidor verificado: escrituras
-      ('S01 distribuidor NO crea proyectos',               'authenticated', v_sup::text, null, format('insert into public.projects (owner_user_id, name) values (%L, %L)', v_sup, 'RLS'), 'exec', '42501'),
+      -- S01/N01 insertan con status 'archived': trg_enforce_active_project_limit
+      -- (BEFORE INSERT) sale sin validar si status <> 'active', así el bloqueo
+      -- lo decide la RLS y no el límite de plan.
+      ('S01 distribuidor NO crea proyectos',               'authenticated', v_sup::text, null, format('insert into public.projects (owner_user_id, name, status) values (%L, %L, %L)', v_sup, 'RLS', 'archived'), 'exec', '42501'),
       ('S02 distribuidor NO edita su proyecto (0 filas)',  'authenticated', v_sup::text, null, format('update public.projects set name = name where id = %L', v_sup_project), 'exec', 'rows=0'),
       ('S03 distribuidor NO añade líneas',                 'authenticated', v_sup::text, null, format('insert into public.project_products (project_id, product_id) values (%L, %L)', v_sup_project, v_pub_other), 'exec', '42501'),
       ('S04 distribuidor NO edita líneas (0 filas)',       'authenticated', v_sup::text, null, format('update public.project_products set quantity = quantity where project_id = %L', v_sup_project), 'exec', 'rows=0'),
@@ -171,15 +174,15 @@ begin
       ('C14 profesional NO crea solicitud con project_id NULL (42501 o 23502, sin fila)', 'authenticated', v_pro::text, null,
          format(v_rfq, null, v_pro, 'rls38b-c14', 'rls@example.invalid', 'submitted'), 'blocked', '42501|23502'),
       -- Anónimo: escrituras
-      ('N01 anon NO crea proyectos',                       'anon', null, null, format('insert into public.projects (owner_user_id, name) values (%L, %L)', v_pro, 'RLS'), 'exec', '42501'),
+      ('N01 anon NO crea proyectos',                       'anon', null, null, format('insert into public.projects (owner_user_id, name, status) values (%L, %L, %L)', v_pro, 'RLS', 'archived'), 'exec', '42501'),
       ('N02 anon NO crea solicitudes',                     'anon', null, null, format(v_rfq, v_pro_project, v_pro, 'RLS', 'rls@example.invalid', 'submitted'), 'exec', '42501'),
       ('N03 anon NO crea productos',                       'anon', null, null, format('insert into public.products (name, category_id) values (%L, %L)', 'RLS', 'iluminacion'), 'exec', '42501'),
       -- Moderación manual (postgres) sobre el producto auxiliar, nunca sobre uno real
-      ('M01 publicar refleja status = active',             '-', null, array[v_tmp_insert, format('update public.products set publication_status = %L where id = %L', 'published', v_tmp],
+      ('M01 publicar refleja status = active',             '-', null, array[v_tmp_insert, format('update public.products set publication_status = %L where id = %L', 'published', v_tmp)],
          format('select count(*) from public.products where id = %L and status = %L', v_tmp, 'active'), 'count', '1'),
-      ('M02 pedir cambios refleja status = archived',      '-', null, array[v_tmp_insert, format('update public.products set publication_status = %L where id = %L', 'changes_requested', v_tmp],
+      ('M02 pedir cambios refleja status = archived',      '-', null, array[v_tmp_insert, format('update public.products set publication_status = %L where id = %L', 'changes_requested', v_tmp)],
          format('select count(*) from public.products where id = %L and status = %L', v_tmp, 'archived'), 'count', '1'),
-      ('M03 al publicarlo, anon lo ve',                    'anon', null, array[v_tmp_insert, format('update public.products set publication_status = %L where id = %L', 'published', v_tmp],
+      ('M03 al publicarlo, anon lo ve',                    'anon', null, array[v_tmp_insert, format('update public.products set publication_status = %L where id = %L', 'published', v_tmp)],
          format('select count(*) from public.products where id = %L', v_tmp), 'count', '1')
     ) as c(name, role, sub, pre_sql, sql, kind, expect)
   loop
