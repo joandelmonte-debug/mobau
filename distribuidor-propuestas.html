@@ -3,23 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mis propuestas — Mobau</title>
+<title>Mis productos — Mobau</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="distribuidor.css">
 <style>
-  /* Propuestas de producto (38-C) — estilos locales a esta página. */
-  .pp-toolbar{ display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:18px; }
-  .pp-list{ display:grid; gap:14px; }
-  .pp-item{ border:1px solid var(--line); border-radius: var(--radius-lg); background: var(--white); padding:18px 20px; }
-  .pp-item__head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
-  .pp-item__name{ font-weight:600; color: var(--ink); }
-  .pp-item__meta{ font-size:13px; color: var(--ink-faint); margin:6px 0 0; }
-  .pp-changes{ margin:10px 0 0; padding:0 0 0 18px; font-size:14px; color: var(--ink-soft); }
-  .pp-note{ margin:10px 0 0; font-size:14px; padding:10px 12px; border-left:3px solid var(--danger); background: var(--surface); }
-  .pp-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  /* Formulario de propuesta de producto (38-C) — estilos locales a esta página. */
+  .pp-note{ margin:0 0 18px; font-size:14px; padding:10px 12px; border-left:3px solid var(--danger); background: var(--surface); }
   .pp-current{ display:block; font-size:12.5px; color: var(--ink-faint); margin-top:4px; }
   .pp-main{ padding-top:28px; padding-bottom:100px; }
   .pp-form-wrap{ max-width:760px; }
+  .pp-product{ margin:0; font-weight:600; color: var(--ink); }
+  .pp-product-meta{ margin:2px 0 0; font-size:13.5px; color: var(--ink-soft); }
+  /* Retirar: botón secundario (sin fondo fuerte), color de alerta discreto,
+     44 px de área táctil y foco visible. */
+  .pp-withdraw-btn{ display:inline-flex; align-items:center; min-height:44px; padding:0 12px; margin:14px 0 0 -12px; border:1px solid transparent; border-radius: var(--radius); background:transparent; color: var(--danger); font:inherit; font-size:14px; font-weight:500; cursor:pointer; }
+  .pp-withdraw-btn:hover{ background: rgba(162, 59, 46, .07); background: color-mix(in srgb, var(--danger) 7%, transparent); text-decoration:underline; text-underline-offset:3px; }
+  .pp-withdraw-btn:focus-visible{ outline:2px solid var(--danger); outline-offset:2px; background: rgba(162, 59, 46, .07); background: color-mix(in srgb, var(--danger) 7%, transparent); }
+  .pp-withdraw-btn:disabled{ opacity:.6; cursor:default; text-decoration:none; background:transparent; }
+  .field .pp-check{ display:flex; gap:8px; align-items:center; font-size:13.5px; font-weight:400; margin:10px 0 0; cursor:pointer; }
+  .field .pp-check input{ width:auto; margin:0; accent-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -31,8 +33,7 @@
     <a href="panel-distribuidor.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
     <nav class="nav-links" aria-label="Principal">
       <a href="panel-distribuidor.html" data-supplier-nav>Resumen</a>
-      <a href="distribuidor-productos.html" data-supplier-nav>Mis productos</a>
-      <a href="distribuidor-propuestas.html" class="active" aria-current="page" data-supplier-nav>Propuestas</a>
+      <a href="distribuidor-productos.html" class="active" data-supplier-nav>Mis productos</a>
       <a href="catalogo.html">Catálogo</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
@@ -43,66 +44,42 @@
   </div>
 </header>
 
+<!-- Solo formulario: se llega desde Mis productos (?nueva=1, ?producto=ID o
+     ?propuesta=ID) y se vuelve allí. Sin parámetros redirige a Mis productos. -->
 <div class="page-head">
   <div class="wrap">
-    <p class="card-meta" style="margin:0 0 14px;"><a href="panel-distribuidor.html">← Volver al panel</a></p>
-    <div class="eyebrow">Distribuidor</div>
-    <h1 id="pp-title">Mis propuestas</h1>
-    <p style="margin-top:14px; max-width:62ch;">Propón cambios de información y precio de tus productos. Mobau revisa cada propuesta antes de aplicarla: el producto publicado no cambia hasta entonces.</p>
+    <p class="card-meta" style="margin:0 0 14px;"><a href="distribuidor-productos.html">← Volver a mis productos</a></p>
+    <div class="eyebrow">Mis productos</div>
+    <h1 id="pp-form-title">Mis productos</h1>
+    <p id="pp-form-subtitle" style="margin-top:14px; max-width:62ch;"></p>
   </div>
 </div>
 
 <main class="wrap pp-main">
 
-  <p id="pp-loading" class="card-meta">Cargando tus propuestas…</p>
+  <p id="pp-loading" class="card-meta">Cargando…</p>
 
   <div id="pp-load-error" class="cart-empty" hidden>
-    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar tus propuestas.</p>
+    <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar tus datos.</p>
     <p id="pp-load-error-detail" style="margin:0 0 14px;">Ocurrió un error al consultar tus datos. Intenta de nuevo.</p>
     <button type="button" class="btn btn-primary" id="pp-retry-btn">Reintentar</button>
   </div>
 
-  <!-- Lista -->
-  <section id="pp-list-view" hidden>
-    <div class="pp-toolbar">
-      <div class="field" style="margin:0; min-width:220px;">
-        <label for="pp-status-filter">Estado</label>
-        <select id="pp-status-filter">
-          <option value="">Todas</option>
-          <option value="open">Abiertas</option>
-          <option value="draft">Borrador</option>
-          <option value="submitted">Enviada</option>
-          <option value="changes_requested">Cambios solicitados</option>
-          <option value="approved">Aprobada</option>
-          <option value="rejected">Rechazada</option>
-          <option value="withdrawn">Retirada</option>
-        </select>
-      </div>
-      <button type="button" class="btn btn-primary" id="pp-new-btn">Nueva propuesta</button>
-    </div>
-    <p id="pp-count" class="card-meta" style="margin:0 0 12px;"></p>
-    <div id="pp-empty" class="cart-empty" hidden>
-      <p id="pp-empty-title" style="margin:0 0 4px; color:var(--ink); font-weight:600;"></p>
-      <p id="pp-empty-text" style="margin:0;"></p>
-    </div>
-    <div class="pp-list" id="pp-list"></div>
-  </section>
-
-  <!-- Formulario (crear o editar una propuesta en borrador o con cambios solicitados) -->
+  <!-- Formulario: crear nuevo producto (create) o proponer cambios de un
+       producto (update, producto fijo). El tipo no se puede cambiar. -->
   <section id="pp-form-view" class="pp-form-wrap" hidden>
-    <p class="card-meta" style="margin:0 0 18px;"><a href="#" id="pp-back-link">← Volver a mis propuestas</a></p>
     <form class="form-card" id="pp-form" novalidate>
-      <p class="card-meta" style="margin:0 0 20px;">Solo se envían a Mobau los campos que cambies. El producto publicado no se modifica hasta que Mobau revise la propuesta.</p>
+      <p class="card-meta" id="pf-state" style="margin:0 0 12px;" hidden></p>
+      <p class="pp-note" id="pf-mobau-note" hidden></p>
 
-      <fieldset>
+      <!-- Solo en Proponer cambios: el producto viene fijado por la URL. -->
+      <fieldset id="pf-product-fields" hidden>
         <legend>Producto</legend>
-        <div class="field full">
-          <label for="pf-product">Producto</label>
-          <select id="pf-product" required><option value="">Selecciona uno de tus productos</option></select>
-        </div>
+        <p class="pp-product" id="pf-product-name"></p>
+        <p class="pp-product-meta" id="pf-product-meta"></p>
       </fieldset>
 
-      <fieldset id="pf-fields" disabled>
+      <fieldset id="pf-fields">
         <legend>Información</legend>
         <div class="field-grid">
           <div class="field full"><label for="pf-name">Nombre</label><input id="pf-name" type="text" maxlength="120"><span class="pp-current" data-current="name"></span></div>
@@ -114,11 +91,14 @@
               <option value="por-confirmar">Por confirmar</option>
             </select><span class="pp-current" data-current="availability"></span></div>
           <div class="field"><label for="pf-category">Categoría</label><select id="pf-category"></select><span class="pp-current" data-current="category_id"></span></div>
-          <div class="field"><label for="pf-subcategory">Subcategoría <span class="hint">(opcional)</span></label><select id="pf-subcategory"></select><span class="pp-current" data-current="subcategory"></span></div>
+          <div class="field"><label for="pf-subcategory">Subcategoría</label><select id="pf-subcategory"></select>
+            <label class="pp-check"><input type="checkbox" id="pf-new-sub-toggle"> No encuentro una subcategoría adecuada</label>
+            <span class="pp-current" data-current="subcategory"></span></div>
+          <div class="field" id="pf-new-sub-field" hidden><label for="pf-new-sub">Nueva subcategoría propuesta</label><input id="pf-new-sub" type="text" maxlength="100"><span class="pp-current">Mobau decide si la añade al catálogo o usa una existente.</span></div>
           <div class="field"><label for="pf-use">Uso <span class="hint">(opcional)</span></label><select id="pf-use"></select><span class="pp-current" data-current="use_context"></span></div>
           <div class="field"><label for="pf-space">Espacio <span class="hint">(opcional)</span></label><select id="pf-space"></select><span class="pp-current" data-current="space"></span></div>
           <div class="field full"><label for="pf-lead">Plazo de entrega <span class="hint">(opcional)</span></label><input id="pf-lead" type="text" maxlength="160"><span class="pp-current" data-current="lead_time"></span></div>
-          <div class="field full"><label for="pf-description">Descripción <span class="hint">(opcional)</span></label><textarea id="pf-description" maxlength="2000"></textarea><span class="pp-current" data-current="description"></span></div>
+          <div class="field full"><label for="pf-description">Descripción <span class="hint" id="pf-description-hint">(opcional)</span></label><textarea id="pf-description" maxlength="2000"></textarea><span class="pp-current" data-current="description"></span></div>
           <div class="field full"><label for="pf-measurements">Medidas <span class="hint">(opcional)</span></label><input id="pf-measurements" type="text" maxlength="200"><span class="pp-current" data-current="measurements"></span></div>
           <div class="field"><label for="pf-materials">Materiales <span class="hint">(opcional)</span></label><input id="pf-materials" type="text" maxlength="200"><span class="pp-current" data-current="materials"></span></div>
           <div class="field"><label for="pf-finishes">Acabados <span class="hint">(opcional)</span></label><input id="pf-finishes" type="text" maxlength="200"><span class="pp-current" data-current="finishes"></span></div>
@@ -128,13 +108,13 @@
         </div>
       </fieldset>
 
-      <fieldset id="pf-price-fields" disabled>
+      <fieldset id="pf-price-fields">
         <legend>Precio</legend>
         <p class="card-meta" id="pf-price-current" style="margin:0 0 12px;"></p>
         <div class="field-grid">
           <div class="field"><label for="pf-price-status">Proponer precio</label>
             <select id="pf-price-status">
-              <option value="">Sin cambios de precio</option>
+              <option value="" id="pf-price-none">Sin cambios de precio</option>
               <option value="published">Precio publicado</option>
               <option value="quote_required">Bajo cotización</option>
               <option value="pending_confirmation">Por confirmar</option>
@@ -144,9 +124,9 @@
         </div>
       </fieldset>
 
-      <fieldset id="pf-note-fields" disabled>
+      <fieldset id="pf-note-fields">
         <legend>Nota para Mobau <span class="hint">(opcional)</span></legend>
-        <div class="field full"><textarea id="pf-note" maxlength="2000" placeholder="Contexto del cambio: nueva colección, corrección de medidas…"></textarea></div>
+        <div class="field full"><textarea id="pf-note" maxlength="2000" aria-label="Nota para Mobau"></textarea></div>
       </fieldset>
 
       <p id="pf-warning" class="card-meta" style="margin:0 0 12px;" hidden></p>
@@ -155,6 +135,8 @@
         <button type="button" class="btn btn-outline" id="pf-save-btn">Guardar borrador</button>
         <button type="button" class="btn btn-primary" id="pf-submit-btn">Enviar a Mobau</button>
       </div>
+      <!-- Solo al continuar una propuesta en borrador o con cambios solicitados. -->
+      <button type="button" class="pp-withdraw-btn" id="pf-withdraw-btn" hidden>Retirar propuesta</button>
     </form>
   </section>
 
@@ -199,40 +181,67 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script>
-/* Mis propuestas (38-C). Escribe SOLO en product_proposals; lee además sus
-   productos, precios y categorías. Nunca escribe en products ni en
-   product_prices: las propuestas las revisa y aplica Mobau (punto 39).
-   Columnas que puede enviar el cliente (permisos de 38-C 03):
-     INSERT: product_id, proposed_changes, proposed_price_status,
+/* Formulario de propuesta de producto (38-C). No es una lista ni un
+   historial: solo se llega desde Mis productos (distribuidor-productos.html)
+   y siempre se vuelve allí.
+     ?nueva=1        crear nuevo producto (proposal_kind create, sin product_id).
+     ?producto=ID    proponer cambios de ese producto (update, producto fijo).
+                     Si ya tiene una propuesta abierta editable, se abre esa;
+                     si está en revisión, se vuelve a Mis productos.
+     ?propuesta=ID   compatibilidad: abre la propuesta si es editable; si
+                     está en revisión o cerrada, vuelve a Mis productos.
+     sin parámetros  redirige a Mis productos.
+   Escribe SOLO en product_proposals (insert/update); lee además productos,
+   precios y categorías. Nunca escribe en products ni en product_prices: las
+   propuestas las revisa y aplica Mobau (punto 39).
+   Columnas que puede enviar el cliente (permisos de 38-C 03 + 04):
+     INSERT: proposal_kind, product_id, proposed_changes,
+             proposed_new_subcategory, proposed_price_status,
              proposed_price_amount, internal_note
-     UPDATE: las mismas salvo product_id, más status.
+     UPDATE: las mismas salvo proposal_kind y product_id, más status.
    La seguridad real está en RLS, permisos por columna y triggers; las
    validaciones de aquí solo adelantan los mensajes. */
 (() => {
   const $ = (id) => document.getElementById(id);
+  const PRODUCTS_PAGE = "distribuidor-productos.html";
 
-  const STATUS = {
-    draft:             { label: "Borrador",            kind: "neutral" },
-    submitted:         { label: "Enviada",             kind: "wait" },
-    changes_requested: { label: "Cambios solicitados", kind: "alert" },
-    approved:          { label: "Aprobada",            kind: "ok" },
-    rejected:          { label: "Rechazada",           kind: "alert" },
-    withdrawn:         { label: "Retirada",            kind: "neutral" }
-  };
+  /* Sin un flujo concreto no hay nada que mostrar: a Mis productos. */
+  const params = new URLSearchParams(window.location.search);
+  const presetNew = params.get("nueva") === "1";
+  const presetProductId = params.get("producto");
+  const presetProposalId = params.get("propuesta");
+  if (!presetNew && !presetProductId && !presetProposalId){
+    window.location.replace(PRODUCTS_PAGE);
+    return;
+  }
+
+  const STATUS_LABELS = { draft: "Borrador", submitted: "En revisión", changes_requested: "Cambios solicitados" };
   const OPEN = ["draft", "submitted", "changes_requested"];
   const EDITABLE = ["draft", "changes_requested"];
+  const HEADINGS = {
+    create: {
+      title: "Crear nuevo producto",
+      subtitle: "Completa la información del producto que quieres añadir. Mobau revisará tu envío antes de publicarlo en el catálogo."
+    },
+    update: {
+      title: "Proponer cambios",
+      subtitle: "Solo se enviarán a Mobau los campos que modifiques. El producto publicado no cambiará hasta que Mobau revise tu propuesta."
+    }
+  };
 
-  /* Campos propuestos: clave = columna real de products (lista cerrada de 38-C 02). */
+  /* Campos propuestos: clave = columna real de products (lista cerrada de
+     38-C 02). requiredOnCreate: obligatorios para enviar un producto nuevo
+     (la subcategoría se valida aparte: lista o nueva subcategoría). */
   const FIELDS = [
-    { key: "name",                id: "pf-name",         label: "Nombre",        required: true, max: 120 },
+    { key: "name",                id: "pf-name",         label: "Nombre",        required: true, requiredOnCreate: true, max: 120 },
     { key: "brand",               id: "pf-brand",        label: "Marca",         max: 80 },
-    { key: "availability",        id: "pf-availability", label: "Disponibilidad", required: true },
-    { key: "category_id",         id: "pf-category",     label: "Categoría",     required: true },
+    { key: "availability",        id: "pf-availability", label: "Disponibilidad", required: true, requiredOnCreate: true },
+    { key: "category_id",         id: "pf-category",     label: "Categoría",     required: true, requiredOnCreate: true },
     { key: "subcategory",         id: "pf-subcategory",  label: "Subcategoría" },
     { key: "use_context",         id: "pf-use",          label: "Uso" },
     { key: "space",               id: "pf-space",        label: "Espacio" },
     { key: "lead_time",           id: "pf-lead",         label: "Plazo de entrega", max: 160 },
-    { key: "description",         id: "pf-description",  label: "Descripción",   max: 2000 },
+    { key: "description",         id: "pf-description",  label: "Descripción",   requiredOnCreate: true, max: 2000 },
     { key: "measurements",        id: "pf-measurements", label: "Medidas",       max: 200 },
     { key: "materials",           id: "pf-materials",    label: "Materiales",    max: 200 },
     { key: "finishes",            id: "pf-finishes",     label: "Acabados",      max: 200 },
@@ -248,6 +257,7 @@
   ];
   const PRICE_LABELS = { published: "Precio publicado", quote_required: "Bajo cotización", pending_confirmation: "Por confirmar", unavailable: "No disponible" };
   const URL_PATTERN = /^https?:\/\/[^\s"'<>`]+$/i;
+  const NEW_SUB_MAX = 100;
 
   let session = null;
   let products = [];       // productos propios (lectura)
@@ -255,16 +265,20 @@
   let categories = [];
   let proposals = [];
   let editing = null;      // propuesta abierta en el formulario, o null si es nueva
+  let mode = null;         // "create" | "update" (fijo por la URL)
+  let productId = null;    // producto del cambio (update), fijo por la URL
 
   function showOnly(id){
-    ["pp-loading", "pp-load-error", "pp-list-view", "pp-form-view"].forEach(x => { $(x).hidden = x !== id; });
+    ["pp-loading", "pp-load-error", "pp-form-view"].forEach(x => { $(x).hidden = x !== id; });
   }
 
-  function textEl(tag, className, text){
-    const el = document.createElement(tag);
-    if (className) el.className = className;
-    el.textContent = text;
-    return el;
+  /* Vuelta a Mis productos con un aviso (?aviso=…) y, si procede, la
+     propuesta que hay que mostrar desplegada (?ver=ID). */
+  function backToProducts(aviso, proposalId){
+    const query = new URLSearchParams();
+    if (aviso) query.set("aviso", aviso);
+    if (proposalId) query.set("ver", proposalId);
+    window.location.replace(`${PRODUCTS_PAGE}${query.toString() ? `?${query}` : ""}`);
   }
 
   function formatDate(value){
@@ -273,8 +287,10 @@
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
   }
 
+  function kindOf(p){ return p.proposal_kind === "create" ? "create" : "update"; }
   function productById(id){ return products.find(p => p.id === id) || null; }
   function categoryName(id){ const c = categories.find(x => x.id === id); return c ? c.name : id; }
+  function sameText(a, b){ return (a || "").trim().replace(/\s+/g, " ").toLowerCase() === (b || "").trim().replace(/\s+/g, " ").toLowerCase(); }
 
   function displayValue(key, value){
     if (value === null || value === undefined || value === "") return "vacío";
@@ -293,13 +309,34 @@
     return PRICE_LABELS[row.price_status] || "Sin precio";
   }
 
+  /* Restricciones de la tabla (38-C 01 y 04): su mensaje de PostgreSQL es
+     técnico, así que se traduce. Los mensajes de los triggers ya están
+     redactados para el distribuidor y se muestran tal cual. */
+  const CONSTRAINT_MESSAGES = {
+    product_proposals_create_has_name: "Indica el nombre del producto.",
+    product_proposals_new_subcategory_exclusive: "Elige una subcategoría de la lista o propón una nueva, no las dos.",
+    product_proposals_new_subcategory_length: "La nueva subcategoría debe tener entre 1 y 100 caracteres.",
+    product_proposals_price_amount_check: "El precio debe ser un número igual o mayor que 0.",
+    product_proposals_price_published_amount: "Para proponer un precio publicado indica el importe en USD.",
+    product_proposals_price_amount_needs_status: "Para indicar un importe elige también el tipo de precio.",
+    product_proposals_changes_size: "La propuesta es demasiado larga. Acorta los textos."
+  };
+  const GENERIC_SAVE_ERROR = "No pudimos guardar. Intenta de nuevo.";
+
   function friendlyError(error){
-    if (!error) return "No pudimos guardar. Intenta de nuevo.";
-    if (error.code === "23505") return "Ya hay una propuesta abierta para este producto. Edítala o retírala antes de crear otra.";
-    if (error.code === "23514") return error.message || "Alguno de los datos no es válido.";
-    if (error.code === "42501") return error.message && !/permission denied/i.test(error.message)
-      ? error.message : "Tu cuenta no tiene permiso para esta acción. Comprueba que tu empresa siga verificada.";
-    return error.message || "No pudimos guardar. Intenta de nuevo.";
+    if (!error) return GENERIC_SAVE_ERROR;
+    const message = error.message || "";
+    if (error.code === "23505") return mode === "create"
+      ? "Ya tienes una propuesta abierta con este nombre. Ábrela desde «Mis productos» para continuarla."
+      : "Este producto ya tiene una propuesta abierta. Ábrela desde «Mis productos» para continuarla.";
+    if (error.code === "23514"){
+      const constraint = Object.keys(CONSTRAINT_MESSAGES).find(name => message.includes(name));
+      if (constraint) return CONSTRAINT_MESSAGES[constraint];
+      return /violates check constraint/i.test(message) || !message ? "Alguno de los datos no es válido. Revisa el formulario." : message;
+    }
+    if (error.code === "42501") return message && !/permission denied|row-level security/i.test(message)
+      ? message : "Tu cuenta no tiene permiso para esta acción. Comprueba que tu empresa siga verificada.";
+    return GENERIC_SAVE_ERROR;
   }
 
   /* ---------- acceso: solo distribuidor con empresa verificada ---------- */
@@ -318,103 +355,80 @@
     return dp.distributor_id;
   }
 
-  /* ---------- lista ---------- */
-  function renderList(){
-    const filter = $("pp-status-filter").value;
-    const visible = proposals.filter(p => !filter || (filter === "open" ? OPEN.includes(p.status) : p.status === filter));
-    $("pp-count").textContent = `${visible.length} de ${proposals.length} ${proposals.length === 1 ? "propuesta" : "propuestas"}`;
-    $("pp-empty").hidden = visible.length > 0;
-    $("pp-list").hidden = visible.length === 0;
-    if (!visible.length){
-      $("pp-empty-title").textContent = proposals.length ? "Ninguna propuesta con ese estado." : "Todavía no has creado propuestas.";
-      $("pp-empty-text").textContent = proposals.length ? "Prueba con otro filtro." : "Usa «Nueva propuesta» para proponer un cambio en uno de tus productos.";
-    }
-    $("pp-list").replaceChildren(...visible.map(buildItem));
-  }
-
-  function buildItem(p){
-    const product = productById(p.product_id);
-    const status = STATUS[p.status] || { label: p.status, kind: "neutral" };
-    const item = document.createElement("article");
-    item.className = "pp-item";
-
-    const head = document.createElement("div");
-    head.className = "pp-item__head";
-    const chip = textEl("span", `pd-chip pd-chip--${status.kind}`, status.label);
-    head.append(textEl("span", "pp-item__name", product ? product.name : p.product_id), chip);
-
-    const dates = [`Versión ${p.version}`];
-    if (p.submitted_at) dates.push(`enviada el ${formatDate(p.submitted_at)}`);
-    dates.push(`actualizada el ${formatDate(p.updated_at)}`);
-    item.append(head, textEl("p", "pp-item__meta", dates.join(" · ")));
-
-    const changes = document.createElement("ul");
-    changes.className = "pp-changes";
-    Object.entries(p.proposed_changes || {}).forEach(([key, value]) => {
-      const field = FIELDS.find(f => f.key === key);
-      changes.appendChild(textEl("li", "", `${field ? field.label : key}: ${displayValue(key, value)}`));
-    });
-    if (p.proposed_price_status){
-      changes.appendChild(textEl("li", "", `Precio: ${priceText({ price_status: p.proposed_price_status, price_amount: p.proposed_price_amount })}`));
-    }
-    if (changes.children.length) item.appendChild(changes);
-
-    if ((p.status === "changes_requested" || p.status === "rejected") && p.rejection_reason){
-      item.appendChild(textEl("p", "pp-note", `Nota de Mobau: ${p.rejection_reason}`));
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "pp-actions";
-    if (EDITABLE.includes(p.status)){
-      const edit = textEl("button", "btn btn-outline btn-sm", p.status === "changes_requested" ? "Corregir y reenviar" : "Editar");
-      edit.type = "button";
-      edit.addEventListener("click", () => openForm(p));
-      actions.appendChild(edit);
-    }
-    if (OPEN.includes(p.status)){
-      const withdraw = textEl("button", "btn btn-outline btn-sm", "Retirar");
-      withdraw.type = "button";
-      withdraw.addEventListener("click", () => withdrawProposal(p, withdraw));
-      actions.appendChild(withdraw);
-    }
-    if (actions.children.length) item.appendChild(actions);
-    return item;
-  }
-
-  async function withdrawProposal(p, button){
-    if (!confirm("¿Retirar esta propuesta? Mobau dejará de revisarla y no se podrá reabrir; podrás crear otra nueva.")) return;
-    button.disabled = true;
-    const { data, error } = await supabaseClient.from("product_proposals")
-      .update({ status: "withdrawn" }).eq("id", p.id).select().single();
-    button.disabled = false;
-    if (error || !data){ showToast(friendlyError(error)); return; }
-    proposals = proposals.map(x => x.id === data.id ? data : x);
-    renderList();
-    showToast("Propuesta retirada.");
-  }
-
   /* ---------- formulario ---------- */
   function fillSelect(select, pairs, placeholder){
     select.replaceChildren(...(placeholder !== null ? [new Option(placeholder, "")] : []), ...pairs.map(([v, l]) => new Option(l, v)));
   }
 
-  function fillSubcategories(categoryId, selected){
+  function subcategoriesOf(categoryId){
     const category = categories.find(c => c.id === categoryId);
-    const subs = (category && category.subcategories) || [];
-    fillSelect($("pf-subcategory"), subs.map(s => [s, s]), "—");
+    return (category && category.subcategories) || [];
+  }
+
+  function fillSubcategories(categoryId, selected){
+    const subs = subcategoriesOf(categoryId);
+    fillSelect($("pf-subcategory"), subs.map(s => [s, s]), categoryId ? "Selecciona una subcategoría" : "Primero elige una categoría");
     $("pf-subcategory").value = selected && subs.includes(selected) ? selected : "";
   }
 
-  function setFormEnabled(enabled){
-    ["pf-fields", "pf-price-fields", "pf-note-fields"].forEach(id => { $(id).disabled = !enabled; });
-    $("pf-save-btn").disabled = !enabled;
-    $("pf-submit-btn").disabled = !enabled;
+  function setNewSub(on, value){
+    $("pf-new-sub-toggle").checked = on;
+    $("pf-new-sub-field").hidden = !on;
+    $("pf-subcategory").disabled = on;
+    if (on) $("pf-subcategory").value = "";
+    $("pf-new-sub").value = on ? (value || "") : "";
   }
 
-  /* Valores del formulario: el actual del producto, con la propuesta encima. */
-  function loadProductIntoForm(productId, proposal){
-    const product = productById(productId);
-    if (!product){ setFormEnabled(false); return; }
+  /* Encabezado, producto fijo, estado de la propuesta y textos según el tipo. */
+  function applyMode(){
+    const heading = HEADINGS[mode];
+    $("pp-form-title").textContent = heading.title;
+    $("pp-form-subtitle").textContent = heading.subtitle;
+    document.title = `${heading.title} — Mobau`;
+
+    const product = mode === "update" ? productById(productId) : null;
+    $("pf-product-fields").hidden = !product;
+    if (product){
+      $("pf-product-name").textContent = product.name;
+      $("pf-product-meta").textContent = [categoryName(product.category_id), product.subcategory || "Sin subcategoría"].join(" · ");
+    }
+
+    $("pf-state").hidden = !editing;
+    if (editing){
+      const parts = [STATUS_LABELS[editing.status] || editing.status, `versión ${editing.version}`];
+      if (editing.submitted_at) parts.push(`enviada el ${formatDate(editing.submitted_at)}`);
+      $("pf-state").textContent = `Propuesta: ${parts.join(" · ")}`;
+    }
+    const note = editing && editing.status === "changes_requested" ? editing.rejection_reason : null;
+    $("pf-mobau-note").hidden = !note;
+    $("pf-mobau-note").textContent = note ? `Nota de Mobau: ${note}` : "";
+
+    document.querySelectorAll("[data-current]").forEach(el => { el.hidden = mode !== "update"; });
+    $("pf-price-current").hidden = mode !== "update";
+    $("pf-price-none").textContent = mode === "create" ? "Sin precio por ahora" : "Sin cambios de precio";
+    $("pf-description-hint").hidden = mode === "create";
+    $("pf-note").placeholder = mode === "create"
+      ? "Contexto del producto: colección, proveedor, variantes…"
+      : "Contexto del cambio: nueva colección, corrección de medidas…";
+    $("pf-submit-btn").textContent = editing && editing.status === "changes_requested" ? "Reenviar a Mobau" : "Enviar a Mobau";
+    $("pf-withdraw-btn").hidden = !(editing && EDITABLE.includes(editing.status));
+  }
+
+  /* Producto nuevo: valores de la propuesta (si se continúa) o vacíos. */
+  function loadBlankIntoForm(proposal){
+    const changes = (proposal && proposal.proposed_changes) || {};
+    FIELDS.forEach(f => {
+      if (f.key === "subcategory") return;
+      $(f.id).value = changes[f.key] ?? "";
+    });
+    if (!changes.availability) $("pf-availability").value = "por-confirmar";
+    fillSubcategories($("pf-category").value, changes.subcategory);
+    setNewSub(!!(proposal && proposal.proposed_new_subcategory), proposal && proposal.proposed_new_subcategory);
+    loadPriceAndNote(proposal);
+  }
+
+  /* Cambio de producto: el valor actual del producto, con la propuesta encima. */
+  function loadProductIntoForm(product, proposal){
     const changes = (proposal && proposal.proposed_changes) || {};
     const value = (key) => Object.prototype.hasOwnProperty.call(changes, key) ? changes[key] : product[key];
     FIELDS.forEach(f => {
@@ -422,73 +436,112 @@
       $(f.id).value = value(f.key) ?? "";
     });
     fillSubcategories(value("category_id"), value("subcategory"));
+    setNewSub(!!(proposal && proposal.proposed_new_subcategory), proposal && proposal.proposed_new_subcategory);
     document.querySelectorAll("[data-current]").forEach(el => {
       const key = el.dataset.current;
       el.textContent = `Actual: ${displayValue(key, product[key])}`;
     });
-    $("pf-price-current").textContent = `Precio actual: ${priceText(prices.get(productId))}`;
+    $("pf-price-current").textContent = `Precio actual: ${priceText(prices.get(product.id))}`;
+    loadPriceAndNote(proposal);
+  }
+
+  function loadPriceAndNote(proposal){
     $("pf-price-status").value = (proposal && proposal.proposed_price_status) || "";
     $("pf-price-amount").value = proposal && proposal.proposed_price_amount !== null && proposal.proposed_price_amount !== undefined ? proposal.proposed_price_amount : "";
     $("pf-note").value = (proposal && proposal.internal_note) || "";
-    setFormEnabled(true);
-    updateWarning();
   }
 
-  function openForm(proposal, presetProductId){
-    editing = proposal || null;
+  /* Abre el formulario con el tipo fijo: una propuesta existente (editable)
+     o una nueva de producto nuevo o de cambio del producto indicado. */
+  function openForm({ proposal = null, kind, product = null }){
+    editing = proposal;
+    mode = proposal ? kindOf(proposal) : kind;
+    productId = mode === "update" ? (proposal ? proposal.product_id : product.id) : null;
     $("pf-error").style.display = "none";
-    const select = $("pf-product");
-    const openProductIds = new Set(proposals.filter(p => OPEN.includes(p.status) && (!editing || p.id !== editing.id)).map(p => p.product_id));
-    select.replaceChildren(new Option("Selecciona uno de tus productos", ""), ...products.map(p => {
-      const opt = new Option(openProductIds.has(p.id) ? `${p.name} (ya tiene una propuesta abierta)` : p.name, p.id);
-      opt.disabled = openProductIds.has(p.id);
-      return opt;
-    }));
-    select.disabled = !!editing;
-    const productId = editing ? editing.product_id : (presetProductId && !openProductIds.has(presetProductId) ? presetProductId : "");
-    select.value = productId;
-    $("pp-title").textContent = editing ? (editing.status === "changes_requested" ? "Corregir propuesta" : "Editar propuesta") : "Nueva propuesta";
-    $("pf-submit-btn").textContent = editing && editing.status === "changes_requested" ? "Reenviar a Mobau" : "Enviar a Mobau";
-    if (productId) loadProductIntoForm(productId, editing); else setFormEnabled(false);
+    applyMode();
+    if (mode === "create"){
+      $("pf-category").value = (proposal && (proposal.proposed_changes || {}).category_id) || "";
+      loadBlankIntoForm(proposal);
+    } else {
+      loadProductIntoForm(productById(productId), proposal);
+    }
+    updateWarning();
     showOnly("pp-form-view");
     window.scrollTo(0, 0);
   }
 
-  function closeForm(){
-    editing = null;
-    $("pp-title").textContent = "Mis propuestas";
-    showOnly("pp-list-view");
-    renderList();
-  }
-
   function norm(v){ const s = (v ?? "").toString().trim(); return s === "" ? null : s; }
 
-  /* Solo los campos que difieren del producto actual. */
+  /* create: todos los campos con valor. update: solo los que difieren del
+     producto actual. La nueva subcategoría va en su propia columna y excluye
+     a la subcategoría de la lista. */
   function readProposal(){
-    const product = productById($("pf-product").value);
+    const newSub = $("pf-new-sub-toggle").checked ? norm($("pf-new-sub").value) : null;
+    const product = mode === "update" ? productById(productId) : null;
     const changes = {};
     FIELDS.forEach(f => {
+      if (f.key === "subcategory" && $("pf-new-sub-toggle").checked) return;
       const proposed = norm($(f.id).value);
-      if (proposed !== norm(product[f.key])) changes[f.key] = proposed;
+      if (mode === "create"){ if (proposed !== null) changes[f.key] = proposed; }
+      else if (proposed !== norm(product[f.key])) changes[f.key] = proposed;
     });
     const priceStatus = $("pf-price-status").value || null;
     const rawAmount = $("pf-price-amount").value.trim();
     return {
       proposed_changes: changes,
+      proposed_new_subcategory: newSub,
       proposed_price_status: priceStatus,
       proposed_price_amount: priceStatus && rawAmount !== "" ? Number(rawAmount) : null,
       internal_note: norm($("pf-note").value)
     };
   }
 
-  function validate(values){
+  /* Misma regla que el servidor (38-C 04, que es quien decide):
+     - formato siempre;
+     - create: obligatorios solo al enviar (el borrador solo exige nombre),
+       incluida una subcategoría de la lista o nueva;
+     - update (D5): la subcategoría solo se exige si la propuesta toca la
+       clasificación; si cambia la categoría, debe aportar subcategoría de
+       la lista o nueva, y una subcategoría propuesta no puede quedar vacía.
+       Esto vale también para borradores, como en el servidor;
+     - nunca subcategoría de la lista y nueva a la vez (readProposal ya
+       omite la de la lista cuando se marca «No encuentro…»). */
+  function validate(values, { submit }){
+    const changes = values.proposed_changes;
+    if (mode === "create" && !changes.name) return "Nombre: indica el nombre del producto.";
     for (const f of FIELDS){
-      if (!Object.prototype.hasOwnProperty.call(values.proposed_changes, f.key)) continue;
-      const v = values.proposed_changes[f.key];
-      if (f.required && !v) return `${f.label}: no puede quedar vacío.`;
+      const has = Object.prototype.hasOwnProperty.call(changes, f.key);
+      const v = has ? changes[f.key] : null;
+      if (mode === "update" && has && f.required && !v) return `${f.label}: no puede quedar vacío.`;
+      if (mode === "create" && submit && f.requiredOnCreate && !v) return `${f.label}: es obligatorio para un producto nuevo.`;
       if (v && f.max && v.length > f.max) return `${f.label}: máximo ${f.max} caracteres.`;
       if (v && f.url && !URL_PATTERN.test(v)) return `${f.label}: ingresa un enlace que empiece con http:// o https://.`;
     }
+
+    const newSub = values.proposed_new_subcategory;
+    const usesNewSub = $("pf-new-sub-toggle").checked;
+    if (usesNewSub && Object.prototype.hasOwnProperty.call(changes, "subcategory")){
+      return "Elige una subcategoría de la lista o propón una nueva, no las dos.";
+    }
+    if (usesNewSub){
+      if (!newSub) return "Nueva subcategoría propuesta: escribe su nombre o desmarca «No encuentro una subcategoría adecuada».";
+      if (newSub.length > NEW_SUB_MAX) return `Nueva subcategoría propuesta: máximo ${NEW_SUB_MAX} caracteres.`;
+      if (subcategoriesOf($("pf-category").value).some(s => sameText(s, newSub))) return `La subcategoría «${newSub}» ya existe en esta categoría: selecciónala en la lista.`;
+    }
+    if (mode === "create" && submit && !usesNewSub && !changes.subcategory){
+      return "Subcategoría: selecciona una o marca «No encuentro una subcategoría adecuada».";
+    }
+    if (mode === "update"){
+      const changesCategory = Object.prototype.hasOwnProperty.call(changes, "category_id");
+      const changesSubcategory = Object.prototype.hasOwnProperty.call(changes, "subcategory");
+      if (changesCategory && !usesNewSub && !(changesSubcategory && changes.subcategory)){
+        return "Si cambias la categoría, elige también una subcategoría de la nueva categoría o marca «No encuentro una subcategoría adecuada».";
+      }
+      if (changesSubcategory && !changes.subcategory){
+        return "Subcategoría: elige una de la lista o marca «No encuentro una subcategoría adecuada».";
+      }
+    }
+
     if (values.proposed_price_amount !== null && (!Number.isFinite(values.proposed_price_amount) || values.proposed_price_amount < 0)){
       return "El precio debe ser un número igual o mayor que 0.";
     }
@@ -500,8 +553,11 @@
 
   /* Avisos que no bloquean (Mobau decide). */
   function updateWarning(){
-    const productId = $("pf-product").value;
-    if (!productId){ $("pf-warning").hidden = true; return; }
+    if (!mode){ $("pf-warning").hidden = true; return; }
+    const notes = [];
+    if (mode === "create" && norm($("pf-name").value) && products.some(p => sameText(p.name, $("pf-name").value))){
+      notes.push("Ya tienes un producto con este nombre. Si quieres modificarlo, usa «Proponer cambios» en ese producto desde Mis productos.");
+    }
     const missing = [];
     if (!norm($("pf-image-url").value)) missing.push("imagen");
     if ($("pf-category").value !== "accesorios-decorativos"){
@@ -509,24 +565,23 @@
       if (!norm($("pf-finishes").value)) missing.push("acabados");
       if (!norm($("pf-sheet-url").value) && !norm($("pf-cad-url").value)) missing.push("ficha técnica o CAD/BIM");
     }
+    if (mode === "create" && !norm($("pf-lead").value)) missing.push("plazo de entrega");
     const desc = norm($("pf-description").value);
     if (desc && desc.length < 20) missing.push("una descripción más completa");
-    $("pf-warning").hidden = missing.length === 0;
-    $("pf-warning").textContent = missing.length ? `Recomendado completar: ${missing.join(", ")}. Puedes enviar igualmente; Mobau lo revisará.` : "";
+    if (missing.length) notes.push(`Recomendado completar: ${missing.join(", ")}. Puedes enviar igualmente; Mobau lo revisará.`);
+    $("pf-warning").hidden = notes.length === 0;
+    $("pf-warning").textContent = notes.join(" ");
   }
 
   async function save({ submit }){
     const errorEl = $("pf-error");
+    const fail = (message) => { errorEl.textContent = message; errorEl.style.display = "block"; };
     errorEl.style.display = "none";
-    const productId = $("pf-product").value;
-    if (!productId){ errorEl.textContent = "Selecciona un producto."; errorEl.style.display = "block"; return; }
     const values = readProposal();
-    const problem = validate(values);
-    if (problem){ errorEl.textContent = problem; errorEl.style.display = "block"; return; }
-    if (submit && !Object.keys(values.proposed_changes).length && !values.proposed_price_status){
-      errorEl.textContent = "La propuesta no contiene ningún cambio.";
-      errorEl.style.display = "block";
-      return;
+    const problem = validate(values, { submit });
+    if (problem) return fail(problem);
+    if (mode === "update" && submit && !Object.keys(values.proposed_changes).length && !values.proposed_new_subcategory && !values.proposed_price_status){
+      return fail("La propuesta no contiene ningún cambio.");
     }
 
     const buttons = [$("pf-save-btn"), $("pf-submit-btn")];
@@ -535,14 +590,16 @@
 
     let row = editing;
     if (!row){
-      const { data, error } = await supabaseClient.from("product_proposals")
-        .insert({ product_id: productId, ...values }).select().single();
-      if (error || !data){ done(); errorEl.textContent = friendlyError(error); errorEl.style.display = "block"; return; }
+      const insert = mode === "create"
+        ? { proposal_kind: "create", ...values }
+        : { proposal_kind: "update", product_id: productId, ...values };
+      const { data, error } = await supabaseClient.from("product_proposals").insert(insert).select().single();
+      if (error || !data){ done(); return fail(friendlyError(error)); }
       row = data;
     } else {
       const { data, error } = await supabaseClient.from("product_proposals")
         .update(values).eq("id", row.id).select().single();
-      if (error || !data){ done(); errorEl.textContent = friendlyError(error); errorEl.style.display = "block"; return; }
+      if (error || !data){ done(); return fail(friendlyError(error)); }
       row = data;
     }
 
@@ -551,19 +608,47 @@
         .update({ status: "submitted" }).eq("id", row.id).select().single();
       if (error || !data){
         done();
+        /* Ya existe como borrador: seguir editándolo, no crear otro. */
         editing = row;
-        proposals = [row, ...proposals.filter(x => x.id !== row.id)];
-        errorEl.textContent = `Guardamos el borrador, pero no pudimos enviarlo: ${friendlyError(error)}`;
-        errorEl.style.display = "block";
-        return;
+        return fail(`Guardamos el borrador, pero no pudimos enviarlo: ${friendlyError(error)}`);
       }
-      row = data;
     }
 
-    done();
-    proposals = [row, ...proposals.filter(x => x.id !== row.id)];
-    closeForm();
-    showToast(submit ? "Propuesta enviada a Mobau." : "Borrador guardado.");
+    backToProducts(submit ? "enviada" : "borrador");
+  }
+
+  /* Retirar la propuesta abierta (draft o changes_requested → withdrawn,
+     transiciones ya autorizadas por 38-C). Cancelar no escribe nada. Si
+     falla, se explica y se relee la propuesta para no mostrar un estado
+     desactualizado. */
+  async function withdraw(){
+    if (!editing || !EDITABLE.includes(editing.status)) return;
+    if (!confirm("¿Retirar esta propuesta?\nPodrás crear una nueva propuesta para este producto cuando la necesites.")) return;
+    const errorEl = $("pf-error");
+    errorEl.style.display = "none";
+    const buttons = [$("pf-save-btn"), $("pf-submit-btn"), $("pf-withdraw-btn")];
+    buttons.forEach(b => { b.disabled = true; });
+
+    const { data, error } = await supabaseClient.from("product_proposals")
+      .update({ status: "withdrawn" }).eq("id", editing.id).select("id, status").single();
+    if (!error && data && data.status === "withdrawn") return backToProducts("retirada");
+
+    const { data: current } = await supabaseClient.from("product_proposals")
+      .select("*").eq("id", editing.id).maybeSingle();
+    const reason = error && error.code === "42501" && error.message && !/permission denied|row-level security/i.test(error.message)
+      ? error.message
+      : (error && error.code === "42501" ? "Tu cuenta no tiene permiso para retirar esta propuesta." : "Inténtalo de nuevo.");
+    if (current && EDITABLE.includes(current.status)){
+      editing = current;
+      applyMode();
+      buttons.forEach(b => { b.disabled = false; });
+      errorEl.textContent = `No pudimos retirar la propuesta. ${reason}`;
+    } else {
+      /* Ya no está abierta para editar (otra pestaña, Mobau…): sin acciones. */
+      buttons.forEach(b => { b.hidden = true; });
+      errorEl.textContent = `No pudimos retirar la propuesta: ya no está abierta para editar. Vuelve a Mis productos para ver su estado.`;
+    }
+    errorEl.style.display = "block";
   }
 
   /* ---------- carga ---------- */
@@ -578,7 +663,7 @@
           .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status")
           .eq("distributor_id", distributorId).order("name"),
         supabaseClient.from("categories").select("id, name, subcategories").order("name"),
-        supabaseClient.from("product_proposals").select("*").order("updated_at", { ascending: false })
+        supabaseClient.from("product_proposals").select("*").in("status", OPEN).order("updated_at", { ascending: false })
       ]);
       if (productsRes.error) throw productsRes.error;
       if (categoriesRes.error) throw categoriesRes.error;
@@ -595,25 +680,25 @@
         prices = new Map(priceRows.map(r => [r.product_id, r]));
       }
 
-      fillSelect($("pf-category"), categories.map(c => [c.id, c.name]), null);
+      fillSelect($("pf-category"), categories.map(c => [c.id, c.name]), "Selecciona una categoría");
       fillSelect($("pf-use"), USE_OPTIONS, "—");
       fillSelect($("pf-space"), SPACE_OPTIONS, "—");
-      $("pp-new-btn").disabled = products.length === 0;
 
-      /* ?producto=ID (enlace «Proponer cambios» de Mis productos): abre una
-         propuesta nueva para ese producto o, si ya tiene una abierta, esa
-         misma; si está enviada, se muestra en la lista. */
-      const preset = new URLSearchParams(window.location.search).get("producto");
-      if (preset) history.replaceState(null, "", window.location.pathname);
-      const presetOpen = preset ? proposals.find(p => p.product_id === preset && OPEN.includes(p.status)) : null;
-      if (presetOpen && EDITABLE.includes(presetOpen.status)){
-        openForm(presetOpen);
-      } else if (preset && !presetOpen && productById(preset)){
-        openForm(null, preset);
+      if (presetProposalId){
+        /* Compatibilidad: solo se abre si es editable; si no (en revisión o
+           cerrada), se consulta desde Mis productos. */
+        const proposal = proposals.find(p => p.id === presetProposalId);
+        if (proposal && EDITABLE.includes(proposal.status)) openForm({ proposal });
+        else backToProducts("consulta", proposal ? proposal.id : null);
+      } else if (presetNew){
+        openForm({ kind: "create" });
       } else {
-        showOnly("pp-list-view");
-        renderList();
-        if (presetOpen) showToast("Este producto ya tiene una propuesta enviada a Mobau.");
+        const product = productById(presetProductId);
+        if (!product) return backToProducts("no-encontrado");
+        const open = proposals.find(p => kindOf(p) === "update" && p.product_id === product.id);
+        if (!open) openForm({ kind: "update", product });
+        else if (EDITABLE.includes(open.status)) openForm({ proposal: open });
+        else backToProducts("en-revision", open.id); // nunca una segunda propuesta
       }
     } catch (error){
       $("pp-load-error-detail").textContent = (error && error.message) || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
@@ -621,14 +706,12 @@
     }
   }
 
-  $("pp-status-filter").addEventListener("change", renderList);
-  $("pp-new-btn").addEventListener("click", () => openForm(null));
-  $("pp-back-link").addEventListener("click", (e) => { e.preventDefault(); closeForm(); });
-  $("pf-product").addEventListener("change", () => { if ($("pf-product").value) loadProductIntoForm($("pf-product").value, null); else setFormEnabled(false); });
   $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); updateWarning(); });
-  ["pf-image-url", "pf-measurements", "pf-finishes", "pf-sheet-url", "pf-cad-url", "pf-description"].forEach(id => $(id).addEventListener("input", updateWarning));
+  $("pf-new-sub-toggle").addEventListener("change", (e) => { setNewSub(e.target.checked, ""); if (e.target.checked) $("pf-new-sub").focus(); });
+  ["pf-name", "pf-lead", "pf-image-url", "pf-measurements", "pf-finishes", "pf-sheet-url", "pf-cad-url", "pf-description"].forEach(id => $(id).addEventListener("input", updateWarning));
   $("pf-save-btn").addEventListener("click", () => save({ submit: false }));
   $("pf-submit-btn").addEventListener("click", () => save({ submit: true }));
+  $("pf-withdraw-btn").addEventListener("click", withdraw);
   $("pp-retry-btn").addEventListener("click", load);
 
   (async () => {

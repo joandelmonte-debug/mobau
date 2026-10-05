@@ -18,7 +18,6 @@
     <nav class="nav-links" aria-label="Principal">
       <a href="panel-distribuidor.html" class="active" aria-current="page" data-supplier-nav>Resumen</a>
       <a href="distribuidor-productos.html" data-supplier-nav>Mis productos</a>
-      <a href="distribuidor-propuestas.html" data-supplier-nav>Propuestas</a>
       <a href="catalogo.html">Catálogo</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
@@ -89,8 +88,7 @@
           <p id="pd-products-text"></p>
           <!-- Solo con empresa verificada: sin verificar, ambas páginas vuelven al panel. -->
           <p style="margin-top:auto;" id="pd-products-link" hidden>
-            <a class="pd-link" style="margin-right:16px;" href="distribuidor-productos.html">Ver mis productos</a>
-            <a class="pd-link" href="distribuidor-propuestas.html">Mis propuestas</a>
+            <a class="pd-link" href="distribuidor-productos.html">Gestionar mis productos</a>
           </p>
         </li>
       </ol>
@@ -121,7 +119,7 @@
                Sin "Añadir producto": no hay escritura de productos desde el panel. -->
           <div class="pd-locked" id="pd-products-locked" hidden>
             <p class="pd-locked__title">Carga inicial acompañada por Mobau</p>
-            <p class="pd-locked__text">Envíanos tus catálogos, fichas y enlaces y preparamos contigo las fichas de producto. Los cambios en tus productos se proponen desde Propuestas; las altas de productos nuevos llegarán más adelante.</p>
+            <p class="pd-locked__text">Envíanos tus catálogos, fichas y enlaces y preparamos contigo las fichas de producto. También puedes proponer productos nuevos o cambios, uno a uno, desde Mis productos.</p>
             <div class="pd-actions">
               <a class="btn btn-primary btn-sm" id="pd-locked-cta" href="#">Solicitar carga inicial</a>
               <a class="btn btn-outline btn-sm" id="pd-locked-catalog" href="catalogo.html">Ver catálogo</a>
@@ -145,8 +143,8 @@
             <p class="pd-meta" id="pd-products-count" style="margin:0;"></p>
           </div>
           <div class="pd-future" role="note">
-            <p class="pd-future__title">Propuestas de cambio</p>
-            <p>Puedes proponer a Mobau cambios de información y precio de tus productos desde <a class="pd-link" href="distribuidor-propuestas.html">Mis propuestas</a>. Mobau revisa cada propuesta antes de aplicarla; la revisión no garantiza la aprobación. Las altas de productos nuevos todavía se solicitan escribiendo a <a class="pd-link" href="mailto:hola@mobau.do">hola@mobau.do</a>.</p>
+            <p class="pd-future__title">Propuestas de productos</p>
+            <p>Desde <a class="pd-link" href="distribuidor-productos.html">Mis productos</a> puedes proponer a Mobau productos nuevos y cambios de información y precio de tus productos. Mobau revisa cada propuesta antes de aplicarla; la revisión no garantiza la aprobación ni la publicación.</p>
           </div>
         </section>
 
@@ -243,7 +241,7 @@
 
   const AVISOS = {
     "solo-profesionales": "Esa sección es para cuentas profesionales. Desde aquí gestionas tu empresa y consultas tus productos.",
-    "plan": "La edición directa de productos no está disponible. Aquí tienes tus productos en modo consulta; las propuestas de altas y cambios llegarán más adelante."
+    "plan": "La edición directa de productos no está disponible. Desde Mis productos puedes consultar tu catálogo y proponer productos nuevos o cambios para que Mobau los revise."
   };
 
   const COMPANY = {
@@ -404,7 +402,7 @@
     $("pd-products-link").hidden = !verified;
     if (verified){
       chip($("pd-products-chip"), "Consulta", "ok");
-      $("pd-products-text").textContent = "Consulta tus productos y propón cambios a Mobau.";
+      $("pd-products-text").textContent = "Consulta tu catálogo y propón productos nuevos o cambios.";
     } else {
       chip($("pd-products-chip"), "Tras la verificación", "neutral");
       $("pd-products-text").textContent = "Podrás consultar tus productos cuando Mobau verifique tu empresa.";

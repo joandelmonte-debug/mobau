@@ -27,8 +27,8 @@
    accesos. El rol confirmado (MobauAccess.accountKind()) la corrige.
 
    Cuenta de distribuidor (Punto 38-A): experiencia B2B separada. La
-   cabecera pasa a Resumen · Mis productos · Propuestas · Catálogo
-   (Propuestas: 38-C), el logo lleva al
+   cabecera pasa a Resumen · Mis productos · Catálogo (las propuestas de
+   38-C se gestionan desde Mis productos), el logo lleva al
    panel, el menú de cuenta solo tiene "Perfil de empresa" y "Cerrar
    sesión", y desaparecen "Mi selección", Inicio, Distribuidores,
    Contacto y los enlaces de proyectos (también los del pie).
@@ -197,7 +197,7 @@
         if (a.getAttribute("href") !== "catalogo.html") a.remove();
       });
       if (!links.querySelector("[data-supplier-nav]")){
-        const items = [["Resumen", home], ["Mis productos", "distribuidor-productos.html"], ["Propuestas", "distribuidor-propuestas.html"]].map(([label, href]) => {
+        const items = [["Resumen", home], ["Mis productos", "distribuidor-productos.html"]].map(([label, href]) => {
           const a = document.createElement("a");
           a.href = href;
           a.textContent = label;

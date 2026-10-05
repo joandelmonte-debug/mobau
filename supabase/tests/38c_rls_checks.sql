@@ -4,7 +4,7 @@
 -- 38-C · Pruebas de RLS, permisos y triggers de propuestas, más una
 -- regresión breve de 38-B, en una transacción revertida.
 -- ------------------------------------------------------------
--- Ejecutar SOLO después de aplicar 38-C 01–03. Pensado para el editor
+-- Ejecutar SOLO después de aplicar 38-C 01–04. Pensado para el editor
 -- SQL de Supabase (rol postgres, miembro de anon y authenticated).
 -- Mismo patrón que supabase/tests/38b_rls_checks.sql.
 --
@@ -23,6 +23,14 @@
 -- Datos auxiliares (solo dentro de la subtransacción de cada prueba):
 --   producto 'rls38c-a' (de A, borrador), distribuidor 'rls38c-dist-b',
 --   producto 'rls38c-b' (de B) y propuestas con ids fijos de prueba.
+--   38-C 04: producto 'rls38c-a2' (de A, con categoría y subcategoría
+--   reales tomadas de categories) y propuestas create de A y de B.
+--   Casos K01–K34: tipos create/update, D1 (duplicados), D2 (obligatorios
+--   al enviar), D3 (subcategoría nueva), D5 (clasificación en update) y
+--   precio en create (K30–K34; K34 vuelve a postgres con RESET ROLE para
+--   comparar la huella completa de product_prices).
+--   La advertencia de la web por nombre ya existente es solo UX: no se
+--   prueba aquí porque no es una restricción de base de datos.
 --
 -- NADA queda guardado: BEGIN … ROLLBACK, cada prueba en su propia
 -- subtransacción deshecha (MB001) y error final MB999 con los
@@ -40,6 +48,15 @@ declare
   b1 constant text := '00000000-0000-4000-8000-0000000c0b01';
   v_prod_a text; v_dist_b text; v_prod_b text;
   v_prop_a_draft text; v_prop_a_empty text; v_prop_a_submitted text; v_prop_a_changes text; v_prop_b text;
+  -- 38-C 04
+  a2 constant text := '00000000-0000-4000-8000-0000000c0a02';
+  b2 constant text := '00000000-0000-4000-8000-0000000c0b02';
+  v_name constant text := 'Lámpara RLS 38-C';
+  v_new_sub constant text := 'Subcategoría nueva RLS 38-C';
+  v_cat1 text; v_sub1 text; v_cat2 text; v_sub2 text;
+  v_full jsonb;
+  v_prod_a2 text; v_create_a text; v_create_b text; v_withdraw_a text;
+  v_prices_fp text;
   r jsonb := '[]'::jsonb;
   t record;
   i int;
@@ -56,6 +73,17 @@ begin
   if v_sup is null or v_pro is null then
     raise exception 'MOBAU_38C: faltan datos de partida (distribuidor verificado o profesional)' using errcode = 'MB998';
   end if;
+  -- 38-C 04: dos categorías reales con al menos una subcategoría.
+  select c.id, c.subcategories[1] into v_cat1, v_sub1
+    from public.categories c where cardinality(c.subcategories) >= 1 order by c.id limit 1;
+  select c.id, c.subcategories[1] into v_cat2, v_sub2
+    from public.categories c where cardinality(c.subcategories) >= 1 and c.id <> v_cat1 order by c.id limit 1;
+  if v_cat1 is null or v_cat2 is null then
+    raise exception 'MOBAU_38C: faltan dos categorías con subcategorías' using errcode = 'MB998';
+  end if;
+  -- Huella de product_prices antes de las pruebas (K34).
+  select count(*)::text || ':' || coalesce(md5(string_agg(pp::text, '|' order by pp::text)), '')
+    into v_prices_fp from public.product_prices pp;
 
   -- ---------- SQL auxiliar (como postgres, dentro de cada prueba) ----------
   v_prod_a := format('insert into public.products (id, name, distributor_id, category_id, publication_status) values (%L, %L, %L, %L, %L)',
@@ -73,6 +101,16 @@ begin
                              a1, 'rls38c-a', v_sup_dist, 'changes_requested', '{"name": "Nombre propuesto"}');
   v_prop_b := format('insert into public.product_proposals (id, product_id, distributor_id, status, proposed_changes) values (%L, %L, %L, %L, %L)',
                      b1, 'rls38c-b', 'rls38c-dist-b', 'draft', '{"name": "Propuesta de B"}');
+  -- 38-C 04
+  v_full := jsonb_build_object('name', v_name, 'description', 'Descripción de prueba RLS 38-C',
+                               'category_id', v_cat1, 'subcategory', v_sub1, 'availability', 'por-confirmar');
+  v_prod_a2 := format('insert into public.products (id, name, distributor_id, category_id, subcategory, publication_status) values (%L, %L, %L, %L, %L, %L)',
+                      'rls38c-a2', 'Producto A2 (prueba RLS 38-C 04)', v_sup_dist, v_cat1, v_sub1, 'draft');
+  v_create_a := format('insert into public.product_proposals (id, proposal_kind, distributor_id, status, proposed_changes) values (%L, %L, %L, %L, %L)',
+                       a2, 'create', v_sup_dist, 'draft', jsonb_build_object('name', v_name)::text);
+  v_create_b := format('insert into public.product_proposals (id, proposal_kind, distributor_id, status, proposed_changes) values (%L, %L, %L, %L, %L)',
+                       b2, 'create', 'rls38c-dist-b', 'draft', jsonb_build_object('name', v_name)::text);
+  v_withdraw_a := format('update public.product_proposals set status = %L where id = %L', 'withdrawn', a2);
 
   -- kind: 'count' (la última sentencia devuelve un número) | 'exec' (se mide row_count de la última)
   -- expect: número exacto | 'ok' (al menos 1 fila) | 'rows=0' | código SQLSTATE (42501, 23514, 23505)
@@ -166,7 +204,91 @@ begin
       ('R06 anon NO ve precios',                              'anon', null, null::text[],
          array['select count(*) from public.product_prices'], 'count', '0'),
       ('R07 políticas en public = 44 (40 de 38-B + 4 de 38-C)', '-', null, null::text[],
-         array['select count(*) from pg_policies where schemaname = ''public'''], 'count', '44')
+         array['select count(*) from pg_policies where schemaname = ''public'''], 'count', '44'),
+      -- 38-C 04 · tipos
+      ('K01 A crea un producto nuevo en borrador sin product_id', 'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', '{"name": "Producto nuevo RLS 38-C K01"}')], 'exec', 'ok'),
+      ('K02 create con product_id: rechazado',                 'authenticated', v_sup::text, array[v_prod_a],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes) values (%L, %L, %L)', 'create', 'rls38c-a', '{"name": "x"}')], 'exec', '23514'),
+      ('K03 update sin product_id: rechazado',                 'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'update', '{"name": "x"}')], 'exec', '23514'),
+      ('K04 borrador create sin nombre: rechazado',            'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', '{"description": "x"}')], 'exec', '23514'),
+      -- 38-C 04 · D2 obligatorios al enviar create
+      ('K05 enviar create sin nombre: rechazado',              'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, status = %L where id = %L', (v_full - 'name')::text, 'submitted', a2)], 'exec', '23514'),
+      ('K06 enviar create sin descripción: rechazado',         'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, status = %L where id = %L', (v_full - 'description')::text, 'submitted', a2)], 'exec', '23514'),
+      ('K07 enviar create sin categoría: rechazado',           'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, proposed_new_subcategory = %L, status = %L where id = %L', (v_full - 'category_id' - 'subcategory')::text, v_new_sub, 'submitted', a2)], 'exec', '23514'),
+      ('K08 enviar create sin subcategoría ni nueva: rechazado', 'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, status = %L where id = %L', (v_full - 'subcategory')::text, 'submitted', a2)], 'exec', '23514'),
+      ('K09 enviar create sin disponibilidad: rechazado',      'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, status = %L where id = %L', (v_full - 'availability')::text, 'submitted', a2)], 'exec', '23514'),
+      ('K10 enviar create completo: sin copia de producto y con fecha', 'authenticated', v_sup::text, array[v_create_a],
+         array[format('with u as (update public.product_proposals set proposed_changes = %L, status = %L where id = %L returning (product_snapshot is null and submitted_at is not null) as ok) select count(*) from u where ok', v_full::text, 'submitted', a2)], 'count', '1'),
+      ('K11 enviar create con subcategoría nueva',             'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, proposed_new_subcategory = %L, status = %L where id = %L', (v_full - 'subcategory')::text, v_new_sub, 'submitted', a2)], 'exec', 'ok'),
+      -- 38-C 04 · D1 duplicados
+      ('K12 segundo create abierto con el mismo nombre normalizado', 'authenticated', v_sup::text, array[v_create_a],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', jsonb_build_object('name', '  lámpara   rls 38-c ')::text)], 'exec', '23505'),
+      ('K13 mismo nombre en otra empresa: permitido',          'authenticated', v_sup::text, array[v_dist_b, v_create_b],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', jsonb_build_object('name', v_name)::text)], 'exec', 'ok'),
+      ('K14 mismo nombre tras retirar el anterior: permitido', 'authenticated', v_sup::text, array[v_create_a, v_withdraw_a],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', jsonb_build_object('name', v_name)::text)], 'exec', 'ok'),
+      -- 38-C 04 · D5 clasificación en update
+      ('K15 update de marca y precio sin tocar clasificación', 'authenticated', v_sup::text, array[v_prod_a],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes, proposed_price_status) values (%L, %L, %L, %L)', 'update', 'rls38c-a', '{"brand": "Marca RLS"}', 'quote_required'),
+               format('update public.product_proposals set status = %L where product_id = %L and status = %L', 'submitted', 'rls38c-a', 'draft')], 'exec', 'ok'),
+      ('K16 update cambia categoría sin subcategoría: rechazado', 'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes) values (%L, %L, %L)', 'update', 'rls38c-a2', jsonb_build_object('category_id', v_cat2)::text)], 'exec', '23514'),
+      ('K17 update cambia categoría con subcategoría ajena: rechazado', 'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes) values (%L, %L, %L)', 'update', 'rls38c-a2', jsonb_build_object('category_id', v_cat2, 'subcategory', 'no-existe-rls38c')::text)], 'exec', '23514'),
+      ('K18 update cambia categoría con subcategoría válida', 'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes) values (%L, %L, %L)', 'update', 'rls38c-a2', jsonb_build_object('category_id', v_cat2, 'subcategory', v_sub2)::text)], 'exec', 'ok'),
+      ('K19 update cambia categoría con subcategoría nueva',  'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes, proposed_new_subcategory) values (%L, %L, %L, %L)', 'update', 'rls38c-a2', jsonb_build_object('category_id', v_cat2)::text, v_new_sub)], 'exec', 'ok'),
+      ('K20 update solo con subcategoría nueva, y se envía',  'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_new_subcategory) values (%L, %L, %L)', 'update', 'rls38c-a2', v_new_sub),
+               format('update public.product_proposals set status = %L where product_id = %L and status = %L', 'submitted', 'rls38c-a2', 'draft')], 'exec', 'ok'),
+      ('K21 subcategoría de la lista y nueva a la vez: rechazado', 'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes, proposed_new_subcategory) values (%L, %L, %L, %L)', 'update', 'rls38c-a2', jsonb_build_object('subcategory', v_sub1)::text, v_new_sub)], 'exec', '23514'),
+      ('K22 subcategoría nueva que ya existe (otra caja): rechazado', 'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_new_subcategory) values (%L, %L, %L)', 'update', 'rls38c-a2', upper(v_sub1))], 'exec', '23514'),
+      ('K23 subcategoría propuesta vacía: rechazado',          'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes) values (%L, %L, %L)', 'update', 'rls38c-a2', '{"subcategory": null}')], 'exec', '23514'),
+      -- 38-C 04 · permisos, historial y otras cuentas
+      ('K24 A NO cambia el tipo de una propuesta',             'authenticated', v_sup::text, array[v_prod_a, v_prop_a_draft],
+         array[format('update public.product_proposals set proposal_kind = %L where id = %L', 'create', a1)], 'exec', '42501'),
+      ('K25 el historial guarda el tipo create',               'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', '{"name": "Producto nuevo RLS 38-C K25"}'),
+               format('select count(*) from public.proposal_events e join public.product_proposals p on p.id = e.proposal_id where p.proposed_changes ->> %L = %L and e.payload ->> %L = %L', 'name', 'Producto nuevo RLS 38-C K25', 'proposal_kind', 'create')], 'count', '1'),
+      ('K26 A NO ve el producto nuevo propuesto por B',        'authenticated', v_sup::text, array[v_dist_b, v_create_b],
+         array[format('select count(*) from public.product_proposals where id = %L', b2)], 'count', '0'),
+      ('K27 profesional NO crea un producto nuevo',            'authenticated', v_pro::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', '{"name": "x"}')], 'exec', '42501'),
+      ('K28 anon NO crea un producto nuevo',                   'anon', null, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes) values (%L, %L)', 'create', '{"name": "x"}')], 'exec', '42501'),
+      ('K29 propuestas no tocan products ni product_prices de A', 'authenticated', v_sup::text, array[v_prod_a2],
+         array[format('insert into public.product_proposals (proposal_kind, product_id, proposed_changes, proposed_price_status, proposed_price_amount) values (%L, %L, %L, %L, %L)', 'update', 'rls38c-a2', '{"name": "Nombre cambiado K29"}', 'published', '99.00'),
+               format('update public.product_proposals set status = %L where product_id = %L and status = %L', 'submitted', 'rls38c-a2', 'draft'),
+               format('select count(*) from public.products where id = %L and name = %L', 'rls38c-a2', 'Producto A2 (prueba RLS 38-C 04)')], 'count', '1'),
+      -- 38-C 04 · precio en create (restricciones de 38-C 01)
+      ('K30 create con precio publicado sin importe: rechazado', 'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes, proposed_price_status) values (%L, %L, %L)', 'create', '{"name": "Producto nuevo RLS 38-C K30"}', 'published')], 'exec', '23514'),
+      ('K31 create con importe sin estado de precio: rechazado', 'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes, proposed_price_amount) values (%L, %L, %L)', 'create', '{"name": "Producto nuevo RLS 38-C K31"}', '10.00')], 'exec', '23514'),
+      ('K32 create con importe negativo: rechazado',          'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes, proposed_price_status, proposed_price_amount) values (%L, %L, %L, %L)', 'create', '{"name": "Producto nuevo RLS 38-C K32"}', 'published', '-1.00')], 'exec', '23514'),
+      ('K33 create con precio válido',                        'authenticated', v_sup::text, null::text[],
+         array[format('insert into public.product_proposals (proposal_kind, proposed_changes, proposed_price_status, proposed_price_amount) values (%L, %L, %L, %L)', 'create', '{"name": "Producto nuevo RLS 38-C K33"}', 'published', '120.00')], 'exec', 'ok'),
+      ('K34 enviar create con precio no toca product_prices ni products', 'authenticated', v_sup::text, array[v_create_a],
+         array[format('update public.product_proposals set proposed_changes = %L, proposed_price_status = %L, proposed_price_amount = %L, status = %L where id = %L', v_full::text, 'published', '150.00', 'submitted', a2),
+               'reset role',
+               format('select count(*) from public.product_proposals pr where pr.id = %L and pr.status = %L and pr.proposed_price_amount = 150 and pr.product_snapshot is null'
+                      || ' and (select count(*)::text || %L || coalesce(md5(string_agg(pp::text, %L order by pp::text)), %L) from public.product_prices pp) = %L'
+                      || ' and not exists (select 1 from public.products p where p.name = %L)',
+                      a2, 'submitted', ':', '|', '', v_prices_fp, v_name)], 'count', '1')
     ) as c(name, role, sub, setup, sql, kind, expect)
   loop
     v_got := null;
