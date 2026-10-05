@@ -18,6 +18,7 @@
     <nav class="nav-links" aria-label="Principal">
       <a href="panel-distribuidor.html" data-supplier-nav>Resumen</a>
       <a href="distribuidor-productos.html" class="active" aria-current="page" data-supplier-nav>Mis productos</a>
+      <a href="distribuidor-propuestas.html" data-supplier-nav>Propuestas</a>
       <a href="catalogo.html">Catálogo</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
@@ -50,7 +51,7 @@
   <div id="pl-content" style="display:none;">
 
     <p class="card-meta" style="border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); padding:12px 16px; margin:0 0 24px;">
-      Solo lectura: así figuran hoy tus productos en Mobau. Todavía no se pueden crear ni editar productos desde aquí.
+      Así figuran hoy tus productos en Mobau. Para cambiar un producto, usa «Proponer cambios»: Mobau revisa la propuesta antes de aplicarla.
     </p>
 
     <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:8px;">
@@ -244,10 +245,18 @@
     chip.className = `pd-chip pd-chip--${publication.kind}`;
     chip.textContent = publication.label;
 
+    /* Propuesta de cambio (38-C): la página de propuestas abre la propuesta
+       abierta del producto, si ya la hay, en lugar de crear otra. */
+    const propose = document.createElement("a");
+    propose.className = "pd-link";
+    propose.href = `distribuidor-propuestas.html?producto=${encodeURIComponent(product.id)}`;
+    propose.textContent = "Proponer cambios";
+
     /* .c-qty ya ocupa todo el ancho en móvil (regla existente de .cart-row). */
     const actions = document.createElement("div");
     actions.className = "c-qty";
-    actions.append(chip);
+    actions.style.cssText = "flex-direction:column; align-items:flex-end; gap:10px;";
+    actions.append(chip, propose);
 
     row.append(makeThumb(product), info, actions);
     return row;
