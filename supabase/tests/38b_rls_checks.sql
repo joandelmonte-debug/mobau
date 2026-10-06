@@ -119,7 +119,7 @@ begin
       ('V02 anon NO ve un archivado (URL directa)',        'anon', null, null, format('select count(*) from public.products where id = %L', v_arch_own), 'count', '0'),
       ('V03 anon NO ve un borrador',                       'anon', null, array[v_tmp_insert], format('select count(*) from public.products where id = %L', v_tmp), 'count', '0'),
       ('V04 anon: total = publicados',                     'anon', null, null, 'select count(*) from public.products', 'count', n_pub::text),
-      ('V05 anon: ningún precio visible (como hoy)',       'anon', null, null, 'select count(*) from public.product_prices', 'count', '0'),
+      ('V05 anon: sin permiso sobre product_prices (39-06)', 'anon', null, null, 'select count(*) from public.product_prices', 'exec', '42501'),
       ('V06 profesional ve un publicado',                  'authenticated', v_pro::text, null, format('select count(*) from public.products where id = %L', v_pub_other), 'count', '1'),
       ('V07 profesional NO ve un archivado',               'authenticated', v_pro::text, null, format('select count(*) from public.products where id = %L', v_arch_own), 'count', '0'),
       ('V08 profesional NO ve un borrador',                'authenticated', v_pro::text, array[v_tmp_insert], format('select count(*) from public.products where id = %L', v_tmp), 'count', '0'),
@@ -131,7 +131,7 @@ begin
       ('V13 distribuidor verificado ve SU borrador',       'authenticated', v_sup::text, array[v_tmp_insert], format('select count(*) from public.products where id = %L', v_tmp), 'count', '1'),
       ('V14 distribuidor verificado: total = publicados + suyos no publicados', 'authenticated', v_sup::text, null, 'select count(*) from public.products', 'count', (n_pub + n_sup_nonpub)::text),
       -- Precios: misma visibilidad que su producto
-      ('P01 profesional ve precio de un publicado',        'authenticated', v_pro::text, null, format('select count(*) from public.product_prices where product_id = %L', v_pub_priced), 'count', '1'),
+      ('P01 profesional NO lee product_prices directamente (39-06; el catálogo usa catalog_published_prices)', 'authenticated', v_pro::text, null, format('select count(*) from public.product_prices where product_id = %L', v_pub_priced), 'count', '0'),
       ('P02 profesional NO ve precio de un archivado',     'authenticated', v_pro::text, null, format('select count(*) from public.product_prices where product_id = %L', v_arch_own), 'count', '0'),
       ('P03 distribuidor verificado ve precio de SU archivado', 'authenticated', v_sup::text, null, format('select count(*) from public.product_prices where product_id = %L', v_arch_own), 'count', '1'),
       ('P04 profesional: ningún precio de producto no visible', 'authenticated', v_pro::text, null,

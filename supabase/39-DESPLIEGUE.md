@@ -11,13 +11,21 @@
 > Ninguna incidencia en la base de datos. No hay admins, MFA ni interfaz de
 > moderación todavía.
 >
-> **Paquete de precios · A:** 39-05 aplicada y registrada el 2026-10-06
-> (`20261006120000_39_05_catalog_published_prices`).
-> - Pruebas de la superficie: **29/29**.
-> - Huella: sin cambios de datos; solo la nueva función y la migración 21.
-> - `script.js` desplegado: pendiente.
-> - Verificación con Spectro: pendiente.
-> - **39-06: pendiente.**
+> **Paquete de precios aplicado el 2026-10-06:**
+> - 39-05 aplicada y registrada como `20261006120000`;
+> - 39-06 aplicada y registrada como `20261006120100`.
+>
+> Pruebas:
+> - 39-06 privacidad: **28/28**;
+> - 39-05 superficie: **29/29**;
+> - 39 moderación: **80/80**;
+> - 38-C RLS: **74/74**;
+> - 38-B RLS: **50/50**;
+> - total: **261/261**.
+>
+> Huella final: sin cambios de datos; solo los cambios previstos en
+> políticas y permisos de `product_prices` y 22 migraciones. **R1 y R2:
+> cerrados.**
 
 Mobau revisa las propuestas que envían los distribuidores verificados
 (38-C) y decide: **aprobar** la propuesta exacta, **solicitar cambios** o
@@ -52,6 +60,7 @@ Mobau revisa las propuestas que envían los distribuidores verificados
 | `20261005130200` | `39_03_moderation_triggers` | `migrations/20261005130200_39_03_moderation_triggers.sql` |
 | `20261005130300` | `39_04_moderate_function` | `migrations/20261005130300_39_04_moderate_function.sql` |
 | `20261006120000` | `39_05_catalog_published_prices` | `migrations/20261006120000_39_05_catalog_published_prices.sql` (paquete de precios · A) |
+| `20261006120100` | `39_06_product_prices_privacy` | `migrations/20261006120100_39_06_product_prices_privacy.sql` (paquete de precios · B) |
 
 **Forma de ejecución:**
 - Cada archivo se envió completo y literal, en una sola llamada, con su
@@ -63,6 +72,8 @@ Mobau revisa las propuestas que envían los distribuidores verificados
   versiones mal formadas.
 - Paquete de precios · A: 39-05 se ejecutó y registró de la misma forma.
   Registro tras A: **21 migraciones**, la última `20261006120000`.
+- Paquete de precios · B: 39-06 se ejecutó y registró de la misma forma.
+  Registro tras B: **22 migraciones**, la última `20261006120100`.
 - Los SQL se conservan sin cambios, incluida la cabecera «PROPUESTA NO
   EJECUTADA»: son el artefacto que se aprobó y se ejecutó.
 
@@ -253,9 +264,11 @@ Mobau:
 - nunca se convierte en `published`;
 - `currency = 'USD'` e `includes_itbis = true`, según las restricciones.
 
-**Visibilidad de `product_prices`: estado actual = RIESGO REAL, no
-aceptado.** Comprobado el 2026-10-06 en modo lectura, simulando cada rol
-dentro de `BEGIN … ROLLBACK`.
+**Visibilidad de `product_prices`.** Lo que sigue (hasta R3) describe el
+estado **anterior a 39-06**, comprobado el 2026-10-06 en modo lectura
+simulando cada rol dentro de `BEGIN … ROLLBACK`. Era un **riesgo real, no
+aceptado**, y quedó cerrado con el paquete de precios (ver «Estado tras
+B» y «Modelo final»).
 - **Regla vigente:** una fila de precio es visible exactamente cuando su
   producto es visible para quien consulta
   (`product_prices_select_authenticated`: `EXISTS (… products p WHERE p.id
@@ -293,9 +306,8 @@ dentro de `BEGIN … ROLLBACK`.
   consulta `product_prices`. No se abren precios públicos por la API ni se
   crea una vista o RPC pública para `anon`.
 
-**Corrección: paquete de precios** (aprobado; **A**: 39-05 aplicada y
-`script.js` en este commit, con la verificación tras su despliegue;
-**B pendiente**: pasos 4–5). La
+**Corrección: paquete de precios** (aprobado y **aplicado**: A, pasos
+1–3; B, pasos 4–5). La
 privacidad de la tabla **no se aplica aislada**: rompería el catálogo del
 profesional. Va en un paquete coordinado, en este orden:
 1. **39-05 · `catalog_published_prices`**
@@ -353,9 +365,9 @@ No se deben moderar propuestas reales con precio durante esa ventana.
 | 39-05 aplicada, registrada (`20261006120000`) y verificada | Aplicada y registrada como `20261006120000_39_05_catalog_published_prices`. Firma `catalog_published_prices(text[],text,integer)`; DEFINER; `search_path = ''`; propietario `postgres`; 7 columnas; MD5 de `prosrc` `38e5e597619fd290b2255e8d9c224453` |
 | `tests/39_05_catalog_prices_checks.sql` | **29/29** |
 | Huella posterior y final | Sin cambios de datos: todas las líneas `tabla:*` idénticas. Solo cambian la nueva función y la migración 21. Sin restos de prueba, admins ni contextos |
-| `script.js` desplegado en el piloto | Pendiente |
-| Verificación del catálogo con Spectro (mismos importes, «bajo cotización» donde corresponde y aviso de demostración) | Pendiente |
-| 39-06 | Pendiente |
+| `script.js` desplegado en el piloto | Hecho: commit `1400d83` en `origin/master`, desplegado por Cloudflare Pages |
+| Verificación del catálogo con Spectro (mismos importes, «bajo cotización» donde corresponde y aviso de demostración) | Correcta: catálogo, fichas, selección y detalle de proyecto usan `catalog_published_prices` (HTTP 200); ninguna llamada directa a `/rest/v1/product_prices`; la RPC devuelve solo las 7 columnas; precios publicados, bajo cotización, demo, subtotales y cantidades correctos; sin errores en consola |
+| 39-06 | Aplicada después de la verificación (ver «Estado tras B») |
 | Avisos de seguridad | 1 WARN más esperado: `catalog_published_prices`, DEFINER ejecutable por `authenticated` (intencionado). No se consultaron en este paso |
 
 **Permisos de ejecución de `catalog_published_prices`** (comprobados tras
@@ -367,8 +379,39 @@ aplicar):
   por defecto de Supabase; no es un rol de navegador ni de cliente y se
   decidió no revocarlo.
 
+**Estado tras B** (R1 y R2 cerrados):
+
+| Paso | Resultado |
+|---|---|
+| Huella previa a 39-06 (nueva línea base) | Tomada. `projects` y `project_products` cambiaron respecto a la huella final de A por el uso normal del piloto durante la verificación (confirmado; no es una incidencia) |
+| 39-06 aplicada, registrada (`20261006120100`) y verificada | Aplicada y registrada como `20261006120100_39_06_product_prices_privacy`. Validación final superada: 4 políticas en `product_prices`, 48 en public, `anon` sin permisos y `authenticated` solo con SELECT |
+| `tests/39_06_prices_privacy_checks.sql` | **28/28** |
+| `tests/39_05_catalog_prices_checks.sql` (repetida con la tabla cerrada) | **29/29** |
+| `tests/39_moderation_checks.sql` (R01 = 48) | **80/80** |
+| Regresiones 38-C (R06, R07 = 43) y 38-B (V05, P01) | **74/74** · **50/50** |
+| Total | **261/261** |
+| Restos entre pruebas | Ninguno: 0 datos auxiliares, admins, contextos y restricciones temporales |
+| Huella posterior y final | Sin cambios de datos: todas las líneas `tabla:*` idénticas a la línea base previa a 39-06. Solo cambian las políticas y los permisos de `product_prices` (políticas `b80ef51e…`), las políticas en public (47 → 48, `7d74acfd…`) y las migraciones (21 → 22). La huella final después de las pruebas es idéntica a la posterior a 39-06 |
+| Rollback de 39-06 | No ejecutado |
+
+**Modelo final de acceso a precios:**
+- **`anon`:** sin acceso a `product_prices` ni a `catalog_published_prices`.
+- **Profesional:** sin lectura directa de `product_prices`; el catálogo
+  usa `catalog_published_prices`.
+- **Distribuidor verificado:** solo sus propios precios, incluidas las
+  columnas operativas necesarias (estados no publicados y campos internos)
+  (`product_prices_select_own`).
+- **Admin de Mobau con AAL2:** todos los precios, para moderar
+  (`product_prices_select_mobau`).
+- **Escritura:** ningún cliente modifica `product_prices` directamente.
+  Los cambios operativos pasan por propuestas y moderación
+  (`moderate_product_proposal`), que actualiza la tabla de forma controlada.
+
 **No se moderarán propuestas reales con precio hasta que el paquete completo,
 incluidas 39-05, script.js y 39-06, esté aplicado y probado.**
+
+El paquete ya está aplicado y probado. Además, moderar propuestas reales con
+precio requiere el primer admin, el MFA real y la interfaz de moderación.
 
 ## Subcategoría nueva
 
@@ -436,6 +479,16 @@ completo era limpio. **No se ejecutó ningún rollback.**
 |---|---|---|
 | `rollback/20261006120000_39_05_catalog_published_prices.rollback.sql` | 39-06 está aplicada | Quita la función. **Antes** hay que volver a la versión anterior de `script.js` (no se puede comprobar desde la base de datos) |
 
+**Paquete de precios · B:**
+
+| Archivo | Se niega si… | Qué hace |
+|---|---|---|
+| `rollback/20261006120100_39_06_product_prices_privacy.rollback.sql` | Falta la confirmación explícita (línea comentada `mobau.reabrir_exposicion_precios = 'confirmo'`) o 39-06 no está como se aprobó | **Reabre R1 y R2.** Restaura la política y los permisos previos y comprueba el MD5 de las 47 políticas |
+
+**Orden inverso:** 39-06 (con confirmación) → `script.js` anterior → 39-05.
+Tras la primera moderación real con precio, el rollback de 39-06 expondría
+esos importes: la salida segura es una corrección nueva (fix forward).
+
 ## Archivos
 
 | Archivo | Contenido |
@@ -453,12 +506,14 @@ completo era limpio. **No se ejecutó ningún rollback.**
 | `tests/39_05_catalog_prices_checks.sql` | 29 pruebas de la superficie, válidas antes y después de 39-06 |
 | `tests/39_huella.sql` | (actualizada) `product_prices` y la función de 39-05 en líneas `precios:*` propias |
 | `../script.js` | Precios del catálogo por `catalog_published_prices` |
+| `migrations/20261006120100_39_06_product_prices_privacy.sql` | Privacidad de `product_prices` |
+| `rollback/20261006120100_39_06_product_prices_privacy.rollback.sql` | Rollback de 39-06 (requiere confirmación explícita; reabre R1 y R2) |
+| `tests/39_06_prices_privacy_checks.sql` | 28 pruebas de privacidad de `product_prices` |
+| `tests/38b_rls_checks.sql`, `tests/38c_rls_checks.sql`, `tests/39_moderation_checks.sql` | Regresiones ajustadas a 39-06 (V05, P01; R06, R07 = 43; R01 = 48) |
 
 ## Pendiente
 
 Cada punto con su propia autorización:
-0. Paquete de precios · **B:** 39-06, pruebas de privacidad, regresiones
-   ajustadas de 38-B, 38-C y 39, y huella posterior.
 1. Interfaz: consola de moderación y aviso de la decisión en Mis productos.
 2. Activar TOTP en Supabase Auth.
 3. Alta del primer admin (`hola@mobau…`).
