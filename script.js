@@ -601,10 +601,13 @@ if (catalogUsesDb()) loadCatalog().catch(() => {});
 /* ============================================================
    PRECIOS — Punto 6
    ------------------------------------------------------------
-   Los precios viven en Supabase (tabla product_prices, RLS: solo
-   SELECT para authenticated), NUNCA en PRODUCTS ni en products —
-   así un usuario sin sesión no puede obtenerlos ni leyendo el HTML,
-   ni el estado JS, ni una respuesta pública de Supabase. Sin sesión,
+   Los precios viven en Supabase (tabla product_prices, privada: solo su
+   distribuidor y Mobau la leen), NUNCA en PRODUCTS ni en products. El
+   catálogo los obtiene con la función catalog_published_prices (39-05):
+   estado del precio de cada producto publicado, con importe solo si el
+   precio está publicado y sin columnas internas (es_demo sustituye a
+   price_source). Un usuario sin sesión no puede obtenerlos ni leyendo el
+   HTML, ni el estado JS, ni una respuesta pública de Supabase. Sin sesión,
    loadPriceState() no hace ninguna llamada de red: PRICE_STATE.map
    queda vacío y getPriceInfo() nunca revela un importe.
 
@@ -636,21 +639,21 @@ async function loadPriceState(productIds){
   }
 
   try {
-    const columns = "product_id, price_amount, currency, price_status, includes_itbis, itbis_rate, price_source";
     const ids = productIds ? [...new Set(productIds)] : [];
     const map = {};
     if (ids.length && ids.length <= PRICE_IN_LIMIT){
-      const { data, error } = await supabaseClient.from("product_prices").select(columns).in("product_id", ids);
+      const { data, error } = await supabaseClient.rpc("catalog_published_prices", { p_product_ids: ids });
       if (error) throw error;
       (data || []).forEach(row => { map[row.product_id] = row; });
     } else {
-      /* Sin ids (o demasiados para la URL): todos los precios, paginados (PostgREST corta en 1000 filas). */
+      /* Sin ids (o demasiados): todos los precios, por páginas de 1000 ordenadas por product_id. */
       const size = 1000;
-      for (let from = 0; ; from += size){
-        const { data, error } = await supabaseClient.from("product_prices").select(columns).order("product_id").range(from, from + size - 1);
+      for (let after = null; ; ){
+        const { data, error } = await supabaseClient.rpc("catalog_published_prices", { p_product_ids: null, p_after: after, p_limit: size });
         if (error) throw error;
         (data || []).forEach(row => { map[row.product_id] = row; });
         if (!data || data.length < size) break;
+        after = data[data.length - 1].product_id;
       }
     }
     PRICE_STATE.map = map;
@@ -693,7 +696,7 @@ function getPriceInfo(productId){
 
   const amount = Number(row.price_amount);
   if (row.price_status === "published" && Number.isFinite(amount)){
-    return { kind: "published", amount, source: row.price_source, text: `${formatUSD(amount)} · ITBIS incluido` };
+    return { kind: "published", amount, source: row.es_demo ? "demo" : null, text: `${formatUSD(amount)} · ITBIS incluido` };
   }
 
   /* Estado no reconocido, o "published" sin importe válido — no debería
