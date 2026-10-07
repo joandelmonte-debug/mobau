@@ -140,9 +140,10 @@
 <script>
 /* Punto 38-A: una cuenta de distribuidor ve la ficha en solo lectura —
    sin cantidad ni "Añadir a la selección" (addToSelection() también lo
-   rechaza). Solo interfaz; la protección de servidor llega en 38-B. */
+   rechaza). Solo interfaz; la protección de servidor llega en 38-B.
+   Punto 39: igual para la cuenta de Mobau. */
 MobauAccess.accountKind().then(kind => {
-  if (kind === "supplier") document.querySelector(".product-selection-actions").hidden = true;
+  if (kind === "supplier" || kind === "mobau") document.querySelector(".product-selection-actions").hidden = true;
 });
 
 runWithCatalog(async () => {

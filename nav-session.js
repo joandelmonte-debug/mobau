@@ -32,6 +32,13 @@
    panel, el menú de cuenta solo tiene "Perfil de empresa" y "Cerrar
    sesión", y desaparecen "Mi selección", Inicio, Distribuidores,
    Contacto y los enlaces de proyectos (también los del pie).
+
+   Cuenta de Mobau (Punto 39, profiles.role = 'admin'): sin selección,
+   proyectos ni perfil profesional; cabecera Moderación · Catálogo y menú
+   Moderación · Cerrar sesión. «Moderación» solo aparece si el servidor
+   confirma un admin activo (mobau_admin_session().admin, una sola llamada
+   y solo para este tipo de cuenta); la consola vuelve a comprobarlo y
+   exige además el segundo factor.
    ============================================================ */
 
 (async () => {
@@ -155,6 +162,10 @@
      pista guardada, donde lo de cliente ya está oculto por CSS. Si la
      consulta falla ("unknown"), la cabecera queda como la de siempre. */
   accountKindPromise.then(kind => {
+    if (kind === "mobau"){
+      applyMobauAccount();
+      return;
+    }
     if (kind !== "supplier") return;
     applySupplierHeader();
 
@@ -179,6 +190,56 @@
       })
       .catch(() => {});
   });
+
+  /* Cuenta de Mobau: quita lo de profesional y, solo con admin activo,
+     añade «Moderación» a la cabecera y al menú (idempotente: data-mobau-nav). */
+  function applyMobauAccount(){
+    const profileLink = document.getElementById("account-menu-profile");
+    if (profileLink) profileLink.remove();
+    panel.querySelectorAll("[data-architect-only]").forEach(el => el.remove());
+
+    const selectionLink = document.getElementById("selection-count-link");
+    if (selectionLink) selectionLink.remove();
+    const links = document.querySelector(".site-header .nav-links");
+    if (links){
+      links.querySelectorAll(":scope > a:not([data-mobau-nav])").forEach(a => {
+        if (a.getAttribute("href") !== "catalogo.html") a.remove();
+      });
+    }
+    document.querySelectorAll('.site-footer a[href="distribuidores.html"], .site-footer a[href="proyectos.html"]').forEach(a => {
+      (a.closest("li") || a).remove();
+    });
+
+    MobauAccess.adminSession().then(state => {
+      if (!state.admin) return;
+      const home = MobauAccess.MOBAU_HOME;
+      const onConsole = /^moderacion/.test(window.location.pathname.split("/").pop() || "");
+      document.querySelectorAll(".site-header .brand").forEach(a => { a.href = home; });
+      const nameEl = document.getElementById("account-menu-name");
+      if (nameEl) nameEl.textContent = "Equipo Mobau";
+
+      if (links && !links.querySelector("[data-mobau-nav]")){
+        const a = document.createElement("a");
+        a.href = home;
+        a.textContent = "Moderación";
+        a.setAttribute("data-mobau-nav", "");
+        if (onConsole){
+          a.className = "active";
+          a.setAttribute("aria-current", "page");
+        }
+        links.prepend(a);
+      }
+      if (!panel.querySelector("[data-mobau-nav]")){
+        const item = document.createElement("a");
+        item.href = home;
+        item.textContent = "Moderación";
+        item.setAttribute("role", "menuitem");
+        item.setAttribute("data-mobau-nav", "");
+        item.addEventListener("click", () => closeMenu());
+        panel.insertBefore(item, document.getElementById("account-menu-logout"));
+      }
+    }).catch(() => {});
+  }
 
   /* Cabecera y pie de distribuidor sobre el HTML estático de cada página
      (sin reescribir las ~21 cabeceras): idempotente — los enlaces propios

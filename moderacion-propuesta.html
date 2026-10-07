@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Propuesta — Moderación — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="distribuidor.css">
+<style>
+  /* Consola de moderación (39): estilos locales a esta página. */
+  .mod-head-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:10px; font-size:14px; color: var(--ink-soft); }
+  .mod-section{ margin-top:36px; }
+  .mod-section h2{ font-size:18px; margin:0 0 10px; }
+  .mod-box{ margin:16px 0 0; padding:12px 16px; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius: var(--radius); background: var(--surface); font-size:14px; color: var(--ink); overflow-wrap:anywhere; }
+  .mod-box p{ margin:0; max-width:none; }
+  .mod-box p + p{ margin-top:6px; }
+  .mod-box--alert{ border-left-color: var(--danger); }
+  .mod-box--wait{ border-left-color: var(--brass); }
+  .mod-table td, .mod-table th{ overflow-wrap:anywhere; }
+  .mod-table td:first-child{ font-weight:600; }
+  .mod-table tr.mod-conflict td{ background: rgba(162, 59, 46, .06); }
+  .mod-proposed{ color: var(--ink); font-weight:600; }
+  .mod-warn{ color: var(--danger); font-size:14px; margin:10px 0 0; max-width:none; }
+  .mod-history{ margin:0; padding-left:20px; font-size:14px; }
+  .mod-history li{ margin-bottom:6px; overflow-wrap:anywhere; }
+  .mod-decision .field textarea{ min-height:110px; }
+  .mod-counter{ font-size:12.5px; color: var(--ink-faint); text-align:right; margin:-12px 0 0; max-width:none; }
+  .mod-counter.is-over{ color: var(--danger); font-weight:600; }
+  .mod-actions{ display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .mod-btn-danger{ color: var(--danger); border-color: var(--danger); }
+  .mod-btn-danger:hover{ border-color: var(--danger); background: rgba(162, 59, 46, .06); }
+  .mod-feedback:empty, .mod-result:empty{ display:none; }
+  .mod-mfa-card{ max-width:440px; }
+  .mod-mfa-title{ font-size:18px; margin:0 0 6px; }
+  .mod-mfa-code{ max-width:200px; letter-spacing:.3em; font-size:18px; }
+  .mod-mfa-msg{ margin:12px 0 0; font-size:14px; color: var(--danger); min-height:1.4em; }
+  @media (max-width: 720px){
+    .mod-actions .btn{ width:100%; justify-content:center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Punto 39: detalle de una propuesta (solo equipo de Mobau). -->
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="catalogo.html">Catálogo</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap pd-main">
+  <p class="card-meta" style="margin:0 0 18px;"><a href="moderacion.html">← Volver a la bandeja</a></p>
+
+  <div id="mod-gate"><p class="card-meta">Comprobando tu acceso…</p></div>
+
+  <div id="mod-app" hidden>
+    <div id="mod-result" class="mod-box mod-result" role="status" aria-live="polite" tabindex="-1"></div>
+    <p id="mod-loading" class="card-meta" hidden>Cargando la propuesta…</p>
+    <div id="mod-error" class="pd-empty" role="alert" hidden>
+      <p class="pd-empty-title">No pudimos cargar la propuesta.</p>
+      <button type="button" class="btn btn-primary" id="mod-retry">Reintentar</button>
+    </div>
+    <div id="mod-notfound" class="pd-empty" hidden>
+      <p class="pd-empty-title">No encontramos la propuesta.</p>
+      <a class="btn btn-outline" href="moderacion.html">Volver a la bandeja</a>
+    </div>
+    <div id="mod-detail"></div>
+  </div>
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Consola de moderación</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="moderacion-acceso.js"></script>
+<script>
+/* Detalle de una propuesta (39). Solo lee después de que la puerta
+   confirme { admin: true, aal2: true } en el servidor. La ÚNICA escritura
+   es rpc("moderate_product_proposal", { p_proposal_id, p_decision,
+   p_message, p_expected_version }): nunca se escribe directamente en
+   product_proposals, products, product_prices, categories ni
+   proposal_events. Todo lo que propone el distribuidor se pinta con
+   textContent; los enlaces solo http(s), en pestaña nueva; sin imágenes. */
+(() => {
+  const M = MobauModeracion;
+  const $ = (id) => document.getElementById(id);
+  const MAX_MESSAGE = 2000;
+  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status";
+  const PUBLICATION = { draft: "Borrador", in_review: "En revisión", changes_requested: "Cambios solicitados", published: "Publicado", archived: "Archivado" };
+
+  const params = new URLSearchParams(window.location.search);
+  const proposalId = params.get("id");
+  let gate = null;
+  let loadId = 0;
+  let ctx = null;          // datos de la propuesta cargada
+  let busy = false;        // una decisión en curso
+  let approveBlocked = false;
+  let actionsLocked = false;
+  let prefill = null;      // texto para «Solicitar cambios» tras un conflicto
+
+  function clearAll(){
+    loadId++;
+    ctx = null;
+    $("mod-detail").replaceChildren();
+    $("mod-result").replaceChildren();
+  }
+
+  function setState(state){
+    $("mod-loading").hidden = state !== "loading";
+    $("mod-error").hidden = state !== "error";
+    $("mod-notfound").hidden = state !== "notfound";
+    $("mod-detail").hidden = state !== "detail";
+  }
+
+  function notFound(){
+    ctx = null;
+    $("mod-detail").replaceChildren();
+    setState("notfound");
+  }
+
+  /* ---------- valores ---------- */
+  const isEmpty = (v) => v === null || v === undefined || v === "";
+
+  function valueText(key, value){
+    if (isEmpty(value)) return "vacío";
+    if (key === "category_id") return (ctx.categories.get(value) || {}).name || String(value);
+    if (key === "availability") return M.AVAILABILITY[value] || String(value);
+    return typeof value === "string" ? value : JSON.stringify(value);
+  }
+
+  function valueNode(key, value, strong){
+    let node;
+    if (M.URL_FIELDS.includes(key) && !isEmpty(value)) node = M.safeLink(value);
+    else node = M.el("span", "", valueText(key, value));
+    if (!strong) return node;
+    const wrap = M.el("span", "mod-proposed");
+    wrap.append(node);
+    return wrap;
+  }
+
+  /* Misma comparación que la función (to_jsonb): null y ausente son iguales. */
+  function sameValue(a, b){
+    return JSON.stringify(isEmpty(a) && a !== "" ? null : a) === JSON.stringify(isEmpty(b) && b !== "" ? null : b);
+  }
+  function samePrice(a, b){
+    const status = (x) => (x && x.price_status) || null;
+    const amount = (x) => (x && !isEmpty(x.price_amount) ? Number(x.price_amount) : null);
+    return status(a) === status(b) && amount(a) === amount(b);
+  }
+
+  function cell(label, ...children){
+    const td = document.createElement("td");
+    td.setAttribute("data-label", label);
+    td.append(...children);
+    return td;
+  }
+
+  function table(headers, rows){
+    const t = M.el("table", "pd-table mod-table");
+    const thead = document.createElement("thead");
+    const tr = document.createElement("tr");
+    headers.forEach(h => tr.append(M.el("th", "", h)));
+    thead.append(tr);
+    const tbody = document.createElement("tbody");
+    tbody.append(...rows);
+    t.append(thead, tbody);
+    const wrap = M.el("div", "pd-table-wrap");
+    wrap.append(t);
+    return wrap;
+  }
+
+  /* ---------- secciones ---------- */
+  function proposedKeys(p){
+    const keys = Object.keys(p.proposed_changes || {});
+    if (p.proposed_new_subcategory && !keys.includes("subcategory")) keys.push("subcategory");
+    return keys;
+  }
+
+  function proposedValue(p, key){
+    if (key === "subcategory" && p.proposed_new_subcategory) return p.proposed_new_subcategory;
+    return (p.proposed_changes || {})[key];
+  }
+
+  function fieldsSection(){
+    const p = ctx.proposal;
+    const section = M.el("section", "mod-section");
+    section.append(M.el("h2", "", p.proposal_kind === "create" ? "Datos del producto nuevo" : "Cambios propuestos"));
+    const keys = proposedKeys(p);
+    if (!keys.length){
+      section.append(M.el("p", "card-meta", "Sin cambios de datos: la propuesta solo afecta al precio."));
+      return { section, conflicts: [] };
+    }
+    const conflicts = [];
+    let rows;
+    if (p.proposal_kind === "create"){
+      rows = keys.map(key => {
+        const tr = document.createElement("tr");
+        const label = key === "subcategory" && p.proposed_new_subcategory ? "Subcategoría (nueva)" : M.fieldLabel(key);
+        tr.append(cell("Campo", document.createTextNode(label)), cell("Propuesto", valueNode(key, proposedValue(p, key), true)));
+        return tr;
+      });
+      section.append(table(["Campo", "Propuesto"], rows));
+    } else {
+      const snap = (p.product_snapshot && p.product_snapshot.product) || {};
+      const cur = ctx.product || {};
+      rows = keys.map(key => {
+        const tr = document.createElement("tr");
+        const changed = p.status === "submitted" && !sameValue(snap[key], cur[key]);
+        if (changed){
+          conflicts.push(key);
+          tr.className = "mod-conflict";
+        }
+        const label = key === "subcategory" && p.proposed_new_subcategory ? "Subcategoría (nueva)" : M.fieldLabel(key);
+        const current = M.el("span");
+        current.append(valueNode(key, cur[key]), document.createTextNode(changed ? " ⚠" : ""));
+        tr.append(
+          cell("Campo", document.createTextNode(label)),
+          cell("Al enviar", valueNode(key, snap[key])),
+          cell("Actual", current),
+          cell("Propuesto", valueNode(key, proposedValue(p, key), true))
+        );
+        return tr;
+      });
+      section.append(table(["Campo", "Al enviar", "Actual", "Propuesto"], rows));
+    }
+    if (p.proposed_new_subcategory) section.append(subcategoryNote(p));
+    return { section, conflicts };
+  }
+
+  function normalize(text){
+    return String(text || "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function subcategoryNote(p){
+    const categoryId = (p.proposed_changes || {}).category_id || (ctx.product && ctx.product.category_id);
+    const category = ctx.categories.get(categoryId);
+    if (!category) return M.el("p", "mod-warn", "La categoría de la propuesta no existe: no se podrá aprobar.");
+    const existing = (category.subcategories || []).find(s => normalize(s) === normalize(p.proposed_new_subcategory));
+    return M.el("p", "card-meta", existing
+      ? `La subcategoría ya existe en «${category.name}»: se usará «${existing}».`
+      : `Subcategoría nueva: al aprobar se añadirá a «${category.name}».`);
+  }
+
+  function priceSection(){
+    const p = ctx.proposal;
+    if (!p.proposed_price_status) return { section: null, conflict: false };
+    const section = M.el("section", "mod-section");
+    section.append(M.el("h2", "", "Precio"));
+    const proposed = { price_status: p.proposed_price_status, price_amount: p.proposed_price_amount };
+    const strong = (text) => { const s = M.el("span", "mod-proposed", text); return s; };
+    let conflict = false;
+    if (p.proposal_kind === "create"){
+      const tr = document.createElement("tr");
+      tr.append(cell("Precio", document.createTextNode("Estado e importe")), cell("Propuesto", strong(M.priceText(proposed))));
+      section.append(table(["Precio", "Propuesto"], [tr]));
+    } else {
+      const snap = (p.product_snapshot && p.product_snapshot.price) || null;
+      conflict = p.status === "submitted" && !samePrice(snap, ctx.price);
+      const tr = document.createElement("tr");
+      if (conflict) tr.className = "mod-conflict";
+      tr.append(
+        cell("Precio", document.createTextNode("Estado e importe")),
+        cell("Al enviar", document.createTextNode(M.priceText(snap))),
+        cell("Actual", document.createTextNode(M.priceText(ctx.price) + (conflict ? " ⚠" : ""))),
+        cell("Propuesto", strong(M.priceText(proposed)))
+      );
+      section.append(table(["Precio", "Al enviar", "Actual", "Propuesto"], [tr]));
+    }
+    section.append(M.el("p", "card-meta", "Al aprobar se guarda en dólares (USD) con ITBIS incluido."));
+    return { section, conflict };
+  }
+
+  function lastEvent(status){
+    return [...ctx.events].reverse().find(e => e.to_status === status && e.actor_kind === "mobau") || null;
+  }
+
+  function statusBox(){
+    const p = ctx.proposal;
+    const box = M.el("div", "mod-box");
+    if (p.status === "changes_requested"){
+      box.classList.add("mod-box--wait");
+      box.append(M.el("p", "", `Cambios solicitados el ${M.formatDate(p.reviewed_at)}.`), M.el("p", "", `Mensaje: ${p.rejection_reason || "—"}`));
+      return box;
+    }
+    if (p.status === "rejected"){
+      box.classList.add("mod-box--alert");
+      box.append(M.el("p", "", `Rechazada el ${M.formatDate(p.reviewed_at)}.`), M.el("p", "", `Motivo: ${p.rejection_reason || "—"}`));
+      return box;
+    }
+    if (p.status === "withdrawn"){
+      const ev = [...ctx.events].reverse().find(e => e.to_status === "withdrawn");
+      box.append(M.el("p", "", `Retirada por la empresa el ${M.formatDate(ev ? ev.created_at : p.updated_at)}.`));
+      return box;
+    }
+    if (p.status === "approved"){
+      const ev = lastEvent("approved");
+      const payload = (ev && ev.payload) || {};
+      box.append(M.el("p", "", `Aprobada el ${M.formatDate(p.reviewed_at)}.`));
+      const applied = (payload.applied_fields || []).map(M.fieldLabel);
+      if (applied.length) box.append(M.el("p", "", `Se aplicaron: ${applied.join(", ")}.`));
+      if (payload.price_applied && payload.price) box.append(M.el("p", "", `Precio aplicado: ${M.priceText(payload.price)}.`));
+      if (payload.subcategory){
+        const s = payload.subcategory;
+        box.append(M.el("p", "", s.result === "added" ? `Subcategoría «${s.value}» añadida a la categoría.` : `Se usó la subcategoría existente «${s.value}».`));
+      }
+      if (p.proposal_kind === "create"){
+        const created = ctx.created;
+        const state = created ? (PUBLICATION[created.publication_status] || created.publication_status) : null;
+        box.append(M.el("p", "", `Producto creado en borrador (${p.created_product_id || "sin id"}); publicación pendiente.`));
+        if (state && created.publication_status !== "draft") box.append(M.el("p", "", `Estado actual en el catálogo: ${state}.`));
+      }
+      if (ev && ev.note) box.append(M.el("p", "", `Mensaje enviado: ${ev.note}`));
+      return box;
+    }
+    return null;
+  }
+
+  function historyText(ev){
+    const note = ev.note ? `: «${ev.note}»` : "";
+    const payload = ev.payload || {};
+    if (ev.from_status === "submitted" && ev.to_status === "submitted"){
+      if (payload.type === "version_conflict") return `Conflicto de versión registrado (esperada ${payload.expected_version}, actual ${payload.current_version})`;
+      if (payload.type === "snapshot_conflict"){
+        const fields = (payload.conflicts || []).map(c => M.fieldLabel(c.field)).join(", ");
+        return `Conflicto con el catálogo registrado${fields ? ` (${fields})` : ""}`;
+      }
+      return "Conflicto registrado";
+    }
+    switch (ev.to_status){
+      case "draft": return ev.from_status ? "Borrador actualizado" : "Borrador creado";
+      case "submitted": return ev.from_status === "changes_requested" ? `Reenviada (versión ${ev.version})` : `Enviada (versión ${ev.version})`;
+      case "changes_requested": return `Cambios solicitados${note}`;
+      case "approved": return `Aprobada${note}`;
+      case "rejected": return `Rechazada${note}`;
+      case "withdrawn": return "Retirada";
+      default: return ev.to_status || "Cambio de estado";
+    }
+  }
+
+  function historySection(){
+    const section = M.el("section", "mod-section");
+    section.append(M.el("h2", "", "Historial"));
+    if (!ctx.events.length){
+      section.append(M.el("p", "card-meta", "Sin eventos."));
+      return section;
+    }
+    const list = M.el("ol", "mod-history");
+    ctx.events.forEach(ev => {
+      const who = ev.actor_kind === "mobau" ? "Mobau" : "Empresa";
+      list.append(M.el("li", "", `${M.formatDate(ev.created_at)} · ${who} · ${historyText(ev)}`));
+    });
+    section.append(list);
+    return section;
+  }
+
+  /* ---------- decisión ---------- */
+  function decisionSection(conflictWarning){
+    const section = M.el("section", "mod-section mod-decision");
+    section.append(M.el("h2", "", "Decisión"));
+    if (conflictWarning) section.append(conflictWarning);
+
+    const field = M.el("div", "field");
+    const label = M.el("label", "", "Mensaje para la empresa ");
+    label.htmlFor = "mod-message";
+    label.append(M.el("span", "hint", "(obligatorio para solicitar cambios o rechazar; opcional al aprobar)"));
+    const textarea = document.createElement("textarea");
+    textarea.id = "mod-message";
+    textarea.rows = 4;
+    textarea.setAttribute("aria-describedby", "mod-counter");
+    field.append(label, textarea);
+    const counter = M.el("p", "mod-counter", `0 / ${MAX_MESSAGE}`);
+    counter.id = "mod-counter";
+    textarea.addEventListener("input", () => {
+      const n = textarea.value.trim().length;
+      counter.textContent = `${n} / ${MAX_MESSAGE}`;
+      counter.classList.toggle("is-over", n > MAX_MESSAGE);
+    });
+
+    const approve = M.el("button", "btn btn-primary", "Aprobar propuesta");
+    approve.type = "button";
+    approve.id = "mod-approve";
+    const changes = M.el("button", "btn btn-outline", "Solicitar cambios");
+    changes.type = "button";
+    changes.id = "mod-request-changes";
+    const reject = M.el("button", "btn btn-outline mod-btn-danger", "Rechazar propuesta");
+    reject.type = "button";
+    reject.id = "mod-reject";
+    const actions = M.el("div", "mod-actions");
+    actions.append(approve, changes, reject);
+
+    const feedback = M.el("div", "mod-box mod-box--alert mod-feedback");
+    feedback.id = "mod-feedback";
+    feedback.setAttribute("role", "status");
+    feedback.setAttribute("aria-live", "polite");
+    feedback.tabIndex = -1;
+
+    approve.addEventListener("click", () => decide("approve"));
+    changes.addEventListener("click", () => decide("request_changes"));
+    reject.addEventListener("click", () => decide("reject"));
+
+    section.append(field, counter, actions, feedback);
+    return section;
+  }
+
+  function refreshButtons(){
+    const approve = $("mod-approve");
+    if (!approve) return;
+    approve.disabled = busy || actionsLocked || approveBlocked;
+    approve.title = approveBlocked ? "Bloqueado por un conflicto: vuelve a cargar la propuesta." : "";
+    $("mod-request-changes").disabled = busy || actionsLocked;
+    $("mod-reject").disabled = busy || actionsLocked;
+  }
+
+  function feedback(...children){
+    const box = $("mod-feedback");
+    if (!box) return;
+    box.replaceChildren(...children);
+    if (children.length) box.focus();
+  }
+
+  function reloadButton(){
+    const b = M.el("button", "btn btn-outline", "Volver a cargar");
+    b.type = "button";
+    b.style.marginTop = "10px";
+    b.addEventListener("click", () => load());
+    return b;
+  }
+
+  function approveSummary(){
+    const p = ctx.proposal;
+    const lines = [];
+    const keys = proposedKeys(p);
+    if (keys.length) lines.push(`Se aplicarán: ${keys.map(k => (k === "subcategory" && p.proposed_new_subcategory) ? "Subcategoría (nueva)" : M.fieldLabel(k)).join(", ")}.`);
+    if (p.proposed_price_status) lines.push(`Precio: ${M.priceText({ price_status: p.proposed_price_status, price_amount: p.proposed_price_amount })}.`);
+    if (p.proposal_kind === "create") lines.push("Se creará el producto en borrador (sin publicar).");
+    return `¿Aprobar esta propuesta?\n${lines.join("\n")}`;
+  }
+
+  function conflictTable(conflicts){
+    const rows = conflicts.map(c => {
+      const tr = document.createElement("tr");
+      const show = (v) => c.field === "price" ? M.priceText(v) : valueText(c.field, v);
+      tr.append(cell("Campo", document.createTextNode(M.fieldLabel(c.field))),
+                cell("Al enviar", document.createTextNode(show(c.at_submit))),
+                cell("Actual", document.createTextNode(show(c.current))),
+                cell("Propuesto", document.createTextNode(show(c.proposed))));
+      return tr;
+    });
+    return table(["Campo", "Al enviar", "Actual", "Propuesto"], rows);
+  }
+
+  async function decide(decision){
+    if (busy || actionsLocked || !ctx || ctx.proposal.status !== "submitted") return;
+    if (decision === "approve" && approveBlocked) return;
+    const textarea = $("mod-message");
+
+    /* Tras un conflicto con el catálogo: el primer «Solicitar cambios»
+       solo prellena el mensaje (editable); nunca envía solo. */
+    if (decision === "request_changes" && prefill){
+      if (!textarea.value.trim()) textarea.value = prefill;
+      prefill = null;
+      textarea.dispatchEvent(new Event("input"));
+      feedback(M.el("p", "", "Revisa el mensaje y pulsa de nuevo «Solicitar cambios» para enviarlo."));
+      textarea.focus();
+      return;
+    }
+
+    const message = textarea.value.trim();
+    if ((decision === "request_changes" || decision === "reject") && !message){
+      feedback(M.el("p", "", "Escribe un mensaje para la empresa: indica el motivo y cómo solucionarlo."));
+      textarea.focus();
+      return;
+    }
+    if (message.length > MAX_MESSAGE){
+      feedback(M.el("p", "", `El mensaje supera los ${MAX_MESSAGE} caracteres.`));
+      textarea.focus();
+      return;
+    }
+    if (decision === "approve" && !window.confirm(approveSummary())) return;
+    if (decision === "reject" && !window.confirm("¿Rechazar esta propuesta?\nLa empresa verá el motivo.")) return;
+
+    busy = true;
+    refreshButtons();
+    feedback();
+    const p = ctx.proposal;
+    let data = null;
+    let error = null;
+    try {
+      ({ data, error } = await supabaseClient.rpc("moderate_product_proposal", {
+        p_proposal_id: p.id,
+        p_decision: decision,
+        p_message: message || null,
+        p_expected_version: p.version
+      }));
+    } catch (err) {
+      error = { code: null, message: "network" };
+    }
+    busy = false;
+
+    if (!error && data && data.ok === true){
+      const texts = {
+        approved: p.proposal_kind === "create" ? "Propuesta aprobada. Producto creado en borrador; publicación pendiente." : "Propuesta aprobada.",
+        changes_requested: "Has solicitado cambios a la empresa.",
+        rejected: "Propuesta rechazada."
+      };
+      $("mod-result").replaceChildren(M.el("p", "", texts[data.result] || "Decisión registrada."));
+      await load({ keepResult: true });
+      $("mod-result").focus();
+      return;
+    }
+
+    if (!error && data && data.ok === false){
+      if (data.code === "version_conflict"){
+        actionsLocked = true;
+        refreshButtons();
+        feedback(M.el("p", "", data.message || "La propuesta cambió desde que la abriste. Vuelve a cargarla antes de decidir."), reloadButton());
+        return;
+      }
+      if (data.code === "snapshot_conflict"){
+        approveBlocked = true;
+        const fields = (data.conflicts || []).map(c => M.fieldLabel(c.field));
+        prefill = `Algunos datos de tu propuesta ya no coinciden con el catálogo: ${fields.join(", ")}. Revisa estos campos y vuelve a enviarla.`;
+        refreshButtons();
+        feedback(M.el("p", "", data.message || "Algún campo propuesto cambió en el catálogo después del envío."), conflictTable(data.conflicts || []));
+        return;
+      }
+    }
+
+    const mapped = M.decisionError(error || {});
+    if (mapped.action === "login"){
+      window.location.href = MobauAccess.accessUrlForCurrentPage();
+      return;
+    }
+    if (mapped.action === "denied"){
+      gate.deny(mapped.message);
+      return;
+    }
+    if (mapped.action === "notfound"){
+      notFound();
+      return;
+    }
+    if (mapped.action === "mfa"){
+      if (await gate.relock(mapped.message)){
+        refreshButtons();
+        feedback(M.el("p", "", mapped.message));
+      }
+      return;
+    }
+    if (mapped.action === "block" || mapped.action === "network"){
+      actionsLocked = true;
+      refreshButtons();
+      feedback(M.el("p", "", mapped.message), ...(mapped.action === "network" ? [reloadButton()] : []));
+      return;
+    }
+    if (mapped.action === "reload"){
+      $("mod-result").replaceChildren(M.el("p", "", mapped.message));
+      $("mod-result").classList.add("mod-box--alert");
+      await load({ keepResult: true });
+      $("mod-result").focus();
+      return;
+    }
+    refreshButtons();
+    feedback(M.el("p", "", mapped.message));
+  }
+
+  /* ---------- carga ---------- */
+  function render(){
+    const p = ctx.proposal;
+    const changes = p.proposed_changes || {};
+    const isCreate = p.proposal_kind === "create";
+    const st = M.STATUS[p.status] || { label: p.status, kind: "neutral" };
+    const nodes = [];
+
+    nodes.push(M.el("div", "eyebrow", isCreate ? "Producto nuevo" : "Cambio de producto"));
+    const title = M.el("h1", "pd-head", isCreate ? (changes.name || "Producto nuevo sin nombre") : ((ctx.product && ctx.product.name) || p.product_id));
+    title.style.cssText = "font-size:28px; margin:8px 0 0; overflow-wrap:anywhere;";
+    nodes.push(title);
+    const meta = M.el("div", "mod-head-meta");
+    const parts = [`versión ${p.version}`, ctx.company || p.distributor_id];
+    if (!isCreate) parts.push(`producto ${p.product_id}`);
+    if (p.submitted_at) parts.push(`enviada el ${M.formatDate(p.submitted_at)}`);
+    meta.append(M.chip(st.label, st.kind), M.el("span", "", parts.join(" · ")));
+    nodes.push(meta);
+    if (p.internal_note){
+      const note = M.el("div", "mod-box");
+      note.append(M.el("p", "", `Nota de la empresa: ${p.internal_note}`));
+      nodes.push(note);
+    }
+
+    const box = statusBox();
+    if (box) nodes.push(box);
+    if (!isCreate && !ctx.product) nodes.push(M.el("p", "mod-warn", "El producto de esta propuesta ya no existe."));
+
+    const fields = fieldsSection();
+    nodes.push(fields.section);
+    const price = priceSection();
+    if (price.section) nodes.push(price.section);
+
+    let warning = null;
+    if (p.status === "submitted"){
+      const names = fields.conflicts.map(M.fieldLabel);
+      if (price.conflict) names.push("Precio");
+      if (names.length){
+        warning = M.el("p", "mod-warn", `⚠ ${names.map(n => `«${n}»`).join(", ")} cambió en el catálogo desde el envío: la aprobación se bloqueará. Solicita cambios o rechaza.`);
+      }
+    }
+
+    nodes.push(historySection());
+    if (p.status === "submitted") nodes.push(decisionSection(warning));
+
+    $("mod-detail").replaceChildren(...nodes);
+    setState("detail");
+    refreshButtons();
+  }
+
+  async function load({ keepResult = false } = {}){
+    const id = ++loadId;
+    busy = false;
+    approveBlocked = false;
+    actionsLocked = false;
+    prefill = null;
+    if (!keepResult){
+      $("mod-result").replaceChildren();
+      $("mod-result").classList.remove("mod-box--alert");
+    }
+    if (typeof proposalId !== "string" || !UUID_PATTERN.test(proposalId)){
+      notFound();
+      return;
+    }
+    setState("loading");
+    try {
+      const { data: p, error } = await supabaseClient.from("product_proposals").select("*").eq("id", proposalId).maybeSingle();
+      if (error) throw error;
+      if (id !== loadId) return;
+      if (!p || p.status === "draft"){
+        /* Sin fila: puede ser falta de segundo factor (RLS). */
+        if (!p && !(await gate.relock())) return;
+        notFound();
+        return;
+      }
+      const none = Promise.resolve({ data: null, error: null });
+      const [productRes, priceRes, categoriesRes, companyRes, eventsRes, createdRes] = await Promise.all([
+        p.product_id ? supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("id", p.product_id).maybeSingle() : none,
+        p.product_id ? supabaseClient.from("product_prices").select("price_status, price_amount").eq("product_id", p.product_id).maybeSingle() : none,
+        supabaseClient.from("categories").select("id, name, subcategories").order("name"),
+        supabaseClient.from("distributors").select("id, name").eq("id", p.distributor_id).maybeSingle(),
+        supabaseClient.from("proposal_events").select("id, actor_kind, from_status, to_status, version, payload, note, created_at")
+          .eq("proposal_id", p.id).order("created_at", { ascending: true }).order("id", { ascending: true }),
+        p.created_product_id ? supabaseClient.from("products").select("id, name, publication_status").eq("id", p.created_product_id).maybeSingle() : none
+      ]);
+      for (const res of [productRes, priceRes, categoriesRes, companyRes, eventsRes, createdRes]){
+        if (res.error) throw res.error;
+      }
+      if (id !== loadId) return;
+      ctx = {
+        proposal: p,
+        product: productRes.data,
+        price: priceRes.data,
+        categories: new Map((categoriesRes.data || []).map(c => [c.id, c])),
+        company: companyRes.data ? companyRes.data.name : null,
+        events: eventsRes.data || [],
+        created: createdRes.data
+      };
+      render();
+    } catch (error){
+      if (id !== loadId) return;
+      setState("error");
+    }
+  }
+
+  $("mod-retry").addEventListener("click", () => load());
+  gate = M.start({ onReady: () => load(), onLock: clearAll });
+})();
+</script>
+</body>
+</html>

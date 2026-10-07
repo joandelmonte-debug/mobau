@@ -479,7 +479,7 @@ function loadCatalog(options = {}){
   catalogPromise = (async () => {
     try {
       const [productRows, distributorRows, categoryRows] = await Promise.all([
-        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active").order("id")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active").eq("publication_status", "published").order("id")),
         fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, contact_email, contact_phone, website, created_at").order("id")),
         fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, () => supabaseClient.from("categories").select("id, name, subcategories").order("id"))
       ]);
@@ -515,7 +515,10 @@ function loadCatalog(options = {}){
 async function loadDistributors(options = {}){ await loadCatalog(options); return DISTRIBUTORS; }
 async function loadCategories(options = {}){ await loadCatalog(options); return CATEGORIES; }
 
-/* Incluye archivados. Con "db" añade a PRODUCTS los que falten; con "static" filtra PRODUCTS. */
+/* Con "db" añade a PRODUCTS los que falten (solo publicados: la RLS ya lo
+   limita para profesionales y anónimos, y el filtro evita que una cuenta
+   con más lectura —distribuidor propietario o Mobau con aal2— vea un
+   borrador en el catálogo o en la ficha); con "static" filtra PRODUCTS. */
 async function loadProductsByIds(ids, options = {}){
   const wanted = [...new Set((ids || []).filter(Boolean).map(String))];
   if (!wanted.length) return [];
@@ -523,7 +526,7 @@ async function loadProductsByIds(ids, options = {}){
   if (CATALOG_STATE.source === "db"){
     const missing = wanted.filter(id => !PRODUCTS.some(p => p.id === id));
     for (let i = 0; i < missing.length; i += 100){
-      const { data, error } = await runCatalogQuery(supabaseClient.from("products").select(PRODUCT_COLUMNS).in("id", missing.slice(i, i + 100)));
+      const { data, error } = await runCatalogQuery(supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("publication_status", "published").in("id", missing.slice(i, i + 100)));
       if (error) throw error;
       (data || []).forEach(row => {
         LABELS.marca[brandKey(row.brand)] = brandLabel(row.brand);
@@ -1152,9 +1155,11 @@ let myActiveProjects = [];
    de solo lectura. Las tarjetas no llevan "Añadir a la selección" ni el
    botón de proyecto activo (que catalogo.html añade dentro de
    .card-actions): se pinta otro contenedor con solo "Ver ficha". Solo
-   interfaz — la protección de servidor llega en 38-B. */
+   interfaz — la protección de servidor llega en 38-B. Punto 39: igual para
+   la cuenta de Mobau. */
+const READ_ONLY_CATALOG_KINDS = ["supplier", "mobau"];
 function isSupplierAccount(){
-  return typeof MobauAccess !== "undefined" && MobauAccess.confirmedKind === "supplier";
+  return typeof MobauAccess !== "undefined" && READ_ONLY_CATALOG_KINDS.includes(MobauAccess.confirmedKind);
 }
 
 function readOnlyCardActionsHtml(fichaUrl){
@@ -1165,7 +1170,7 @@ function readOnlyCardActionsHtml(fichaUrl){
 
 /* Si el rol llega después de pintar las tarjetas, se pasan a solo lectura. */
 document.addEventListener("mobau:account-kind", (e) => {
-  if (e.detail.kind !== "supplier") return;
+  if (!READ_ONLY_CATALOG_KINDS.includes(e.detail.kind)) return;
   document.querySelectorAll(".product-card .card-actions").forEach(actions => {
     const card = actions.closest(".product-card");
     const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(card.dataset.productId)}`);

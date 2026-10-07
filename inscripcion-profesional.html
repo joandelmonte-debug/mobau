@@ -570,10 +570,12 @@
     if (!session) return; // ya redirigió a acceso.html
 
     /* El alta profesional nunca se ofrece a una cuenta de distribuidor, y
-       (Punto 38-A) tampoco "Mi perfil" profesional: va a su panel. */
-    if (await MobauAccess.accountKind() === "supplier"){
+       (Punto 38-A) tampoco "Mi perfil" profesional: va a su panel. Punto 39:
+       la cuenta de Mobau va a la consola. */
+    const kind = await MobauAccess.accountKind();
+    if (kind === "supplier" || kind === "mobau"){
       if (isOnboarding) MobauPerfil.clearDraft();
-      window.location.replace(MobauAccess.SUPPLIER_HOME);
+      window.location.replace(kind === "mobau" ? MobauAccess.MOBAU_HOME : MobauAccess.SUPPLIER_HOME);
       return;
     }
 

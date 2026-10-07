@@ -102,7 +102,9 @@ const MobauAccess = {
     ["proyectos", { status: /^(active|archived|requested)$/ }],
     ["proyectos-detalle", { id: UUID_PATTERN }],
     ["proyectos-resumen", { id: UUID_PATTERN }],
-    ["proyectos-cotizacion", { mode: /^(save|send)$/, id: UUID_PATTERN }]
+    ["proyectos-cotizacion", { mode: /^(save|send)$/, id: UUID_PATTERN }],
+    ["moderacion", {}],
+    ["moderacion-propuesta", { id: UUID_PATTERN }]
   ]),
 
   /* Planes profesionales que se pueden elegir al crear la cuenta. Solo
@@ -264,6 +266,12 @@ const MobauAccess = {
      sesión, y de cualquier ruta de cliente que abra. */
   SUPPLIER_HOME: "panel-distribuidor.html",
 
+  /* Punto 39: destino único de la cuenta de Mobau (profiles.role = 'admin')
+     tras iniciar sesión y desde cualquier ruta de cliente. Solo navegación:
+     la consola exige además un admin activo con segundo factor (aal2), que
+     comprueba el servidor; la protección real de los datos son las RLS. */
+  MOBAU_HOME: "moderacion.html",
+
   /* Punto 38-A: la edición de productos (distribuidor-producto.html) exige
      un plan activo, y ese dato todavía no existe (llega en 38-C) — así que,
      por ahora, queda cerrada para todas las cuentas de distribuidor. La
@@ -277,10 +285,11 @@ const MobauAccess = {
   SUPPLIER_AVISOS: ["solo-profesionales", "plan"],
 
   /* Tipo de cuenta de la sesión actual, con una sola consulta por página:
-     "anon" (sin sesión), "supplier", "client" o "unknown" (no se pudo leer
-     el rol). Lo comparten la cabecera (nav-session.js), las tarjetas del
-     catálogo y las redirecciones de distribuidor. Al resolverse, marca
-     <html data-account="supplier"> y avisa con el evento
+     "anon" (sin sesión), "supplier", "mobau" (profiles.role = 'admin',
+     Punto 39), "client" o "unknown" (no se pudo leer el rol). Lo comparten
+     la cabecera (nav-session.js), las tarjetas del catálogo y las
+     redirecciones de distribuidor y de Mobau. Al resolverse, marca
+     <html data-account="supplier|mobau"> y avisa con el evento
      "mobau:account-kind". Es lógica de interfaz: la protección real de los
      datos son las políticas RLS. */
   _accountKindPromise: null,
@@ -296,14 +305,16 @@ const MobauAccess = {
         const { data, error } = await supabaseClient
           .from("profiles").select("role").eq("id", session.user.id).maybeSingle();
         if (error) return "unknown";
-        const isSupplier = !!data && data.role === "supplier";
-        MobauAccountHint.remember(isSupplier);
-        return isSupplier ? "supplier" : "client";
+        const role = data ? data.role : null;
+        MobauAccountHint.remember(role === "supplier");
+        if (role === "supplier") return "supplier";
+        if (role === "admin") return "mobau";
+        return "client";
       })().catch(() => "unknown").then((kind) => {
         this.confirmedKind = kind;
         /* "unknown" no cambia nada: se queda lo que hubiera pintado la pista. */
         if (kind !== "unknown") {
-          if (kind === "supplier") document.documentElement.setAttribute("data-account", "supplier");
+          if (kind === "supplier" || kind === "mobau") document.documentElement.setAttribute("data-account", kind);
           else document.documentElement.removeAttribute("data-account");
         }
         document.dispatchEvent(new CustomEvent("mobau:account-kind", { detail: { kind } }));
@@ -313,13 +324,36 @@ const MobauAccess = {
     return this._accountKindPromise;
   },
 
+  /* Estado de la sesión para la consola de moderación (Punto 39), calculado
+     en el servidor: mobau_admin_session() -> { admin, aal2 }. Solo se pide
+     para cuentas "mobau"; una consulta por página, compartida por la
+     cabecera y la puerta de la consola. { fresh: true } vuelve a preguntar
+     (tras verificar el segundo factor). No autoriza nada por sí misma. */
+  _adminSessionPromise: null,
+  adminSession({ fresh = false } = {}) {
+    if (fresh || !this._adminSessionPromise) {
+      const promise = supabaseClient.rpc("mobau_admin_session").then(({ data, error }) => {
+        if (error || !data) throw error || new Error("mobau_admin_session sin respuesta");
+        return { admin: data.admin === true, aal2: data.aal2 === true };
+      });
+      promise.catch(() => { if (this._adminSessionPromise === promise) this._adminSessionPromise = null; });
+      this._adminSessionPromise = promise;
+    }
+    return this._adminSessionPromise;
+  },
+
   /* Rutas de cliente (selección, proyectos, cotización, cuenta profesional):
-     una cuenta de distribuidor se envía a su panel con location.replace()
-     (Atrás no vuelve a la ruta bloqueada). Devuelve true si redirige, para
-     que la página detenga su script. Si el rol no se pudo leer, no redirige.
-     Solo interfaz: hasta 38-B, RLS no impide estas operaciones a un supplier. */
+     una cuenta de distribuidor se envía a su panel, y una cuenta de Mobau
+     (Punto 39) a la consola, con location.replace() (Atrás no vuelve a la
+     ruta bloqueada). Devuelve true si redirige, para que la página detenga
+     su script. Si el rol no se pudo leer, no redirige. Solo interfaz. */
   async redirectSupplierToPanel({ aviso = "solo-profesionales" } = {}) {
-    if (await this.accountKind() !== "supplier") return false;
+    const kind = await this.accountKind();
+    if (kind === "mobau") {
+      window.location.replace(this.MOBAU_HOME);
+      return true;
+    }
+    if (kind !== "supplier") return false;
     const safeAviso = this.SUPPLIER_AVISOS.includes(aviso) ? aviso : null;
     window.location.replace(safeAviso ? `${this.SUPPLIER_HOME}?aviso=${safeAviso}` : this.SUPPLIER_HOME);
     return true;
@@ -373,19 +407,22 @@ const MobauAccess = {
 
   /* Rol y existencia de perfil profesional de la cuenta. Si la consulta del
      perfil falla, se trata como "sin perfil": la página de perfil vuelve a
-     comprobarlo y continúa sola si el perfil ya existe. */
+     comprobarlo y continúa sola si el perfil ya existe. isMobau: cuenta de
+     Mobau (profiles.role = 'admin', Punto 39), sin perfil profesional. */
   async accountFacts(session) {
     const userId = session.user.id;
     const { data: account, error: roleError } = await supabaseClient
       .from("profiles").select("role").eq("id", userId).maybeSingle();
-    const isSupplier = !roleError && !!account && account.role === "supplier";
+    const role = !roleError && account ? account.role : null;
+    const isSupplier = role === "supplier";
     /* Tras iniciar sesión es el primer momento en que se conoce el rol:
        deja la pista estética lista para la página siguiente. */
     if (!roleError) MobauAccountHint.remember(isSupplier);
-    if (isSupplier) return { isSupplier: true, hasProfessionalProfile: false };
+    if (isSupplier) return { isSupplier: true, isMobau: false, hasProfessionalProfile: false };
+    if (role === "admin") return { isSupplier: false, isMobau: true, hasProfessionalProfile: false };
     const { data: profile, error: profileError } = await supabaseClient
       .from("professional_profiles").select("user_id").eq("user_id", userId).maybeSingle();
-    return { isSupplier: false, hasProfessionalProfile: !profileError && !!profile };
+    return { isSupplier: false, isMobau: false, hasProfessionalProfile: !profileError && !!profile };
   },
 
   /* Destino final, sin pasos de alta pendientes: une la selección anónima a
@@ -408,6 +445,12 @@ const MobauAccess = {
     if (facts.isSupplier) {
       this.clearIntent();
       return { url: this.SUPPLIER_HOME };
+    }
+    /* Punto 39: la cuenta de Mobau tampoco pasa por el alta profesional ni
+       hereda una intención profesional: siempre a la consola. */
+    if (facts.isMobau) {
+      this.clearIntent();
+      return { url: this.MOBAU_HOME };
     }
     const intent = this.peekIntent() || fallbackIntent;
     const plan = this.normalizePlan(explicitPlan)

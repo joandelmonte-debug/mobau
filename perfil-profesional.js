@@ -181,6 +181,7 @@ const MobauPerfil = {
   /* Cierra el alta al volver del enlace mágico. Nunca sobrescribe un perfil
      existente ni duplica filas. Resultado (status):
      - "supplier": cuenta de distribuidor; borrador e intención descartados.
+     - "mobau":    cuenta de Mobau (Punto 39); igual, sin perfil profesional.
      - "existing": la cuenta ya tenía perfil; se conserva y se descarta el borrador.
      - "created":  perfil creado con el borrador; borrador borrado.
      - "missing":  no hay borrador válido en este dispositivo (otro navegador,
@@ -196,6 +197,11 @@ const MobauPerfil = {
       this.clearDraft();
       MobauAccess.clearIntent();
       return { status: "supplier" };
+    }
+    if (account && account.role === "admin") {
+      this.clearDraft();
+      MobauAccess.clearIntent();
+      return { status: "mobau" };
     }
 
     const existing = await this.fetchProfileExists(userId);

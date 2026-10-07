@@ -511,10 +511,59 @@ esos importes: la salida segura es una corrección nueva (fix forward).
 | `tests/39_06_prices_privacy_checks.sql` | 28 pruebas de privacidad de `product_prices` |
 | `tests/38b_rls_checks.sql`, `tests/38c_rls_checks.sql`, `tests/39_moderation_checks.sql` | Regresiones ajustadas a 39-06 (V05, P01; R06, R07 = 43; R01 = 48) |
 
+**Nota (incorporación pendiente):** las migraciones 39-01 a 39-04, sus
+rollbacks y la versión de `tests/38c_rls_checks.sql` con solo R07 ajustado
+están aplicadas en Supabase, pero todavía no están en el repositorio.
+Se incorporarán en un commit propio, con autorización aparte.
+
+## Interfaz de moderación
+
+Solo repositorio: no cambia políticas, funciones, migraciones ni datos.
+
+| Archivo | Qué hace |
+|---|---|
+| `../moderacion.html` | Bandeja: «En revisión» por defecto; filtros de estado (nunca borradores), tipo y empresa; hasta 200 propuestas, las más antiguas primero |
+| `../moderacion-propuesta.html?id=` | Detalle: comparación al enviar / actual / propuesto, precio, subcategoría nueva, historial y decisión |
+| `../moderacion-acceso.js` | Puerta común y utilidades de pintado seguro |
+| `../supabase-client.js` | Tipo de cuenta `mobau` (`profiles.role = 'admin'`), destino `moderacion.html`, sin alta profesional |
+| `../nav-session.js` | Cabecera y menú de la cuenta de Mobau; «Moderación» solo con `mobau_admin_session().admin` |
+| `../script.js`, `../producto.html` | Catálogo y ficha en solo lectura para la cuenta de Mobau. `script.js` filtra además `publication_status = 'published'` en la lista y en la consulta por ids: ni el distribuidor dueño ni Mobau con `aal2` ven borradores en el catálogo ni en la ficha, aunque `status` y `publication_status` dejen de coincidir |
+| `../perfil-profesional.js` | `completeSignup()` no crea perfil profesional para la cuenta de Mobau |
+| `../inscripcion-profesional.html` | La cuenta de Mobau va a `moderacion.html`: nunca ve ni envía el formulario profesional |
+| `../distribuidor-productos.html` | «Decisiones recientes de Mobau» (30 días) y fecha de «Cambios solicitados» |
+
+**Acceso:**
+1. Sesión.
+2. Profesional o distribuidor: «solo para el equipo de Mobau», sin más consultas.
+3. `mobau_admin_session()` en el servidor.
+4. Sin `aal2`: segundo factor con `auth.mfa.listFactors()`, `challenge()` y `verify()` sobre un factor TOTP **ya verificado**.
+5. Nueva comprobación en el servidor: solo con `{ admin: true, aal2: true }` se leen propuestas.
+
+El sitio **no** enrola factores: no usa `enroll` ni `unenroll`, ni muestra
+QR, secreto o URI TOTP. Sin factor verificado, la consola muestra «La
+verificación en dos pasos todavía no está configurada para esta cuenta.
+Contacta con el equipo de Mobau.» El primer factor se configura fuera del
+sitio, con un procedimiento local, temporal y autorizado aparte.
+
+**Escritura:** solo `rpc("moderate_product_proposal", { p_proposal_id,
+p_decision, p_message, p_expected_version })`, una llamada por decisión.
+La consola nunca escribe directamente en `product_proposals`, `products`,
+`product_prices`, `categories` ni `proposal_events`. Un producto nuevo
+aprobado queda en borrador; la publicación sigue siendo manual.
+
+**Pintado:** todo lo que propone el distribuidor se pinta con
+`textContent`. Los enlaces solo admiten `http(s)` y se abren con
+`target="_blank" rel="noopener noreferrer"`. La consola no carga imágenes.
+
+**Aviso al distribuidor:** aprobadas y rechazadas de los últimos 30 días,
+con el mensaje de Mobau. «Leído» solo en ese dispositivo (`localStorage`
+`mobau_decisiones_vistas`). Sin correo, push ni SMS.
+
 ## Pendiente
 
 Cada punto con su propia autorización:
-1. Interfaz: consola de moderación y aviso de la decisión en Mis productos.
-2. Activar TOTP en Supabase Auth.
-3. Alta del primer admin (`hola@mobau…`).
-4. Prueba MFA real.
+1. Activar TOTP en Supabase Auth.
+2. Alta del primer admin (`hola@mobau…`): cuenta, `profiles.role = 'admin'` y fila en `mobau_admins`.
+3. Configurar su primer factor TOTP fuera del sitio (procedimiento local y temporal).
+4. Prueba MFA real con una propuesta de prueba («Solicitar cambios», nunca aprobar) y su limpieza.
+5. Incorporar 39-01 a 39-04 al repositorio.

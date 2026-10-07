@@ -35,6 +35,16 @@
   .pp-withdraw-btn:disabled{ opacity:.6; cursor:default; text-decoration:none; background:transparent; }
   /* Error persistente (los avisos breves desaparecen en 2,4 s). */
   .pl-alert{ margin:0 0 16px; padding:10px 12px; border-left:3px solid var(--danger); background: var(--surface); font-size:14px; color: var(--ink); }
+  /* Decisiones recientes de Mobau (39): sin imágenes, todo como texto. */
+  .pl-decisions{ margin:0 0 32px; }
+  .pl-decision{ padding:14px 16px; border:1px solid var(--line); border-radius: var(--radius); background: var(--white); margin-top:10px; font-size:14px; overflow-wrap:anywhere; }
+  .pl-decision-head{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; }
+  .pl-decision-head .c-name{ font-weight:600; color: var(--ink); }
+  .pl-decision p{ margin:6px 0 0; max-width:none; }
+  .pl-decision .pl-note{ margin-top:8px; }
+  .pl-decision .pl-note--ok{ border-left-color: var(--accent); }
+  .pl-decision .pl-decision-meta{ margin:4px 0 0; font-size:13px; color: var(--ink-soft); }
+  .pl-decision .pd-link{ display:inline-block; margin-top:8px; }
   @media (max-width: 900px){ .cart-row .pl-actions{ flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; } }
 </style>
 </head>
@@ -83,6 +93,13 @@
 
   <div id="pl-content" style="display:none;">
     <p id="pl-alert" class="pl-alert" role="alert" hidden></p>
+
+    <!-- Decisiones de Mobau de los últimos 30 días (39). Solo lectura. -->
+    <section class="pl-decisions" id="pl-decisions" aria-labelledby="pl-decisions-title" hidden>
+      <h2 class="pl-section-title" id="pl-decisions-title">Decisiones recientes de Mobau</h2>
+      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Propuestas aprobadas o rechazadas en los últimos 30 días. Las que tienen cambios solicitados siguen en la tarjeta de su producto.</p>
+      <div id="pl-decisions-list"></div>
+    </section>
     <div class="pl-filters" id="pl-filters">
       <div class="field" style="margin:0;">
         <label for="pl-search">Buscar</label>
@@ -198,7 +215,11 @@
    Una propuesta en revisión no se edita: "Ver propuesta enviada" la muestra
    desplegada en la propia tarjeta, con "Retirar propuesta" (única escritura
    de esta página: status submitted → withdrawn en product_proposals, una
-   transición ya autorizada por 38-C). Las cerradas no se muestran. */
+   transición ya autorizada por 38-C). Las cerradas no se muestran, salvo
+   en "Decisiones recientes de Mobau" (39): aprobadas y rechazadas de los
+   últimos 30 días, con dos lecturas más (product_proposals y
+   proposal_events propios, por RLS) y "leído" solo en este dispositivo
+   (localStorage "mobau_decisiones_vistas"). */
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -259,7 +280,10 @@
   let openUpdates = new Map(); // product_id -> propuesta update abierta (como máximo una: índice único)
   let openCreates = [];        // propuestas create abiertas
 
-  const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason";
+  const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, reviewed_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason";
+  const DECISION_DAYS = 30;
+  const SEEN_KEY = "mobau_decisiones_vistas";
+  const SEEN_MAX = 200;
 
   function setProposals(rows){
     openUpdates = new Map(rows.filter(p => p.proposal_kind === "update" && p.product_id).map(p => [p.product_id, p]));
@@ -458,6 +482,7 @@
     line.className = "pl-proposal";
     const parts = [`versión ${proposal.version}`];
     if (proposal.submitted_at) parts.push(`enviada el ${formatDate(proposal.submitted_at)}`);
+    if (proposal.status === "changes_requested" && proposal.reviewed_at) parts.push(`cambios solicitados el ${formatDate(proposal.reviewed_at)}`);
     line.append(chip(`Propuesta: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
     const block = [line];
     if (proposal.status === "changes_requested" && proposal.rejection_reason){
@@ -544,6 +569,108 @@
     row.append(makeThumb(changes.name, changes.image_url), info, actions);
     makeClickable(row, action);
     return row;
+  }
+
+  /* ---------- Decisiones recientes de Mobau (39) ---------- */
+  function readSeen(){
+    try {
+      const list = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
+      return Array.isArray(list) ? list.filter(x => typeof x === "string") : [];
+    } catch (e) {
+      return null; // sin localStorage: sin chip «Nueva»
+    }
+  }
+
+  function rememberSeen(previous, ids){
+    if (!previous) return;
+    const merged = [...new Set([...ids, ...previous])].slice(0, SEEN_MAX);
+    try {
+      localStorage.setItem(SEEN_KEY, JSON.stringify(merged));
+    } catch (e) {
+      /* sin localStorage: solo se pierde el «leído» */
+    }
+  }
+
+  function buildDecisionRow(decision, event, isNew){
+    const changes = decision.proposed_changes || {};
+    const isCreate = decision.proposal_kind === "create";
+    const product = isCreate ? null : products.find(p => p.id === decision.product_id) || null;
+    const name = isCreate ? (changes.name || "Producto nuevo sin nombre") : (product ? product.name : decision.product_id);
+    const approved = decision.status === "approved";
+    const payload = (event && event.payload) || {};
+
+    const row = document.createElement("div");
+    row.className = "pl-decision";
+    const head = document.createElement("div");
+    head.className = "pl-decision-head";
+    head.append(chip(approved ? "Aprobada" : "Rechazada", approved ? "ok" : "alert"));
+    if (isNew) head.append(chip("Nueva", "wait"));
+    const nameEl = document.createElement("span");
+    nameEl.className = "c-name";
+    nameEl.textContent = name;
+    head.append(nameEl);
+    const line = (text, className) => { const p = document.createElement("p"); if (className) p.className = className; p.textContent = text; return p; };
+    row.append(head, line(`${isCreate ? "Producto nuevo" : "Cambio"} · ${formatDate(decision.reviewed_at)}`, "pl-decision-meta"));
+    if (approved){
+      if (isCreate){
+        row.append(line("Producto creado en borrador; Mobau lo publicará en el catálogo."));
+      } else {
+        const applied = (payload.applied_fields || []).map(key => FIELD_LABELS[key] || key);
+        if (payload.subcategory) applied.push("Subcategoría");
+        if (applied.length) row.append(line(`Se aplicaron: ${applied.join(", ")}.`));
+        if (payload.price_applied && payload.price){
+          const amount = payload.price.price_amount !== null && payload.price.price_amount !== undefined
+            ? ` · US$ ${Number(payload.price.price_amount).toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
+          row.append(line(`Precio: ${PROPOSED_PRICE_LABELS[payload.price.price_status] || payload.price.price_status}${amount}.`));
+        }
+      }
+      if (event && event.note) row.append(textDiv("pl-note pl-note--ok", `Mensaje de Mobau: ${event.note}`));
+      if (product && product.publication_status === "published") row.append(link("Ver producto", `producto.html?id=${encodeURIComponent(product.id)}`));
+    } else {
+      row.append(textDiv("pl-note", `Motivo: ${decision.rejection_reason || "—"}`));
+      if (isCreate) row.append(link("Crear nueva propuesta", "distribuidor-propuestas.html?nueva=1"));
+      else if (product) row.append(link("Proponer cambios de nuevo", productHref(product)));
+    }
+    return row;
+  }
+
+  /* Dos lecturas propias (RLS): decisiones de los últimos 30 días y sus
+     eventos de Mobau (mensaje de aprobación, campos aplicados). Si algo
+     falla, la sección no se muestra y el resto de la página sigue igual. */
+  async function loadDecisions(){
+    try {
+      const since = new Date(Date.now() - DECISION_DAYS * 24 * 3600 * 1000).toISOString();
+      const { data: decided, error } = await supabaseClient.from("product_proposals")
+        .select("id, proposal_kind, product_id, status, version, proposed_changes, reviewed_at, rejection_reason, created_product_id")
+        .in("status", ["approved", "rejected"]).gte("reviewed_at", since)
+        .order("reviewed_at", { ascending: false });
+      if (error) throw error;
+      if (!decided.length){
+        $("pl-decisions").hidden = true;
+        return;
+      }
+      const { data: events, error: eventsError } = await supabaseClient.from("proposal_events")
+        .select("proposal_id, to_status, note, payload, created_at")
+        .in("proposal_id", decided.map(d => d.id))
+        .eq("actor_kind", "mobau").in("to_status", ["approved", "rejected"]);
+      if (eventsError) throw eventsError;
+
+      const latest = new Map();
+      events.forEach(ev => {
+        const prev = latest.get(ev.proposal_id);
+        if (!prev || ev.created_at > prev.created_at) latest.set(ev.proposal_id, ev);
+      });
+      const seen = readSeen();
+      const seenSet = new Set(seen || []);
+      $("pl-decisions-list").replaceChildren(...decided.map(d => {
+        const ev = latest.get(d.id);
+        return buildDecisionRow(d, ev && ev.to_status === d.status ? ev : null, !!seen && !seenSet.has(d.id));
+      }));
+      $("pl-decisions").hidden = false;
+      rememberSeen(seen, decided.map(d => d.id));
+    } catch (error){
+      $("pl-decisions").hidden = true;
+    }
   }
 
   function matchesProposal(open, filter){
@@ -636,6 +763,7 @@
 
       showOnly("pl-content");
       render();
+      loadDecisions();
 
       /* Al volver del formulario: aviso (?aviso=…) y, si procede, la
          propuesta en revisión a mostrar desplegada (?ver=ID). */

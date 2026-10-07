@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moderación — Mobau</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="distribuidor.css">
+<style>
+  /* Consola de moderación (39): estilos locales a esta página. */
+  .mod-filters{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:14px; margin-bottom:8px; }
+  .mod-list{ list-style:none; margin:12px 0 0; padding:0; border-top:1px solid var(--line); }
+  .mod-row{ border-bottom:1px solid var(--line); }
+  .mod-row a{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 4px; color:inherit; text-decoration:none; }
+  .mod-row a:hover .mod-row-title, .mod-row a:focus-visible .mod-row-title{ text-decoration:underline; }
+  .mod-row a:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .mod-row-title{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-weight:600; color: var(--ink); overflow-wrap:anywhere; }
+  .mod-row-sub{ font-size:13px; color: var(--ink-soft); margin-top:4px; overflow-wrap:anywhere; }
+  .mod-row-warn{ color: var(--danger); }
+  .mod-row-arrow{ color: var(--ink-faint); flex:none; }
+  .mod-mfa-card{ max-width:440px; }
+  .mod-mfa-title{ font-size:18px; margin:0 0 6px; }
+  .mod-mfa-code{ max-width:200px; letter-spacing:.3em; font-size:18px; }
+  .mod-mfa-msg{ margin:12px 0 0; font-size:14px; color: var(--danger); min-height:1.4em; }
+</style>
+</head>
+<body>
+
+<!-- Punto 39: consola de moderación (solo equipo de Mobau). La cabecera
+     de cuenta la completa nav-session.js («Moderación» solo para admin). -->
+<header class="site-header">
+  <div class="wrap nav">
+    <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <nav class="nav-links" aria-label="Principal">
+      <a href="catalogo.html">Catálogo</a>
+      <span class="nav-sep"></span>
+      <span id="nav-session-slot"></span>
+    </nav>
+    <div class="nav-cta">
+      <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
+    </div>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="eyebrow">Moderación</div>
+    <h1 id="mod-title">Propuestas de productos</h1>
+    <p style="margin-top:14px; max-width:62ch;">Revisa las propuestas de los distribuidores. Cada decisión se aplica tal cual se propuso; Mobau no edita las propuestas.</p>
+  </div>
+</div>
+
+<main class="wrap pd-main">
+  <div id="mod-gate"><p class="card-meta">Comprobando tu acceso…</p></div>
+
+  <div id="mod-app" hidden>
+    <div class="mod-filters">
+      <div class="field" style="margin:0;">
+        <label for="mod-status">Estado</label>
+        <select id="mod-status">
+          <option value="submitted">En revisión</option>
+          <option value="changes_requested">Cambios solicitados</option>
+          <option value="approved">Aprobadas</option>
+          <option value="rejected">Rechazadas</option>
+          <option value="withdrawn">Retiradas</option>
+          <option value="todas">Todas</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label for="mod-kind">Tipo</label>
+        <select id="mod-kind">
+          <option value="">Todos</option>
+          <option value="create">Producto nuevo</option>
+          <option value="update">Cambio</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <label for="mod-company">Empresa</label>
+        <select id="mod-company"><option value="">Todas</option></select>
+      </div>
+    </div>
+
+    <p id="mod-count" class="card-meta" role="status" aria-live="polite" style="margin:6px 0 0;"></p>
+    <p id="mod-limit" class="pd-aviso" hidden style="margin:12px 0 0;">Mostrando las 200 más antiguas; usa los filtros.</p>
+    <p id="mod-loading" class="card-meta" hidden>Cargando propuestas…</p>
+    <div id="mod-error" class="pd-empty" role="alert" hidden>
+      <p class="pd-empty-title">No pudimos cargar las propuestas.</p>
+      <button type="button" class="btn btn-primary" id="mod-retry">Reintentar</button>
+    </div>
+    <div id="mod-empty" class="pd-empty" hidden>
+      <p class="pd-empty-title" id="mod-empty-title"></p>
+    </div>
+    <ul class="mod-list" id="mod-list"></ul>
+  </div>
+</main>
+
+<footer class="site-footer" id="contacto">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>© 2026 Mobau. Piloto en preparación — uso interno.</span>
+      <span>Consola de moderación</span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script src="nav-session.js"></script>
+<script src="moderacion-acceso.js"></script>
+<script>
+/* Bandeja de moderación (39). Solo lee, y solo después de que la puerta
+   (moderacion-acceso.js) confirme { admin: true, aal2: true } en el
+   servidor: product_proposals (nunca borradores), products (nombres),
+   distributors (nombres, lectura pública) y proposal_events (conflictos
+   registrados). Nunca escribe; las decisiones se toman en el detalle. */
+(() => {
+  const M = MobauModeracion;
+  const $ = (id) => document.getElementById(id);
+  const STATES = ["submitted", "changes_requested", "approved", "rejected", "withdrawn"]; // nunca "draft"
+  const EMPTY = {
+    submitted: "No hay propuestas en revisión.",
+    changes_requested: "No hay propuestas con cambios solicitados.",
+    approved: "No hay propuestas aprobadas.",
+    rejected: "No hay propuestas rechazadas.",
+    withdrawn: "No hay propuestas retiradas.",
+    todas: "No hay propuestas."
+  };
+  const LIMIT = 200;
+  let gate = null;
+  let companies = new Map();
+  let requestId = 0;
+
+  function clear(){
+    requestId++;
+    $("mod-list").replaceChildren();
+    $("mod-count").textContent = "";
+    $("mod-title").textContent = "Propuestas de productos";
+    $("mod-company").replaceChildren(new Option("Todas", ""));
+    companies = new Map();
+  }
+
+  function setState(state){
+    $("mod-loading").hidden = state !== "loading";
+    $("mod-error").hidden = state !== "error";
+    $("mod-empty").hidden = state !== "empty";
+    $("mod-list").hidden = state !== "list";
+    if (state !== "list") $("mod-limit").hidden = true;
+  }
+
+  function buildRow(p, productNames, conflicted){
+    const changes = p.proposed_changes || {};
+    const isCreate = p.proposal_kind === "create";
+    const name = isCreate ? (changes.name || "Producto nuevo sin nombre") : (productNames.get(p.product_id) || p.product_id || "Producto");
+
+    const title = M.el("div", "mod-row-title");
+    title.append(M.chip(isCreate ? "Producto nuevo" : "Cambio", isCreate ? "wait" : "neutral"));
+    if ($("mod-status").value !== "submitted"){
+      const st = M.STATUS[p.status] || { label: p.status, kind: "neutral" };
+      title.append(M.chip(st.label, st.kind));
+    }
+    title.append(M.el("span", "", name));
+
+    const fields = Object.keys(changes).length + (p.proposed_new_subcategory ? 1 : 0);
+    const parts = [companies.get(p.distributor_id) || p.distributor_id];
+    if (fields) parts.push(`${fields} ${fields === 1 ? "campo" : "campos"}`);
+    if (p.proposed_price_status) parts.push(fields ? "incluye precio" : "solo precio");
+    parts.push(`versión ${p.version}`);
+    if (p.submitted_at) parts.push(`enviada el ${M.formatDate(p.submitted_at)}`);
+    if (p.reviewed_at && p.status !== "submitted") parts.push(`revisada el ${M.formatDate(p.reviewed_at)}`);
+    const sub = M.el("div", "mod-row-sub", parts.join(" · "));
+    if (conflicted){
+      sub.append(document.createTextNode(" · "), M.el("span", "mod-row-warn", "⚠ conflicto registrado"));
+    }
+
+    const a = document.createElement("a");
+    a.href = `moderacion-propuesta.html?id=${encodeURIComponent(p.id)}`;
+    const text = M.el("div");
+    text.append(title, sub);
+    a.append(text, M.el("span", "mod-row-arrow", "›"));
+    a.querySelector(".mod-row-arrow").setAttribute("aria-hidden", "true");
+    const li = M.el("li", "mod-row");
+    li.append(a);
+    return li;
+  }
+
+  async function loadCompanies(){
+    const { data, error } = await supabaseClient.from("distributors").select("id, name").order("name");
+    if (error) throw error;
+    companies = new Map(data.map(d => [d.id, d.name]));
+    const select = $("mod-company");
+    const current = select.value;
+    select.replaceChildren(new Option("Todas", ""), ...data.map(d => new Option(d.name, d.id)));
+    select.value = companies.has(current) ? current : "";
+  }
+
+  async function loadCount(){
+    const { count, error } = await supabaseClient.from("product_proposals")
+      .select("id", { count: "exact", head: true }).eq("status", "submitted");
+    $("mod-title").textContent = error || typeof count !== "number"
+      ? "Propuestas de productos" : `Propuestas en revisión (${count})`;
+  }
+
+  async function loadList(){
+    const id = ++requestId;
+    setState("loading");
+    const status = $("mod-status").value;
+    const kind = $("mod-kind").value;
+    const company = $("mod-company").value;
+    try {
+      let q = supabaseClient.from("product_proposals")
+        .select("id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, proposed_price_status, proposed_new_subcategory, submitted_at, reviewed_at")
+        .order("submitted_at", { ascending: true, nullsFirst: false })
+        .limit(LIMIT);
+      q = status === "todas" ? q.in("status", STATES) : q.eq("status", STATES.includes(status) ? status : "submitted");
+      if (kind) q = q.eq("proposal_kind", kind);
+      if (company) q = q.eq("distributor_id", company);
+      const { data: rows, error } = await q;
+      if (error) throw error;
+      if (id !== requestId) return;
+
+      /* Sin filas: puede ser que ya no haya segundo factor (RLS devuelve
+         vacío). Se vuelve a preguntar al servidor antes de decir "no hay". */
+      if (!rows.length && !(await gate.relock())) return;
+
+      const productIds = [...new Set(rows.filter(p => p.product_id).map(p => p.product_id))];
+      const ids = rows.map(p => p.id);
+      const [productsRes, eventsRes] = await Promise.all([
+        productIds.length ? supabaseClient.from("products").select("id, name").in("id", productIds) : { data: [], error: null },
+        ids.length ? supabaseClient.from("proposal_events").select("proposal_id")
+          .in("proposal_id", ids).eq("actor_kind", "mobau").eq("from_status", "submitted").eq("to_status", "submitted")
+          : { data: [], error: null }
+      ]);
+      if (productsRes.error) throw productsRes.error;
+      if (eventsRes.error) throw eventsRes.error;
+      if (id !== requestId) return;
+
+      const productNames = new Map(productsRes.data.map(p => [p.id, p.name]));
+      const conflicted = new Set(eventsRes.data.map(e => e.proposal_id));
+      $("mod-list").replaceChildren(...rows.map(p => buildRow(p, productNames, conflicted.has(p.id))));
+      $("mod-count").textContent = `${rows.length} ${rows.length === 1 ? "propuesta" : "propuestas"}`;
+      if (!rows.length){
+        $("mod-empty-title").textContent = EMPTY[status] || EMPTY.todas;
+        setState("empty");
+        return;
+      }
+      setState("list");
+      $("mod-limit").hidden = rows.length < LIMIT;
+    } catch (error){
+      if (id !== requestId) return;
+      $("mod-count").textContent = "";
+      setState("error");
+    }
+  }
+
+  async function loadAll(){
+    setState("loading");
+    try {
+      await loadCompanies();
+    } catch (error){
+      setState("error");
+      return;
+    }
+    loadCount();
+    await loadList();
+  }
+
+  ["mod-status", "mod-kind", "mod-company"].forEach(id => $(id).addEventListener("change", loadList));
+  $("mod-retry").addEventListener("click", loadAll);
+
+  gate = M.start({ onReady: loadAll, onLock: clear });
+})();
+</script>
+</body>
+</html>
