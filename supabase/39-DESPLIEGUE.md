@@ -8,8 +8,8 @@
 > - regresión de 38-C: **74/74**;
 > - regresión de 38-B: **50/50**.
 >
-> Ninguna incidencia en la base de datos. No hay admins, MFA ni interfaz de
-> moderación todavía.
+> Ninguna incidencia en la base de datos. En ese momento no había admins,
+> MFA ni interfaz de moderación (hoy sí: ver más abajo).
 >
 > **Paquete de precios aplicado el 2026-10-06:**
 > - 39-05 aplicada y registrada como `20261006120000`;
@@ -26,6 +26,15 @@
 > Huella final: sin cambios de datos; solo los cambios previstos en
 > políticas y permisos de `product_prices` y 22 migraciones. **R1 y R2:
 > cerrados.**
+>
+> **Primer admin y validación final (2026-10-07/08):**
+> - TOTP en *Verify Enabled*; primer admin activo, con dos factores TOTP
+>   verificados;
+> - acceso real a Moderación con AAL2 y prueba funcional de extremo a
+>   extremo (A11: solo «Solicitar cambios», con limpieza protegida);
+> - ventana de validación posterior al alta: **261/261**, sin restos.
+>
+> Detalle en «Primer admin, validación y prueba funcional».
 
 Mobau revisa las propuestas que envían los distribuidores verificados
 (38-C) y decide: **aprobar** la propuesta exacta, **solicitar cambios** o
@@ -166,7 +175,8 @@ global, calculado por cada archivo, confirma que todos los casos pasan. Las
 pruebas no se repitieron.
 
 **Límites de las pruebas:**
-- Son pruebas unitarias con JWT simulado: **no validan el MFA real**.
+- Son pruebas unitarias con JWT simulado: **no validan el MFA real** (se
+  comprobó aparte en A10 y se recorrió de nuevo durante A11).
 - No hay concurrencia real entre sesiones.
 
 ## Huella (paso 1 → final)
@@ -419,8 +429,9 @@ aplicar):
 **No se moderarán propuestas reales con precio hasta que el paquete completo,
 incluidas 39-05, script.js y 39-06, esté aplicado y probado.**
 
-El paquete ya está aplicado y probado. Además, moderar propuestas reales con
-precio requiere el primer admin, el MFA real y la interfaz de moderación.
+El paquete ya está aplicado y probado. Los otros tres requisitos para
+moderar propuestas reales con precio (primer admin, MFA real e interfaz de
+moderación) también se cumplen desde el 2026-10-07/08.
 
 ## Subcategoría nueva
 
@@ -435,16 +446,17 @@ precio requiere el primer admin, el MFA real y la interfaz de moderación.
 
 ## Seguridad y operación
 
-- **Primera cuenta admin pendiente:** `hola@mobau…`. Su alta es un paso
-  aparte, con autorización y con un script revisado; todavía no se ha
-  hecho.
+- **Primer admin:** `hola@mobau…`, activo desde el 2026-10-07 (A9). Es el
+  único admin. Ver «Primer admin, validación y prueba funcional».
 - **MFA (`aal2`) obligatorio para moderar:** sin `aal2` no se lee la bandeja
   ni se puede decidir.
-- **Todavía no hay** admins ni MFA activos (TOTP en Supabase Auth). La
-  prueba MFA real está pendiente.
-- **La interfaz de moderación** (consola y aviso en Mis productos) todavía
-  no está implementada.
-- **No ejecutar** `tests/39_moderation_checks.sql` mientras se usa el piloto.
+- **TOTP en Supabase Auth:** *Verify Enabled* (no se pueden enrolar factores
+  nuevos; la verificación sigue activa). El admin tiene dos factores TOTP
+  verificados. MFA real comprobado en A10 y recorrido de nuevo durante A11.
+- **La interfaz de moderación** (consola y aviso en Mis productos) está
+  implementada (commit `aa1679d`; ver «Interfaz de moderación»).
+- **No ejecutar** `tests/39_moderation_checks.sql` ni
+  `tests/39_06_prices_privacy_checks.sql` mientras se usa el piloto.
 - **No se moderarán propuestas reales con precio hasta que el paquete
   completo, incluidas 39-05, script.js y 39-06, esté aplicado y probado.**
 - **Fuera de alcance:** no hay correo, automatizaciones, pagos, Stripe,
@@ -455,7 +467,26 @@ precio requiere el primer admin, el MFA real y la interfaz de moderación.
 
 ## Rollback
 
-**Orden obligatorio:** 04 → 03 → 02 → 01. Cada archivo comprueba sus
+**Los rollbacks no se ejecutan de rutina.** Solo con una decisión explícita,
+después de analizar la incidencia, y con autorización paso a paso.
+
+**Orden seguro con el estado actual** (39-05 y 39-06 aplicadas, un admin
+activo):
+1. **Primero, lo posterior que depende de 39-02 y 39-01:** 39-06 (con su
+   confirmación) → `script.js` anterior → 39-05, si procede.
+   - 39-06 crea `product_prices_select_mobau`, que usa `is_mobau_admin()`.
+     Con 39-06 aplicada, el rollback de 39-02 falla en su validación final
+     (espera 44 políticas) y el de 39-01 no puede borrar `is_mobau_admin()`.
+   - Los dos fallan de forma segura: la transacción se deshace entera.
+2. **Después, 39-04 → 39-03 → 39-02 → 39-01**, con las condiciones de la
+   tabla siguiente.
+3. **El rollback de 39-01 se niega mientras `mobau_admins` tenga filas**,
+   activas o revocadas. Desde A9 tiene una.
+
+**Tras una moderación real, la salida ante una incidencia es una corrección
+nueva (fix forward)**, revisada y autorizada, no el rollback.
+
+**Orden dentro de 39-01…04:** 04 → 03 → 02 → 01. Cada archivo comprueba sus
 condiciones y se niega si no es seguro. Después de cada rollback se borra
 su fila de `schema_migrations` (con autorización) y se comprueba la huella.
 
@@ -480,7 +511,8 @@ aplicados:**
   sino una corrección nueva (fix forward), revisada y autorizada.
 
 Durante este despliegue no hubo decisiones ni admins, así que el rollback
-completo era limpio. **No se ejecutó ningún rollback.**
+completo era limpio. **No se ejecutó ningún rollback.** Desde A9 hay un
+admin activo, así que hoy el rollback de 39-01 se negaría.
 
 **Paquete de precios · A:**
 
@@ -520,10 +552,14 @@ esos importes: la salida segura es una corrección nueva (fix forward).
 | `tests/39_06_prices_privacy_checks.sql` | 28 pruebas de privacidad de `product_prices` |
 | `tests/38b_rls_checks.sql`, `tests/38c_rls_checks.sql`, `tests/39_moderation_checks.sql` | Regresiones ajustadas a 39-06 (V05, P01; R06, R07 = 43; R01 = 48) |
 
-**Nota (incorporación pendiente):** las migraciones 39-01 a 39-04, sus
-rollbacks y la versión de `tests/38c_rls_checks.sql` con solo R07 ajustado
-están aplicadas en Supabase, pero todavía no están en el repositorio.
-Se incorporarán en un commit propio, con autorización aparte.
+**Nota (incorporación hecha):** las migraciones 39-01 a 39-04 y sus
+rollbacks se incorporaron en el commit `c292c41`, con los mismos MD5 que se
+aplicaron. La versión intermedia de `tests/38c_rls_checks.sql` (solo R07)
+quedó sustituida por la del paquete de precios · B, ya versionada.
+
+| Archivo | Contenido |
+|---|---|
+| `tests/39_moderation_checks.sql`, `tests/39_05_catalog_prices_checks.sql`, `tests/39_06_prices_privacy_checks.sql` | (commit `8b4b0d6`) Sin el supuesto «`mobau_admins` vacía»: comprueban que las identidades de prueba no son admins y comparan `mobau_admins` y los eventos con una línea base tomada al empezar |
 
 ## Interfaz de moderación
 
@@ -568,11 +604,79 @@ aprobado queda en borrador; la publicación sigue siendo manual.
 con el mensaje de Mobau. «Leído» solo en ese dispositivo (`localStorage`
 `mobau_decisiones_vistas`). Sin correo, push ni SMS.
 
+## Primer admin, validación y prueba funcional
+
+### Alta del primer admin (A1–A10, 2026-10-07)
+
+| Paso | Resultado |
+|---|---|
+| A1 · Cloudflare Access | `hola@mobau…` entra al piloto con código de un solo uso |
+| A2 · Correo y URL | SMTP propio con remitente `hola@mobau…` y Site URL `https://mobau-pilot.pages.dev/`. Envío comprobado con un enlace a una cuenta existente |
+| A3 · Invitación | 1 cuenta invitada, rol `individual`, sin perfil profesional ni de distribuidor |
+| A4 · Rol | `profiles.role = 'admin'` (1 fila, con comprobaciones previas) |
+| A5 · Factores | Herramienta local y temporal en `http://127.0.0.1:8788` (Redirect URL temporal). El factor de respaldo de un primer intento quedó sin verificar: se borró con SQL protegido, se cerró la sesión pendiente y se enroló de nuevo. Herramienta y carpetas borradas |
+| A6–A7 · Cierre | Redirect URL retirada: quedan las 4 originales. Exactamente 2 factores TOTP verificados («Mobau principal» y «Mobau respaldo») y ningún otro |
+| A8 · TOTP | *Verify Enabled*. Al recargar, el panel muestra «Select status»; el valor guardado se confirmó porque «Save changes» solo se desactiva con *Verify Enabled* |
+| A9 · Admin | Fila activa en `mobau_admins` (concedida el 2026-10-07, sin revocar). Único admin |
+| A10 · Acceso real (2026-10-07) | Acceso real a Moderación con AAL2: tras el segundo factor, la bandeja fue accesible y mostraba 0 propuestas («No hay propuestas») |
+
+### Línea base posterior a A9 (2026-10-08)
+
+- 1 admin activo; contexto de moderación vacío.
+- 22 migraciones, la última `20261006120100`; 48 políticas.
+- 0 propuestas, 0 eventos, 0 restos de prueba y 0 restricciones temporales.
+
+Huella (`tests/39_huella.sql`): igual que la final del paso 12, salvo estas
+líneas (las líneas `precios:*` son las de «Estado tras B»).
+
+| Línea | Valor |
+|---|---|
+| `tabla:profiles` | `8 / fa50a52bd595f187f1ad96e363d180d9` (cuenta de A3) |
+| `tabla:projects` · `tabla:project_products` | `11 / c2a1eef1f9d5145d90c199e3443f3d8a` · `32 / d7882962154650c09ab443f935928b37` (uso normal del piloto) |
+| `39:tabla mobau_admins (filas)` | `1` |
+| `politicas:public (todas)` · `politicas:previas` | `48 / 7d74acfd2da8332fbe6aa878f15d4987` · `41 / 65cdf91ae8c1394f231a5cc0cd08d0aa` |
+| `permisos:tabla` · `permisos:columna` | `252 / 4322028e912e0a2d62c13618aef35f4f` · `880 / e326a95c27dac29e4ed2d211edd2cf9b` (medición del paquete de precios, sin `product_prices`) |
+| `migraciones registradas` | `22 / 20261006120100` |
+
+### Ventana de validación (2026-10-08)
+
+Piloto sin uso durante la ventana. Cada archivo, completo y una sola vez,
+como `postgres`, en `BEGIN … ROLLBACK`.
+
+| Paso | Resultado |
+|---|---|
+| H1 (línea base) | Tomada |
+| `tests/39_05_catalog_prices_checks.sql` | **29/29** |
+| `tests/39_06_prices_privacy_checks.sql` (`lock_timeout = 5s`) | **28/28**, sin tiempo de espera agotado |
+| `tests/39_moderation_checks.sql` (`lock_timeout = 5s`) | **80/80**, sin tiempo de espera agotado |
+| `tests/38c_rls_checks.sql` | **74/74** |
+| `tests/38b_rls_checks.sql` | **50/50** |
+| Total | **261/261** |
+| Restos tras cada suite | Ninguno: 0 datos auxiliares, `mobau_admins` igual a la línea base, contexto 0, 0 restricciones temporales, sin sesiones abiertas ni bloqueos en `product_prices` |
+| H2 | Idéntica a H1 (41/41 líneas) |
+
+La herramienta recortó un tramo del detalle en moderación (F03–A02) y en
+38-C (P33–K07); el recuento global de cada archivo confirma que pasan todos.
+
+### A11 · Prueba funcional de extremo a extremo (2026-10-08)
+
+| Paso | Resultado |
+|---|---|
+| T0 | Producto archivado del distribuidor verificado, sin propuestas y con el plazo de entrega vacío. H1′ idéntica a H1 |
+| T1 · Distribuidor | Propuesta de actualización solo del plazo de entrega, con un texto de prueba inequívoco y una nota. 2 eventos del distribuidor. Productos, precios y categorías sin cambios |
+| T2 · Admin con AAL2 | La consola pidió el código TOTP antes de mostrar la bandeja; 1 propuesta; la comparación mostraba solo «Plazo de entrega». **Solo «Solicitar cambios»**, con mensaje; no se aprobó ni se rechazó. 1 evento `mobau` del admin. Productos, precios y categorías sin cambios |
+| T3 · Distribuidor | Ve «Cambios solicitados», la nota de Mobau y las acciones esperadas. Sin cambios |
+| Limpieza | SQL protegido, autorizado por escrito: comprobó la propuesta, sus 3 eventos, que no hubiera otros y que los datos reales coincidieran con H1′. Borró exactamente 3 eventos y 1 propuesta |
+| Lectura final | 0 propuestas, 0 eventos, 0 restos. H3 idéntica a H1′ (41/41 líneas) |
+
+Fuera de los datos de `public` quedan, sin tocar: el contador de ids de
+`proposal_events` (avanzado) y el rastro de Auth de los inicios de sesión.
+
 ## Pendiente
 
-Cada punto con su propia autorización:
-1. Activar TOTP en Supabase Auth.
-2. Alta del primer admin (`hola@mobau…`): cuenta, `profiles.role = 'admin'` y fila en `mobau_admins`.
-3. Configurar su primer factor TOTP fuera del sitio (procedimiento local y temporal).
-4. Prueba MFA real con una propuesta de prueba («Solicitar cambios», nunca aprobar) y su limpieza.
-5. Incorporar 39-01 a 39-04 al repositorio.
+Hechos: TOTP, alta del primer admin, sus factores, la prueba MFA real
+(A10), la prueba funcional con limpieza (A11) y la incorporación de 39-01
+a 39-04 al repositorio.
+
+Queda, con autorización aparte: publicar en `origin` los commits locales de
+sincronización, pruebas y documentación.
