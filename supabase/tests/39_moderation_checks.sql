@@ -55,6 +55,9 @@
 -- (MB001) y error final MB999 con los resultados. Sin IDs reales, correos
 -- ni secretos en el archivo.
 -- Después: repetir 38c_rls_checks.sql (74) y 38b_rls_checks.sql (50).
+-- 40-01: con 40-01 aplicada, aprobar un create publica el producto
+-- (M17 y D01 lo exigen). Las pruebas propias de 40-01 están en
+-- 40_01_publish_checks.sql.
 -- ============================================================
 
 BEGIN;
@@ -244,15 +247,15 @@ begin
       ('M16 empresa sin verificar: no se puede aprobar',       'authenticated', v_pro::text, 'aal2', array[v_admin, v_dist_b, v_prod_b, v_b1],
          array[format(fn_call, b1, 'approve', null, 1)], 'exec', '55000:verificada'),
       -- ---------- Aprobar ----------
-      ('M17 aprobar create: producto en borrador y enlazado',  'authenticated', v_pro::text, 'aal2', array[v_admin, v_c1],
+      ('M17 aprobar create: producto publicado y enlazado',    'authenticated', v_pro::text, 'aal2', array[v_admin, v_c1],
          array[format(fn_save, c1, 'approve', null, 1),
                format('select count(*) from public.products p where p.id = %s ->> %L and p.name = %L and p.brand = %L and p.distributor_id = %L'
-                      || ' and p.category_id = %L and p.subcategory = %L and p.availability = %L and p.publication_status = %L'
+                      || ' and p.category_id = %L and p.subcategory = %L and p.availability = %L and p.publication_status = %L and p.status = %L'
                       || ' and exists (select 1 from public.product_proposals pr where pr.id = %L and pr.status = %L and pr.created_product_id = p.id and pr.reviewed_by = %L)'
                       || ' and exists (select 1 from public.product_prices pp where pp.product_id = p.id and pp.price_status = %L and pp.price_amount is null'
                       || ' and pp.currency = %L and pp.includes_itbis and pp.price_source = %L)'
                       || ' and exists (select 1 from public.proposal_events e where e.proposal_id = %L and e.to_status = %L and e.actor_kind = %L and e.payload ->> %L = p.id)',
-                      res, 'created_product_id', 'Producto nuevo 39', 'Marca nueva 39', v_sup_dist, v_cat1, v_sub1, 'bajo-pedido', 'draft',
+                      res, 'created_product_id', 'Producto nuevo 39', 'Marca nueva 39', v_sup_dist, v_cat1, v_sub1, 'bajo-pedido', 'published', 'active',
                       c1, 'approved', v_pro, 'quote_required', 'USD', 'distributor', c1, 'approved', 'mobau', 'created_product_id')], 'count', '1'),
       ('M18 aprobar update: solo cambian los campos propuestos', 'authenticated', v_pro::text, 'aal2', array[v_admin, v_prod, v_price, v_u1],
          array[format(fn_save, u1, 'approve', null, 1),
@@ -396,14 +399,14 @@ begin
                       || ' where p.id = %L and pp.product_id = p.id and pr.id = %L and current_setting(%L) = %L'
                       || ' and to_jsonb(p) = pr.product_snapshot -> %L and to_jsonb(pp) = pr.product_snapshot -> %L and pr.status = %L',
                       'rls39-a', u3, 'mobau.test_result', '23514', 'product', 'price', 'submitted')], 'count', '1'),
-      -- ---------- Producto nuevo: exactamente draft ----------
-      ('D01 producto nuevo: publication_status = draft exacto y no visible para anon', 'authenticated', v_pro::text, 'aal2', array[v_admin, v_c1],
+      -- ---------- Producto nuevo: publicado (40-01) ----------
+      ('D01 producto nuevo: publication_status = published exacto y visible para anon', 'authenticated', v_pro::text, 'aal2', array[v_admin, v_c1],
          array[format(fn_save, c1, 'approve', null, 1),
                format('select set_config(%L, (select publication_status from public.products where id = %s ->> %L), true)', 'mobau.test_pub', res, 'created_product_id'),
                'set local role anon',
                'select set_config(''request.jwt.claims'', '''', true), set_config(''request.jwt.claim.sub'', '''', true)',
-               format('select count(*) where current_setting(%L) = %L and not exists (select 1 from public.products where id = %s ->> %L)',
-                      'mobau.test_pub', 'draft', res, 'created_product_id')], 'count', '1'),
+               format('select count(*) where current_setting(%L) = %L and exists (select 1 from public.products where id = %s ->> %L)',
+                      'mobau.test_pub', 'published', res, 'created_product_id')], 'count', '1'),
       -- ---------- Autoaprobación (admin que pertenece a la empresa) ----------
       ('S01 admin de la propia empresa no puede aprobar',      'authenticated', v_sup::text, 'aal2', array[v_admin_a, v_prod, v_price, v_u1],
          array[format(fn_call, u1, 'approve', null, 1)], 'exec', '42501:propia empresa'),

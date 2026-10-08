@@ -320,10 +320,23 @@
         box.append(M.el("p", "", s.result === "added" ? `Subcategoría «${s.value}» añadida a la categoría.` : `Se usó la subcategoría existente «${s.value}».`));
       }
       if (p.proposal_kind === "create"){
+        /* 40-01: aprobar un create publica el producto. El texto sale del
+           estado real del producto, no del momento de la aprobación. */
         const created = ctx.created;
-        const state = created ? (PUBLICATION[created.publication_status] || created.publication_status) : null;
-        box.append(M.el("p", "", `Producto creado en borrador (${p.created_product_id || "sin id"}); publicación pendiente.`));
-        if (state && created.publication_status !== "draft") box.append(M.el("p", "", `Estado actual en el catálogo: ${state}.`));
+        const id = p.created_product_id || "sin id";
+        if (created && created.publication_status === "published"){
+          const line = M.el("p", "", `Producto publicado en el catálogo (${id}). `);
+          const view = M.el("a", "pd-link", "Ver producto");
+          view.href = `producto.html?id=${encodeURIComponent(created.id)}`;
+          view.target = "_blank";
+          view.rel = "noopener noreferrer";
+          line.append(view);
+          box.append(line);
+        } else if (created){
+          box.append(M.el("p", "", `Producto creado (${id}). Estado actual en el catálogo: ${PUBLICATION[created.publication_status] || created.publication_status}.`));
+        } else {
+          box.append(M.el("p", "", `Producto creado (${id}); ya no existe en el catálogo.`));
+        }
       }
       if (ev && ev.note) box.append(M.el("p", "", `Mensaje enviado: ${ev.note}`));
       return box;
@@ -392,7 +405,7 @@
       counter.classList.toggle("is-over", n > MAX_MESSAGE);
     });
 
-    const approve = M.el("button", "btn btn-primary", "Aprobar propuesta");
+    const approve = M.el("button", "btn btn-primary", ctx.proposal.proposal_kind === "create" ? "Aprobar y publicar" : "Aprobar propuesta");
     approve.type = "button";
     approve.id = "mod-approve";
     const changes = M.el("button", "btn btn-outline", "Solicitar cambios");
@@ -448,7 +461,10 @@
     const keys = proposedKeys(p);
     if (keys.length) lines.push(`Se aplicarán: ${keys.map(k => (k === "subcategory" && p.proposed_new_subcategory) ? "Subcategoría (nueva)" : M.fieldLabel(k)).join(", ")}.`);
     if (p.proposed_price_status) lines.push(`Precio: ${M.priceText({ price_status: p.proposed_price_status, price_amount: p.proposed_price_amount })}.`);
-    if (p.proposal_kind === "create") lines.push("Se creará el producto en borrador (sin publicar).");
+    if (p.proposal_kind === "create"){
+      lines.push("El producto se creará y se publicará en el catálogo de inmediato.");
+      return `¿Aprobar y publicar este producto?\n${lines.join("\n")}`;
+    }
     return `¿Aprobar esta propuesta?\n${lines.join("\n")}`;
   }
 
@@ -515,7 +531,7 @@
 
     if (!error && data && data.ok === true){
       const texts = {
-        approved: p.proposal_kind === "create" ? "Propuesta aprobada. Producto creado en borrador; publicación pendiente." : "Propuesta aprobada.",
+        approved: p.proposal_kind === "create" ? "Propuesta aprobada y producto publicado." : "Propuesta aprobada.",
         changes_requested: "Has solicitado cambios a la empresa.",
         rejected: "Propuesta rechazada."
       };

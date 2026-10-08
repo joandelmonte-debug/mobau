@@ -529,6 +529,7 @@
     const actions = document.createElement("div");
     actions.className = "c-qty pl-actions";
     actions.append(chip(publication.label, publication.kind), action);
+    if (product.publication_status === "published") actions.append(link("Ver producto", `producto.html?id=${encodeURIComponent(product.id)}`));
 
     row.append(makeThumb(product.name, product.image_url), info, actions);
     makeClickable(row, action);
@@ -594,7 +595,8 @@
   function buildDecisionRow(decision, event, isNew){
     const changes = decision.proposed_changes || {};
     const isCreate = decision.proposal_kind === "create";
-    const product = isCreate ? null : products.find(p => p.id === decision.product_id) || null;
+    /* 40-01: un create aprobado enlaza su producto (created_product_id). */
+    const product = products.find(p => p.id === (isCreate ? decision.created_product_id : decision.product_id)) || null;
     const name = isCreate ? (changes.name || "Producto nuevo sin nombre") : (product ? product.name : decision.product_id);
     const approved = decision.status === "approved";
     const payload = (event && event.payload) || {};
@@ -613,7 +615,9 @@
     row.append(head, line(`${isCreate ? "Producto nuevo" : "Cambio"} · ${formatDate(decision.reviewed_at)}`, "pl-decision-meta"));
     if (approved){
       if (isCreate){
-        row.append(line("Producto creado en borrador; Mobau lo publicará en el catálogo."));
+        if (product && product.publication_status === "published") row.append(line("Producto publicado en el catálogo."));
+        else if (product) row.append(line(`Producto creado · ${(PUBLICATION[product.publication_status] || { label: "Sin estado" }).label}.`));
+        else row.append(line("Producto creado."));
       } else {
         const applied = (payload.applied_fields || []).map(key => FIELD_LABELS[key] || key);
         if (payload.subcategory) applied.push("Subcategoría");
