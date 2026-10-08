@@ -20,6 +20,16 @@
 --   * Admin + distribuidor (casos F, S y C): el propio distribuidor A dado
 --     de alta como admin temporal, para probar que no puede autodecidir.
 --
+-- Admins reales: mobau_admins puede tener filas reales. Precondición: ni el
+-- profesional ni el distribuidor A tienen fila en mobau_admins (activa o
+-- revocada), porque estas pruebas los dan de alta como admins temporales.
+-- Antes de los casos se toma una línea base completa de mobau_admins
+-- (recuento y MD5 de todas las filas y columnas, sin filtrar ninguna) y R02
+-- exige que al final sea idéntica.
+-- Eventos: también se toma el número de eventos ya registrados por el
+-- distribuidor A y por el profesional (puede haber eventos reales). S06–S08
+-- y E01–E04 exigen que los intentos bloqueados no añadan ninguno.
+--
 -- Casos C: algunas filas de contexto se preparan como postgres (solo
 -- posible con el rol propietario) para demostrar que el contexto está
 -- ligado a la transacción, la propuesta y el admin; nunca se crean como
@@ -75,6 +85,8 @@ declare
   i int;
   v_got text; v_n bigint; v_ok boolean; v_stmt text;
   n_total int := 0; n_ok int := 0;
+  -- Líneas base (como postgres, antes de los casos)
+  v_adm_n bigint; v_adm_md5 text; v_ev_sup bigint; v_ev_pro bigint;
   -- Llamadas a la función
   fn_call constant text := 'select public.moderate_product_proposal(%L::uuid, %L, %L, %s)';
   fn_save constant text := 'select set_config(''mobau.test_result'', public.moderate_product_proposal(%L::uuid, %L, %L, %s)::text, true)';
@@ -96,9 +108,17 @@ begin
   if v_sup is null or v_pro is null or v_cat1 is null then
     raise exception 'MOBAU_39: faltan datos de partida' using errcode = 'MB998';
   end if;
-  if exists (select 1 from public.mobau_admins) then
-    raise exception 'MOBAU_39: mobau_admins no está vacía; estas pruebas esperan cero admins permanentes' using errcode = 'MB998';
+  if exists (select 1 from public.mobau_admins a where a.user_id in (v_pro, v_sup)) then
+    raise exception 'MOBAU_39: el profesional o el distribuidor de prueba ya tiene fila en mobau_admins; estas pruebas los dan de alta como admins temporales' using errcode = 'MB998';
   end if;
+
+  -- ---------- líneas base (lectura como postgres, antes de los casos) ----------
+  -- mobau_admins completa: todas las filas y columnas, sin filtrar ninguna.
+  select count(*), md5(coalesce(string_agg(to_jsonb(a)::text, '|' order by a.user_id), ''))
+    into v_adm_n, v_adm_md5 from public.mobau_admins a;
+  -- Eventos ya registrados por cada identidad de prueba.
+  select count(*) into v_ev_sup from public.proposal_events e where e.actor_id = v_sup;
+  select count(*) into v_ev_pro from public.proposal_events e where e.actor_id = v_pro;
 
   -- ---------- SQL auxiliar (como postgres, dentro de cada caso) ----------
   v_admin := format('insert into public.mobau_admins (user_id, granted_note) values (%L, %L)', v_pro, 'Admin temporal de prueba 39');
@@ -403,13 +423,13 @@ begin
                       || ' and not exists (select 1 from public.products where name = %L)'
                       || ' and not exists (select 1 from public.categories c where c.id = %L and %L = any (c.subcategories))'
                       || ' and exists (select 1 from public.product_proposals where id = %L and status = %L and reviewed_by is null and created_product_id is null)'
-                      || ' and not exists (select 1 from public.proposal_events where actor_id = %L)'
+                      || ' and (select count(*) from public.proposal_events where actor_id = %L) = %s'
                       || ' and not exists (select 1 from public.mobau_moderation_context)',
-                      'mobau.test_result', '42501', 'Producto con subcategoría nueva 39', v_cat1, 'Subcategoría nueva 39', c2, 'submitted', v_sup)], 'count', '1'),
+                      'mobau.test_result', '42501', 'Producto con subcategoría nueva 39', v_cat1, 'Subcategoría nueva 39', c2, 'submitted', v_sup, v_ev_sup)], 'count', '1'),
       ('S07 intento bloqueado con versión distinta: tampoco deja evento de conflicto', 'authenticated', v_sup::text, 'aal2', array[v_admin_a, v_prod, v_price, v_u1],
          array[format(fn_try, u1, 'approve', null, 2), 'reset role',
-               format('select count(*) where current_setting(%L) = %L and not exists (select 1 from public.proposal_events where actor_id = %L)',
-                      'mobau.test_result', '42501', v_sup)], 'count', '1'),
+               format('select count(*) where current_setting(%L) = %L and (select count(*) from public.proposal_events where actor_id = %L) = %s',
+                      'mobau.test_result', '42501', v_sup, v_ev_sup)], 'count', '1'),
       ('S08 versión antigua: admin de la empresa bloqueado sin evento; admin externo recibe el conflicto', 'authenticated', v_sup::text, 'aal2',
          array[v_admin, v_admin_a, v_prod, v_price, v_u1],
          array[format(fn_try, u1, 'approve', null, 2),
@@ -418,34 +438,34 @@ begin
                       'request.jwt.claims', json_build_object('sub', v_pro, 'role', 'authenticated', 'aal', 'aal2')::text),
                format(fn_save, u1, 'approve', null, 2), 'reset role',
                format('select count(*) where current_setting(%L) = %L and %s ->> %L = %L'
-                      || ' and not exists (select 1 from public.proposal_events where actor_id = %L)'
+                      || ' and (select count(*) from public.proposal_events where actor_id = %L) = %s'
                       || ' and (select count(*) from public.proposal_events e where e.proposal_id = %L and e.actor_id = %L) = 1'
                       || ' and exists (select 1 from public.proposal_events e where e.proposal_id = %L and e.actor_id = %L'
                       || ' and e.from_status = %L and e.to_status = %L and e.note is null'
                       || ' and e.payload = jsonb_build_object(%L, %L, %L, %L, %L, 2, %L, 1))'
                       || ' and exists (select 1 from public.product_proposals where id = %L and status = %L and reviewed_by is null)',
-                      'mobau.test_self', '42501', res, 'code', 'version_conflict', v_sup, u1, v_pro, u1, v_pro, 'submitted', 'submitted',
+                      'mobau.test_self', '42501', res, 'code', 'version_conflict', v_sup, v_ev_sup, u1, v_pro, u1, v_pro, 'submitted', 'submitted',
                       'type', 'version_conflict', 'decision', 'approve', 'expected_version', 'current_version', u1, 'submitted')], 'count', '1'),
       -- ---------- Intentos sin evento de moderación ----------
       ('E01 no admin: error y ningún evento',                  'authenticated', v_pro::text, 'aal2', array[v_prod, v_price, v_u1],
          array[format(fn_try, u1, 'approve', null, 1), 'reset role',
-               format('select count(*) where current_setting(%L) = %L and not exists (select 1 from public.proposal_events where actor_id = %L)'
+               format('select count(*) where current_setting(%L) = %L and (select count(*) from public.proposal_events where actor_id = %L) = %s'
                       || ' and exists (select 1 from public.product_proposals where id = %L and status = %L)',
-                      'mobau.test_result', '42501', v_pro, u1, 'submitted')], 'count', '1'),
+                      'mobau.test_result', '42501', v_pro, v_ev_pro, u1, 'submitted')], 'count', '1'),
       ('E02 admin sin MFA: error y ningún evento',             'authenticated', v_pro::text, 'aal1', array[v_admin, v_prod, v_price, v_u1],
          array[format(fn_try, u1, 'reject', 'Motivo 39.', 1), 'reset role',
-               format('select count(*) where current_setting(%L) = %L and not exists (select 1 from public.proposal_events where actor_id = %L)'
+               format('select count(*) where current_setting(%L) = %L and (select count(*) from public.proposal_events where actor_id = %L) = %s'
                       || ' and exists (select 1 from public.product_proposals where id = %L and status = %L)',
-                      'mobau.test_result', '42501', v_pro, u1, 'submitted')], 'count', '1'),
+                      'mobau.test_result', '42501', v_pro, v_ev_pro, u1, 'submitted')], 'count', '1'),
       ('E03 propuesta inexistente: error y ningún evento',     'authenticated', v_pro::text, 'aal2', array[v_admin],
          array[format(fn_try, '00000000-0000-4000-8000-000000039fff', 'approve', null, 1), 'reset role',
-               format('select count(*) where current_setting(%L) = %L and not exists (select 1 from public.proposal_events where actor_id = %L)'
+               format('select count(*) where current_setting(%L) = %L and (select count(*) from public.proposal_events where actor_id = %L) = %s'
                       || ' and not exists (select 1 from public.proposal_events where proposal_id = %L)',
-                      'mobau.test_result', 'P0002', v_pro, '00000000-0000-4000-8000-000000039fff')], 'count', '1'),
+                      'mobau.test_result', 'P0002', v_pro, v_ev_pro, '00000000-0000-4000-8000-000000039fff')], 'count', '1'),
       ('E04 propuesta cerrada: error y ningún evento',         'authenticated', v_pro::text, 'aal2', array[v_admin, v_prod, v_price, v_w1],
          array[format(fn_try, w1, 'approve', null, 1), 'reset role',
-               format('select count(*) where current_setting(%L) = %L and not exists (select 1 from public.proposal_events where actor_id = %L)',
-                      'mobau.test_result', '55000', v_pro)], 'count', '1'),
+               format('select count(*) where current_setting(%L) = %L and (select count(*) from public.proposal_events where actor_id = %L) = %s',
+                      'mobau.test_result', '55000', v_pro, v_ev_pro)], 'count', '1'),
       -- ---------- Precios no publicados (comportamiento de 38-C) ----------
       ('P07 quote_required con importe: se guarda tal cual, sin publicar', 'authenticated', v_pro::text, 'aal2', array[v_admin, v_prod, v_price, v_u4],
          array[format(fn_save, u4, 'approve', null, 1),
@@ -496,8 +516,9 @@ begin
       -- ---------- Estado global ----------
       ('R01 políticas en public = 48 (47 de 39 − 1 + 2 de 39-06)', '-', null, null, null::text[],
          array['select count(*) from pg_policies where schemaname = ''public'''], 'count', '48'),
-      ('R02 ningún admin permanente',                          '-', null, null, null::text[],
-         array['select count(*) from public.mobau_admins'], 'count', '0'),
+      ('R02 mobau_admins idéntica a la línea base (ningún admin de prueba queda)', '-', null, null, null::text[],
+         array[format('select count(*) from (select count(*) as n, md5(coalesce(string_agg(to_jsonb(a)::text, %L order by a.user_id), %L)) as fp'
+                      || ' from public.mobau_admins a) x where x.n = %s and x.fp = %L', '|', '', v_adm_n, v_adm_md5)], 'count', '1'),
       ('R03 contexto de moderación vacío',                     '-', null, null, null::text[],
          array['select count(*) from public.mobau_moderation_context'], 'count', '0')
     ) as c(name, role, sub, aal, setup, sql, kind, expect)

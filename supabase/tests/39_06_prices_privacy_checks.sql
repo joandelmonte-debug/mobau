@@ -25,6 +25,12 @@
 --   rls395-c  A · publicado · precio published 100, fuente demo
 --   rls395-e  A · publicado · sin precio
 --   rls395-h  B · publicado · precio quote_required con importe 60 + nota interna
+-- Admins reales: mobau_admins puede tener filas reales. Precondición: ni el
+-- profesional ni el distribuidor A tienen fila en mobau_admins (activa o
+-- revocada); el profesional se da de alta aquí como admin temporal. Antes de
+-- los casos se toma una línea base completa de mobau_admins (recuento y MD5
+-- de todas las filas y columnas, sin filtrar ninguna) y R05 exige que al
+-- final sea idéntica.
 -- NADA queda guardado: BEGIN … ROLLBACK, MB001 por caso y MB999 final.
 -- ============================================================
 
@@ -43,6 +49,7 @@ declare
   r jsonb := '[]'::jsonb; t record; i int;
   v_got text; v_n bigint; v_ok boolean; v_stmt text;
   n_total int := 0; n_ok int := 0;
+  v_adm_n bigint; v_adm_md5 text;  -- línea base de mobau_admins (como postgres, antes de los casos)
   fn_save constant text := 'select set_config(''mobau.test_result'', public.moderate_product_proposal(%L::uuid, %L, %L, %s)::text, true)';
   fn_try constant text := 'do $t$ begin perform public.moderate_product_proposal(%L::uuid, %L, %L, %s);'
                           || ' perform set_config(''mobau.test_result'', ''sin error'', true);'
@@ -58,9 +65,13 @@ begin
   if v_sup is null or v_pro is null or v_cat1 is null then
     raise exception 'MOBAU_39_06_PRECIOS: faltan datos de partida' using errcode = 'MB998';
   end if;
-  if exists (select 1 from public.mobau_admins) then
-    raise exception 'MOBAU_39_06_PRECIOS: mobau_admins no está vacía' using errcode = 'MB998';
+  if exists (select 1 from public.mobau_admins a where a.user_id in (v_pro, v_sup)) then
+    raise exception 'MOBAU_39_06_PRECIOS: el profesional o el distribuidor de prueba ya tiene fila en mobau_admins' using errcode = 'MB998';
   end if;
+
+  -- Línea base de mobau_admins: todas las filas y columnas, sin filtrar ninguna.
+  select count(*), md5(coalesce(string_agg(to_jsonb(a)::text, '|' order by a.user_id), ''))
+    into v_adm_n, v_adm_md5 from public.mobau_admins a;
 
   -- Referencias calculadas como postgres sobre los datos reales (sin auxiliares).
   select count(*) into n_own from public.product_prices pp join public.products p on p.id = pp.product_id
@@ -167,8 +178,9 @@ begin
                || ' and (select count(*) from pg_policies where schemaname = ''public'' and tablename = ''product_prices'') = 4'], 'count', '4'),
       ('R04 políticas en public = 48',                         '-', null, null, null::text[],
          array['select count(*) from pg_policies where schemaname = ''public'''], 'count', '48'),
-      ('R05 ningún admin permanente',                          '-', null, null, null::text[],
-         array['select count(*) from public.mobau_admins'], 'count', '0')
+      ('R05 mobau_admins idéntica a la línea base (ningún admin de prueba queda)', '-', null, null, null::text[],
+         array[format('select count(*) from (select count(*) as n, md5(coalesce(string_agg(to_jsonb(a)::text, %L order by a.user_id), %L)) as fp'
+                      || ' from public.mobau_admins a) x where x.n = %s and x.fp = %L', '|', '', v_adm_n, v_adm_md5)], 'count', '1')
     ) as c(name, role, sub, aal, setup, sql, kind, expect)
   loop
     v_got := null;

@@ -199,8 +199,17 @@ ejecuciones.
 | `constraints:product_proposals` | 20 | 22 (cambio esperado: la clave ajena y la restricción nuevas) |
 | `columnas:product_proposals` | 19 | 20 (cambio esperado: `created_product_id`) |
 | `migraciones registradas` | `16 / 20261005120000` | `20 / 20261005130300` (cambio esperado) |
-| `39:*` | No existen (CE1) | Objetos de 39 con los valores esperados; admins 0; contexto 0 |
+| `39:*` | No existen (CE1) | Objetos de 39 con los valores esperados; admins: 0 en el paso 12; desde A9 (alta del primer admin real), `39:tabla mobau_admins (filas)` se compara con la línea base tomada después de A9, no con 0; contexto 0 |
 | `propuestas por estado` / eventos de Mobau / restos `rls39` | `ninguna` / 0 / 0 | Idénticos |
+
+**Pruebas de comportamiento:** `tests/38b_rls_checks.sql`,
+`tests/38c_rls_checks.sql`, `tests/39_05_catalog_prices_checks.sql`,
+`tests/39_06_prices_privacy_checks.sql` y `tests/39_moderation_checks.sql`
+se ejecutan siempre en una transacción revertida (`BEGIN … ROLLBACK`, error
+final `MB999`) y no dejan datos. Las de 39 no suponen que `mobau_admins`
+esté vacía: toman al empezar una línea base completa de la tabla y
+comprueban al final que sigue idéntica. 38-B y 38-C no dependen de
+`mobau_admins`. La huella es solo lectura.
 
 **Comprobación adicional del paso 12:**
 - 0 restos de 38-B y 38-C (`rls38%`, líneas `rls38b-aux`, RFQ de prueba,

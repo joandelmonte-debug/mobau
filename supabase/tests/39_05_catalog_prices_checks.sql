@@ -21,6 +21,10 @@
 --   rls395-e  A · publicado · sin precio
 --   rls395-f  A · publicado · pending_confirmation, importe guardado 90
 --   rls395-g  A · publicado · unavailable, importe guardado 95
+-- Admins reales: estas pruebas no dan de alta admins. mobau_admins puede
+-- tener filas reales: antes de los casos se toma una línea base completa
+-- (recuento y MD5 de todas las filas y columnas, sin filtrar ninguna) y R04
+-- exige que al final sea idéntica.
 -- NADA queda guardado: BEGIN … ROLLBACK, MB001 por caso y MB999 final.
 -- ============================================================
 
@@ -37,6 +41,7 @@ declare
   r jsonb := '[]'::jsonb; t record; i int;
   v_got text; v_n bigint; v_ok boolean; v_stmt text;
   n_total int := 0; n_ok int := 0;
+  v_adm_n bigint; v_adm_md5 text;  -- línea base de mobau_admins (como postgres, antes de los casos)
   -- Huella de una salida con las 7 columnas (alias r).
   fp_sql constant text := 'md5(coalesce(string_agg(concat_ws('':'', r.product_id, coalesce(r.price_amount::text, ''-''), coalesce(r.currency, ''-''), r.price_status,'
                           || ' coalesce(r.includes_itbis::text, ''-''), coalesce(r.itbis_rate::text, ''-''), coalesce(r.es_demo::text, ''-'')), ''|'' order by r.product_id), ''''))';
@@ -60,6 +65,10 @@ begin
   if to_regprocedure('public.catalog_published_prices(text[], text, integer)') is null then
     raise exception 'MOBAU_39_05_PRECIOS: falta 39-05' using errcode = 'MB998';
   end if;
+
+  -- Línea base de mobau_admins: todas las filas y columnas, sin filtrar ninguna.
+  select count(*), md5(coalesce(string_agg(to_jsonb(a)::text, '|' order by a.user_id), ''))
+    into v_adm_n, v_adm_md5 from public.mobau_admins a;
 
   -- Referencia sobre los datos reales (sin auxiliares).
   execute 'select count(*), ' || fp_sql || ' from (' || ref_sql || ') r' into n_cat, v_cat_fp;
@@ -169,8 +178,9 @@ begin
          array['select count(*) from pg_proc p where p.pronamespace = ''public''::regnamespace and p.proname = ''catalog_published_prices'''
                || ' and array_to_string(p.proargnames, '','') = ''p_product_ids,p_after,p_limit,product_id,price_amount,currency,price_status,includes_itbis,itbis_rate,es_demo'''
                || ' and (select count(*) from pg_proc q where q.pronamespace = ''public''::regnamespace and q.proname = ''catalog_published_prices'') = 1'], 'count', '1'),
-      ('R04 ningún admin permanente',                               '-', null, null::text[],
-         array['select count(*) from public.mobau_admins'], 'count', '0')
+      ('R04 mobau_admins idéntica a la línea base',                 '-', null, null::text[],
+         array[format('select count(*) from (select count(*) as n, md5(coalesce(string_agg(to_jsonb(a)::text, %L order by a.user_id), %L)) as fp'
+                      || ' from public.mobau_admins a) x where x.n = %s and x.fp = %L', '|', '', v_adm_n, v_adm_md5)], 'count', '1')
     ) as c(name, role, sub, setup, sql, kind, expect)
   loop
     v_got := null;
