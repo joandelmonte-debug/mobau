@@ -52,6 +52,9 @@
 -- mobau.test_result para comprobarlo en la sentencia siguiente.
 --
 -- NADA queda guardado: BEGIN … ROLLBACK, cada caso en su subtransacción
+-- 41-01: la copia del producto se escribe y se compara con las 22 columnas
+-- de catálogo, por nombre (anon y authenticated ya no tienen SELECT de
+-- tabla en products: to_jsonb(p) fallaría con 42501 en M18, M19 y A02).
 -- (MB001) y error final MB999 con los resultados. Sin IDs reales, correos
 -- ni secretos en el archivo.
 -- Después: repetir 38c_rls_checks.sql (74) y 38b_rls_checks.sql (50).
@@ -137,12 +140,12 @@ begin
   -- Propuesta update en revisión, con el snapshot que guardaría el trigger 40.
   v_u1 := format('insert into public.product_proposals (id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, product_snapshot, submitted_at)'
                  || ' select %L, %L, p.id, p.distributor_id, %L, 1, %L::jsonb,'
-                 || ' jsonb_build_object(%L, to_jsonb(p), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
+                 || ' jsonb_build_object(%L, (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
                  || ' from public.products p where p.id = %L',
                  u1, 'update', 'submitted', '{"name": "Nombre aprobado 39"}', 'product', 'price', 'taken_at', 'rls39-a');
   v_u2 := format('insert into public.product_proposals (id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, proposed_price_status, proposed_price_amount, product_snapshot, submitted_at)'
                  || ' select %L, %L, p.id, p.distributor_id, %L, 1, %L::jsonb, %L, 120,'
-                 || ' jsonb_build_object(%L, to_jsonb(p), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
+                 || ' jsonb_build_object(%L, (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
                  || ' from public.products p where p.id = %L',
                  u2, 'update', 'submitted', '{}', 'published', 'product', 'price', 'taken_at', 'rls39-a');
   v_c1 := format('insert into public.product_proposals (id, proposal_kind, distributor_id, status, version, proposed_changes, proposed_price_status, submitted_at) values (%L, %L, %L, %L, 1, %L::jsonb, %L, now())',
@@ -162,7 +165,7 @@ begin
                      'Subcategoría paralela 39');
   v_u3 := format('insert into public.product_proposals (id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, proposed_price_status, proposed_price_amount, product_snapshot, submitted_at)'
                  || ' select %L, %L, p.id, p.distributor_id, %L, 1, %L::jsonb, %L, 777.77,'
-                 || ' jsonb_build_object(%L, to_jsonb(p), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
+                 || ' jsonb_build_object(%L, (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
                  || ' from public.products p where p.id = %L',
                  u3, 'update', 'submitted', '{"name": "Nombre atómico 39"}', 'published', 'product', 'price', 'taken_at', 'rls39-a');
   v_c3 := format('insert into public.product_proposals (id, proposal_kind, distributor_id, status, version, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, submitted_at) values (%L, %L, %L, %L, 1, %L::jsonb, %L, %L, 777.77, now())',
@@ -177,7 +180,7 @@ begin
   -- Propuesta update de A solo con precio (estado e importe dados).
   f_u_price := 'insert into public.product_proposals (id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, proposed_price_status, proposed_price_amount, product_snapshot, submitted_at)'
                || ' select %L, %L, p.id, p.distributor_id, %L, 1, %L::jsonb, %L, %L::numeric,'
-               || ' jsonb_build_object(%L, to_jsonb(p), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
+               || ' jsonb_build_object(%L, (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41), %L, (select to_jsonb(pp) from public.product_prices pp where pp.product_id = p.id), %L, now()), now()'
                || ' from public.products p where p.id = %L';
   v_u4 := format(f_u_price, u4, 'update', 'submitted', '{}', 'quote_required', 80, 'product', 'price', 'taken_at', 'rls39-a');
   v_u5 := format(f_u_price, u5, 'update', 'submitted', '{}', 'pending_confirmation', null, 'product', 'price', 'taken_at', 'rls39-a');
@@ -192,7 +195,7 @@ begin
   v_w1 := format('insert into public.product_proposals (id, proposal_kind, product_id, distributor_id, status, version, proposed_changes) values (%L, %L, %L, %L, %L, 1, %L::jsonb)',
                  w1, 'update', 'rls39-a', v_sup_dist, 'withdrawn', '{"brand": "Marca retirada 39"}');
   v_b1 := format('insert into public.product_proposals (id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, product_snapshot, submitted_at)'
-                 || ' select %L, %L, p.id, p.distributor_id, %L, 1, %L::jsonb, jsonb_build_object(%L, to_jsonb(p), %L, null, %L, now()), now()'
+                 || ' select %L, %L, p.id, p.distributor_id, %L, 1, %L::jsonb, jsonb_build_object(%L, (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41), %L, null, %L, now()), now()'
                  || ' from public.products p where p.id = %L',
                  b1, 'update', 'submitted', '{"name": "Nombre de B 39"}', 'product', 'price', 'taken_at', 'rls39-b');
 
@@ -260,12 +263,12 @@ begin
       ('M18 aprobar update: solo cambian los campos propuestos', 'authenticated', v_pro::text, 'aal2', array[v_admin, v_prod, v_price, v_u1],
          array[format(fn_save, u1, 'approve', null, 1),
                format('select count(*) from public.products p, public.product_proposals pr where p.id = %L and pr.id = %L and p.name = %L'
-                      || ' and (to_jsonb(p) - %L - %L) = (pr.product_snapshot -> %L) - %L - %L and pr.status = %L',
+                      || ' and ((select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41) - %L - %L) = (pr.product_snapshot -> %L) - %L - %L and pr.status = %L',
                       'rls39-a', u1, 'Nombre aprobado 39', 'name', 'updated_at', 'product', 'name', 'updated_at', 'approved')], 'count', '1'),
       ('M19 aprobar precio: solo cambia el precio',            'authenticated', v_pro::text, 'aal2', array[v_admin, v_prod, v_price, v_u2],
          array[format(fn_save, u2, 'approve', null, 1),
                format('select count(*) from public.products p, public.product_proposals pr, public.product_prices pp'
-                      || ' where p.id = %L and pr.id = %L and pp.product_id = p.id and to_jsonb(p) = pr.product_snapshot -> %L'
+                      || ' where p.id = %L and pr.id = %L and pp.product_id = p.id and (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41) = pr.product_snapshot -> %L'
                       || ' and pp.price_status = %L and pp.price_amount = 120 and pp.price_source = %L and pr.status = %L'
                       || ' and pp.currency = %L and pp.includes_itbis and pp.price_reference is null'
                       || ' and pp.id::text = pr.product_snapshot -> %L ->> %L and pp.created_at = (pr.product_snapshot -> %L ->> %L)::timestamptz',
@@ -397,7 +400,7 @@ begin
          array[format(fn_try, u3, 'approve', null, 1),
                format('select count(*) from public.products p, public.product_prices pp, public.product_proposals pr'
                       || ' where p.id = %L and pp.product_id = p.id and pr.id = %L and current_setting(%L) = %L'
-                      || ' and to_jsonb(p) = pr.product_snapshot -> %L and to_jsonb(pp) = pr.product_snapshot -> %L and pr.status = %L',
+                      || ' and (select to_jsonb(s41) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status) s41) = pr.product_snapshot -> %L and to_jsonb(pp) = pr.product_snapshot -> %L and pr.status = %L',
                       'rls39-a', u3, 'mobau.test_result', '23514', 'product', 'price', 'submitted')], 'count', '1'),
       -- ---------- Producto nuevo: publicado (40-01) ----------
       ('D01 producto nuevo: publication_status = published exacto y visible para anon', 'authenticated', v_pro::text, 'aal2', array[v_admin, v_c1],
