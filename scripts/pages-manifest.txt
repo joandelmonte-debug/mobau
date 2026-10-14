@@ -1,0 +1,51 @@
+# Archivos web que publica Cloudflare Pages (lista cerrada).
+# scripts/pages-build.sh copia a dist/ solo estas rutas, una por línea.
+# Las líneas vacías y las que empiezan por # se ignoran.
+# supabase/, la documentación interna y cualquier archivo no listado quedan fuera.
+acceso.html
+activar-plan.html
+catalogo.html
+crear-cuenta.html
+cuenta.html
+distribuidor-producto.html
+distribuidor-productos.html
+distribuidor-propuestas.html
+distribuidor.css
+distribuidores.html
+ficha-distribuidor.html
+gracias.html
+images/acceso/acceso-fondo.jpg
+images/acceso/optimizado/alta-1.jpg
+images/acceso/optimizado/alta-2.jpg
+images/acceso/optimizado/alta-3.jpg
+images/hero/hero-bano-spa.jpg
+images/hero/hero-sala-comedor.jpg
+images/hero/hero-sala-principal.jpg
+index.html
+inscripcion-profesional.html
+login.html
+moderacion-acceso.js
+moderacion-propuesta.html
+moderacion.html
+nav-account-hint.js
+nav-session.js
+panel-distribuidor.html
+perfil-distribuidor.html
+perfil-profesional.js
+planes.html
+producto.html
+proyecto.html
+proyectos-cotizacion.html
+proyectos-data.js
+proyectos-detalle.html
+proyectos-nuevo.html
+proyectos-resumen.html
+proyectos.html
+registro.html
+rfq.html
+script.js
+seleccion-data.js
+seleccion.html
+styles.css
+supabase-client.js
+verificar-correo.html
