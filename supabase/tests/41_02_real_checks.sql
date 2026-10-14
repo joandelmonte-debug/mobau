@@ -11,7 +11,8 @@
 --   profesional                  1.er perfil 'individual'         (sin auxiliares)
 --   distribuidor dueño (A)       el distribuidor verificado real  (sin auxiliares)
 --   otro distribuidor (B)        2.º perfil 'individual', vinculado SOLO dentro
---                                del caso a 'rls41r-dist-b' (empresa sin productos)
+--                                del caso a 'rls41r-dist-b' (empresa sin productos;
+--                                desde V3 / B3-C, también role = 'supplier')
 --   Mobau sin AAL2 / con AAL2    3.er perfil 'individual', admin temporal SOLO
 --                                dentro del caso
 -- Los auxiliares de identidad no crean productos ni precios: catalog_products
@@ -84,7 +85,9 @@ begin
   -- ---------- auxiliares de identidad (como postgres, dentro de cada caso) ----------
   v_aux_b := array[
     format('insert into public.distributors (id, name) values (%L, %L)', 'rls41r-dist-b', 'Distribuidor B (prueba 41 real)'),
-    format('insert into public.distributor_profiles (user_id, nombre_comercial, razon_social, rnc, direccion_fiscal, telefono, email_contacto, nombre_contacto, cargo_contacto, verification_status, verified_at, distributor_id)' || ' values (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, now(), %L)', v_pro2, 'Prueba 41R B', 'Prueba 41R B SRL', '999999942', 'Calle de prueba 41R', '0000000042', 'prueba41r@example.invalid', 'Contacto prueba 41R', 'Prueba', 'verified', 'rls41r-dist-b')
+    format('insert into public.distributor_profiles (user_id, nombre_comercial, razon_social, rnc, direccion_fiscal, telefono, email_contacto, nombre_contacto, cargo_contacto, verification_status, verified_at, distributor_id)' || ' values (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, now(), %L)', v_pro2, 'Prueba 41R B', 'Prueba 41R B SRL', '999999942', 'Calle de prueba 41R', '0000000042', 'prueba41r@example.invalid', 'Contacto prueba 41R', 'Prueba', 'verified', 'rls41r-dist-b'),
+    -- V3 (B3-C): la regla única exige role = 'supplier'; solo dentro del caso.
+    format('update public.profiles set role = %L where id = %L', 'supplier', v_pro2)
   ];
   v_aux_m := array[
     format('insert into public.mobau_admins (user_id, granted_note) values (%L, %L)', v_pro3, 'Admin temporal de prueba 41 real')

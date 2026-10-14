@@ -14,7 +14,9 @@
 --   distribuidor dueño (A)       el distribuidor verificado real
 --   otro distribuidor (B)        2.º perfil 'individual', vinculado SOLO
 --                                dentro de cada caso a 'rls41-dist-b'
---                                (distributor_profiles verificado)
+--                                (distributor_profiles verificado y, desde
+--                                V3 / B3-C, role = 'supplier' también solo
+--                                dentro del caso)
 --   Mobau sin AAL2 / con AAL2    3.er perfil 'individual', admin temporal
 --                                SOLO dentro de cada caso
 -- Auxiliares (dentro de cada caso; nunca persisten): empresa
@@ -77,6 +79,8 @@ begin
   v_aux := array[
     format('insert into public.distributors (id, name) values (%L, %L)', 'rls41-dist-b', 'Distribuidor B (prueba 41)'),
     format('insert into public.distributor_profiles (user_id, nombre_comercial, razon_social, rnc, direccion_fiscal, telefono, email_contacto, nombre_contacto, cargo_contacto, verification_status, verified_at, distributor_id)' || ' values (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, now(), %L)', v_pro2, 'Prueba 41 B', 'Prueba 41 B SRL', '999999941', 'Calle de prueba 41', '0000000041', 'prueba41@example.invalid', 'Contacto prueba 41', 'Prueba', 'verified', 'rls41-dist-b'),
+    -- V3 (B3-C): la regla única exige role = 'supplier'; solo dentro del caso.
+    format('update public.profiles set role = %L where id = %L', 'supplier', v_pro2),
     format('insert into public.mobau_admins (user_id, granted_note) values (%L, %L)', v_pro3, 'Admin temporal de prueba 41'),
     format('insert into public.products (id, name, distributor_id, category_id, publication_status) values (%L, %L, %L, %L, %L)', 'rls41-a-pub', 'A publicado 41', v_sup_dist, v_cat1, 'published'),
     format('insert into public.products (id, name, distributor_id, category_id, publication_status) values (%L, %L, %L, %L, %L)', 'rls41-a-draft', 'A borrador 41', v_sup_dist, v_cat1, 'draft'),
@@ -353,10 +357,10 @@ begin
       ('N02 la copia es igual a las 22 columnas del producto', 'authenticated', v_sup::text, 'aal1', v_aux || array[v_prop],
          array[format('update public.product_proposals set status = %L where id = %L', 'submitted', p41),
                format('select count(*) from public.product_proposals pr where pr.id = %L and pr.product_snapshot -> %L = (select to_jsonb(s) from (select p.id, p.name, p.distributor_id, p.brand, p.category_id, p.subcategory, p.use_context, p.space, p.availability, p.description, p.measurements, p.materials, p.finishes, p.lead_time, p.icon, p.technical_sheet_url, p.cad_bim_3d_url, p.image_url, p.created_at, p.status, p.updated_at, p.publication_status from public.products p where p.id = %L) s)', p41, 'product', 'rls41-a-pub')]::text[], 'count', '1'),
-      ('N03 snapshot_product_on_submit: cuerpo de 41-01, misma ACL, invoker, search_path vacío', '-', null, null, null::text[],
-         array['select count(*) from pg_proc where oid = ''public.snapshot_product_on_submit()''::regprocedure and md5(prosrc) = ''c92b110bbe7d742854379ac64746b484'' and proacl::text = ''{postgres=X/postgres,service_role=X/postgres}'' and not prosecdef and proconfig @> array[''search_path=""'']']::text[], 'count', '1'),
-      ('Z01 moderate_product_proposal sin cambios (40-01)', '-', null, null, null::text[],
-         array['select count(*) from pg_proc where oid = ''public.moderate_product_proposal(uuid, text, text, integer)''::regprocedure and md5(prosrc) = ''e814b477d0e078872ad085e00157c2c2''']::text[], 'count', '1'),
+      ('N03 snapshot_product_on_submit: cuerpo de 41-04 (41-01 + republish), misma ACL, invoker, search_path vacío', '-', null, null, null::text[],
+         array['select count(*) from pg_proc where oid = ''public.snapshot_product_on_submit()''::regprocedure and md5(prosrc) = ''92d5158e8454b17263942346e5487d7c'' and proacl::text = ''{postgres=X/postgres,service_role=X/postgres}'' and not prosecdef and proconfig @> array[''search_path=""'']']::text[], 'count', '1'),
+      ('Z01 moderate_product_proposal: cuerpo de 41-04 (40-01 + republish)', '-', null, null, null::text[],
+         array['select count(*) from pg_proc where oid = ''public.moderate_product_proposal(uuid, text, text, integer)''::regprocedure and md5(prosrc) = ''aa4fac4c25f4634499532824782ee908''']::text[], 'count', '1'),
       ('Z02 políticas en public = 48', '-', null, null, null::text[],
          array['select count(*) from pg_policies where schemaname = ''public''']::text[], 'count', '48'),
       ('Z03 mobau_admins idéntica a la línea base', '-', null, null, null::text[],

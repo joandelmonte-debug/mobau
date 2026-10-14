@@ -210,9 +210,9 @@ begin
       ('N20 distribuidor no puede insertar un producto publicado', 'authenticated', v_sup::text, 'aal1', null::text[],
          array[format('insert into public.products (name, category_id, publication_status) values (%L, %L, %L)', 'Directo 40', v_cat1, 'published')], 'exec', '42501'),
       -- ---------- Función ----------
-      ('F01 función: cuerpo 40-01, SECURITY DEFINER, search_path vacío, propietario postgres', '-', null, null, null::text[],
+      ('F01 función: cuerpo de 41-04 (40-01 + republish), SECURITY DEFINER, search_path vacío, propietario postgres', '-', null, null, null::text[],
          array['select count(*) from pg_proc where oid = ''public.moderate_product_proposal(uuid, text, text, integer)''::regprocedure'
-               || ' and md5(prosrc) = ''e814b477d0e078872ad085e00157c2c2'' and prosecdef and proconfig @> array[''search_path=""''] and proowner = ''postgres''::regrole'], 'count', '1'),
+               || ' and md5(prosrc) = ''aa4fac4c25f4634499532824782ee908'' and prosecdef and proconfig @> array[''search_path=""''] and proowner = ''postgres''::regrole'], 'count', '1'),
       ('F02 función: EXECUTE solo authenticated (ni anon ni PUBLIC)', '-', null, null, null::text[],
          array['select count(*) from pg_proc p where p.oid = ''public.moderate_product_proposal(uuid, text, text, integer)''::regprocedure'
                || ' and not has_function_privilege(''anon'', p.oid, ''EXECUTE'') and has_function_privilege(''authenticated'', p.oid, ''EXECUTE'')'
