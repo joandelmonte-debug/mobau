@@ -22,6 +22,14 @@
   .mod-mfa-title{ font-size:18px; margin:0 0 6px; }
   .mod-mfa-code{ max-width:200px; letter-spacing:.3em; font-size:18px; }
   .mod-mfa-msg{ margin:12px 0 0; font-size:14px; color: var(--danger); min-height:1.4em; }
+  /* Ciclo de vida (41, D2): solo con MobauAccess.LIFECYCLE_UI_ENABLED. */
+  .lc-section{ margin-top:44px; }
+  .lc-section h2{ font-size:18px; margin:0 0 6px; }
+  .lc-aviso{ margin:14px 0 0; padding:12px 16px; border:1px solid var(--line); border-left:3px solid var(--brass); border-radius: var(--radius); background: var(--surface); font-size:14px; overflow-wrap:anywhere; }
+  .lc-aviso p{ margin:0; max-width:none; }
+  .lc-aviso p + p, .lc-aviso ul{ margin-top:6px; }
+  .lc-aviso ul{ padding-left:18px; }
+  .lc-aviso--alert{ border-left-color: var(--danger); }
 </style>
 </head>
 <body>
@@ -107,6 +115,7 @@
 <script src="supabase-client.js"></script>
 <script src="nav-session.js"></script>
 <script src="moderacion-acceso.js"></script>
+<script src="product-lifecycle.js"></script>
 <script>
 /* Bandeja de moderación (39). Solo lee, y solo después de que la puerta
    (moderacion-acceso.js) confirme { admin: true, aal2: true } en el
@@ -150,10 +159,11 @@
   function buildRow(p, productNames, conflicted){
     const changes = p.proposed_changes || {};
     const isCreate = p.proposal_kind === "create";
+    const isRepublish = p.proposal_kind === "republish"; // 41-04: solo existen con el ciclo de vida activo
     const name = isCreate ? (changes.name || "Producto nuevo sin nombre") : (productNames.get(p.product_id) || p.product_id || "Producto");
 
     const title = M.el("div", "mod-row-title");
-    title.append(M.chip(isCreate ? "Producto nuevo" : "Cambio", isCreate ? "wait" : "neutral"));
+    title.append(M.chip(isCreate ? "Producto nuevo" : (isRepublish ? "Republicación" : "Cambio"), isCreate || isRepublish ? "wait" : "neutral"));
     if ($("mod-status").value !== "submitted"){
       const st = M.STATUS[p.status] || { label: p.status, kind: "neutral" };
       title.append(M.chip(st.label, st.kind));
@@ -264,10 +274,208 @@
     await loadList();
   }
 
+  /* ---------- Ciclo de vida (41, D2) ----------
+     Solo con el interruptor de interfaz encendido y tras la puerta (admin +
+     aal2). Lista de productos con las lecturas ya autorizadas (products:
+     columnas públicas) y, para los ARCHIVADOS, el estado exacto con
+     mobau_product_lifecycle_view(): como mucho LC_CONCURRENCY a la vez y una
+     vez por producto en cada carga. El «aviso de retiradas» describe solo
+     estados comprobados ahora: no hay historial de avisos ni «no leídos». */
+  const LC = MobauLifecycle;
+  const LC_CONCURRENCY = 3;
+  let lcLoadId = 0;
+  let lcProducts = [];
+  let lcViews = new Map();  // product_id -> vista comprobada (esta carga)
+  let lcFailed = new Map(); // product_id -> { kind, message } del último intento
+
+  function lcSection(){
+    let section = $("lc-section");
+    if (section) return section;
+    section = M.el("section", "lc-section");
+    section.id = "lc-section";
+    section.setAttribute("aria-labelledby", "lc-title");
+    const title = M.el("h2", "", "Productos y ciclo de vida");
+    title.id = "lc-title";
+    const intro = M.el("p", "card-meta", "Estado de cada producto. El estado exacto de los archivados se comprueba en el servidor; el de los borradores (que podrían estar en la papelera), en su detalle.");
+    intro.style.cssText = "margin:0; max-width:70ch;";
+    const aviso = M.el("div", "lc-aviso");
+    aviso.id = "lc-aviso";
+    aviso.setAttribute("role", "status");
+    aviso.hidden = true;
+    const status = M.el("p", "card-meta");
+    status.id = "lc-status";
+    const list = M.el("ul", "mod-list");
+    list.id = "lc-list";
+    section.append(title, intro, aviso, status, list);
+    $("mod-app").append(section);
+    return section;
+  }
+
+  function lcClear(){
+    lcLoadId++;
+    lcProducts = [];
+    lcViews = new Map();
+    lcFailed = new Map();
+    const section = $("lc-section");
+    if (section) section.remove();
+  }
+
+  function lcRetryButton(text, handler){
+    const b = M.el("button", "btn btn-outline btn-sm", text);
+    b.type = "button";
+    b.style.marginTop = "10px";
+    b.addEventListener("click", handler);
+    return b;
+  }
+
+  function lcRetiredBy(view){
+    const ev = (view.events || []).find(e => e.action === "retire");
+    return ev ? (LC.ACTORS[ev.actor_kind] || ev.actor_kind) : null;
+  }
+
+  function lcRow(p){
+    const view = lcViews.get(p.id) || null;
+    const failed = lcFailed.get(p.id) || null;
+    const title = M.el("div", "mod-row-title");
+    let label;
+    if (view) label = LC.stateInfo(view.lifecycle_state);
+    else if (p.publication_status === "archived") label = { label: `Archivado · ${LC.TEXT.notChecked.toLowerCase()}`, kind: "neutral" };
+    else label = LC.stateInfo(p.publication_status);
+    title.append(M.chip(label.label, label.kind), M.el("span", "", p.name || p.id));
+    const parts = [companies.get(p.distributor_id) || p.distributor_id, p.id];
+    if (view && view.lifecycle_state === "retired" && view.retired_at) parts.push(`retirado el ${M.formatDate(view.retired_at)}`);
+    if (view && view.lifecycle_state === "trashed" && view.purge_after) parts.push(`papelera hasta el ${M.formatDate(view.purge_after)}`);
+    if (!view && p.publication_status === "draft") parts.push("papelera sin comprobar");
+    const sub = M.el("div", "mod-row-sub", parts.join(" · "));
+    if (failed) sub.append(document.createTextNode(" · "), M.el("span", "mod-row-warn", failed.message));
+    const a = document.createElement("a");
+    a.href = `moderacion-producto.html?id=${encodeURIComponent(p.id)}`;
+    const text = M.el("div");
+    text.append(title, sub);
+    a.append(text, M.el("span", "mod-row-arrow", "›"));
+    a.querySelector(".mod-row-arrow").setAttribute("aria-hidden", "true");
+    const li = M.el("li", "mod-row");
+    li.append(a);
+    return li;
+  }
+
+  function lcRenderAviso(blocking){
+    const aviso = $("lc-aviso");
+    const archived = lcProducts.filter(p => p.publication_status === "archived");
+    aviso.classList.remove("lc-aviso--alert");
+    aviso.hidden = false;
+    if (blocking){
+      aviso.classList.add("lc-aviso--alert");
+      aviso.replaceChildren(M.el("p", "", blocking.message), lcRetryButton("Reintentar", () => lcLoad()));
+      return;
+    }
+    const checked = archived.filter(p => lcViews.has(p.id));
+    const pending = archived.length - checked.length;
+    const retired = checked.map(p => ({ p, v: lcViews.get(p.id) })).filter(x => x.v.lifecycle_state === "retired");
+    const trashed = checked.filter(p => lcViews.get(p.id).lifecycle_state === "trashed").length;
+    const nodes = [];
+    if (pending > 0){
+      aviso.classList.add("lc-aviso--alert");
+      nodes.push(M.el("p", "", `Se comprobaron ${checked.length} de ${archived.length} productos archivados; ${pending} sin comprobar. El recuento de retiradas no está completo.`));
+    }
+    if (retired.length){
+      nodes.push(M.el("p", "", `Productos retirados${pending ? " entre los comprobados" : ""}: ${retired.length}.`));
+      const ul = M.el("ul");
+      retired.forEach(({ p, v }) => {
+        const by = lcRetiredBy(v);
+        ul.append(M.el("li", "", `${p.name || p.id} · ${companies.get(p.distributor_id) || p.distributor_id} · retirado el ${M.formatDate(v.retired_at)}${by ? ` por ${by === "Empresa" ? "la empresa" : by}` : ""}${v.retired_reason ? ` · Motivo: ${v.retired_reason}` : ""}`));
+      });
+      nodes.push(ul);
+    } else if (!pending){
+      nodes.push(M.el("p", "", archived.length
+        ? `Ningún producto retirado entre los ${archived.length} archivados comprobados.`
+        : "No hay productos archivados."));
+    }
+    if (trashed) nodes.push(M.el("p", "", `En papelera (entre los archivados comprobados): ${trashed}.`));
+    if (pending > 0) nodes.push(lcRetryButton("Reintentar los no comprobados", () => lcCheck()));
+    aviso.replaceChildren(...nodes);
+  }
+
+  function lcRenderList(){
+    $("lc-list").replaceChildren(...lcProducts.map(lcRow));
+    $("lc-status").textContent = `${lcProducts.length} ${lcProducts.length === 1 ? "producto" : "productos"}`;
+  }
+
+  /* Comprueba los archivados que aún no tienen vista en esta carga. */
+  async function lcCheck(){
+    const id = lcLoadId;
+    const todo = lcProducts.filter(p => p.publication_status === "archived" && !lcViews.has(p.id)).map(p => p.id);
+    lcFailed = new Map();
+    $("lc-status").textContent = todo.length ? "Comprobando el estado de los productos archivados…" : $("lc-status").textContent;
+    const results = await LC.runLimited(todo, LC_CONCURRENCY, (productId) => LC.view(productId));
+    if (id !== lcLoadId) return;
+    let blocking = null;
+    for (const r of results){
+      if (r.ok && r.value && r.value.product_id === r.item){ lcViews.set(r.item, r.value); continue; }
+      const c = r.ok ? { kind: "network", message: LC.TEXT.network } : LC.classify(r.error);
+      if (c.kind === "mfa"){ if (!(await gate.relock(c.message))) return; }
+      if (c.kind === "denied"){ gate.deny(c.message); return; }
+      if (["server_disabled", "no_permission", "ui_disabled"].includes(c.kind)) blocking = blocking || c;
+      lcFailed.set(r.item, { kind: c.kind, message: LC.TEXT.notChecked });
+    }
+    lcRenderList();
+    lcRenderAviso(blocking);
+  }
+
+  /* Todos los productos (columnas públicas), por páginas de LC_PAGE y en orden
+     estable (nombre, id). Si alguna página falla o la respuesta no es válida,
+     lanza: nunca se presenta una lista parcial como completa. */
+  const LC_PAGE = 1000;
+  async function lcReadAllProducts(id){
+    const rows = [];
+    for (let from = 0; ; from += LC_PAGE){
+      const { data, error } = await supabaseClient.from("products")
+        .select("id, name, distributor_id, publication_status, updated_at")
+        .order("name").order("id").range(from, from + LC_PAGE - 1);
+      if (error) throw error;
+      if (!Array.isArray(data)) throw new Error("Respuesta no válida de products");
+      if (id !== lcLoadId) return null;
+      rows.push(...data);
+      if (data.length < LC_PAGE) return rows;
+    }
+  }
+
+  async function lcLoad(){
+    if (!LC.enabled()) return;
+    const id = ++lcLoadId;
+    lcViews = new Map();
+    lcFailed = new Map();
+    lcSection();
+    $("lc-aviso").hidden = true;
+    $("lc-list").replaceChildren();
+    $("lc-status").textContent = "Cargando productos…";
+    try {
+      const rows = await lcReadAllProducts(id);
+      if (rows === null) return; // otra carga la sustituyó
+      lcProducts = rows;
+    } catch (error){
+      if (id !== lcLoadId) return;
+      $("lc-status").textContent = "";
+      const aviso = $("lc-aviso");
+      aviso.hidden = false;
+      aviso.classList.add("lc-aviso--alert");
+      aviso.replaceChildren(M.el("p", "", "No pudimos cargar los productos."), lcRetryButton("Reintentar", () => lcLoad()));
+      return;
+    }
+    lcRenderList();
+    await lcCheck();
+  }
+
+  /* El tipo «Republicación» solo se ofrece con el ciclo de vida activo. */
+  if (LC.enabled()) $("mod-kind").append(new Option("Republicación", "republish"));
+
   ["mod-status", "mod-kind", "mod-company"].forEach(id => $(id).addEventListener("change", loadList));
   $("mod-retry").addEventListener("click", loadAll);
 
-  gate = M.start({ onReady: loadAll, onLock: clear });
+  gate = M.start({
+    onReady: async () => { await loadAll(); if (LC.enabled()) lcLoad(); },
+    onLock: () => { clear(); lcClear(); }
+  });
 })();
 </script>
 </body>

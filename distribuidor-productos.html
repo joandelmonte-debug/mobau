@@ -45,6 +45,14 @@
   .pl-decision .pl-note--ok{ border-left-color: var(--accent); }
   .pl-decision .pl-decision-meta{ margin:4px 0 0; font-size:13px; color: var(--ink-soft); }
   .pl-decision .pd-link{ display:inline-block; margin-top:8px; }
+  /* Ciclo de vida (41, D2): solo se usan con MobauAccess.LIFECYCLE_UI_ENABLED. */
+  .lc-line{ margin-top:8px; font-size:13px; color: var(--ink-soft); overflow-wrap:anywhere; }
+  .lc-actions{ display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:10px; }
+  .lc-panel{ margin-top:10px; padding:12px; border:1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size:14px; }
+  .lc-panel p{ margin:0 0 8px; max-width:none; }
+  .lc-panel textarea{ width:100%; min-height:80px; box-sizing:border-box; }
+  .lc-panel .lc-msg{ color: var(--danger); margin:8px 0 0; }
+  .lc-history{ margin:8px 0 0; padding-left:18px; font-size:13px; color: var(--ink-soft); }
   @media (max-width: 900px){ .cart-row .pl-actions{ flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; } }
 </style>
 </head>
@@ -196,6 +204,7 @@
 <script src="proyectos-data.js"></script>
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
+<script src="product-lifecycle.js"></script>
 <script>
 /* Mis productos (38-C): centro de control del distribuidor verificado.
    Lee en cuatro consultas sin N+1: products (los de su empresa,
@@ -279,6 +288,11 @@
   let categoryNames = new Map();
   let openUpdates = new Map(); // product_id -> propuesta update abierta (como máximo una: índice único)
   let openCreates = [];        // propuestas create abiertas
+  /* Ciclo de vida (41, D2), solo con el interruptor de interfaz encendido. */
+  const LC = MobauLifecycle;
+  let openRepublish = new Map(); // product_id -> solicitud de republicación abierta
+  let lifecycle = null;          // product_id -> fila de my_products_lifecycle(), o null si no se cargó
+  let lifecycleError = null;     // { kind, message } si la carga falló: sin acciones de ciclo de vida
 
   const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, reviewed_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason";
   const DECISION_DAYS = 30;
@@ -288,6 +302,9 @@
   function setProposals(rows){
     openUpdates = new Map(rows.filter(p => p.proposal_kind === "update" && p.product_id).map(p => [p.product_id, p]));
     openCreates = rows.filter(p => p.proposal_kind === "create");
+    openRepublish = LC.enabled()
+      ? new Map(rows.filter(p => p.proposal_kind === "republish" && p.product_id).map(p => [p.product_id, p]))
+      : new Map();
   }
 
   function showOnly(id){
@@ -468,7 +485,7 @@
   function makeClickable(row, action){
     row.classList.add("pl-clickable");
     row.addEventListener("click", (e) => {
-      if (e.target.closest("a, button, input, select, textarea, .pl-details")) return;
+      if (e.target.closest("a, button, input, select, textarea, .pl-details, .lc-panel, .lc-history")) return;
       if (action.tagName === "A") window.location.href = action.href;
       else action.click();
     });
@@ -489,6 +506,275 @@
       block.push(textDiv("pl-note", `Nota de Mobau: ${proposal.rejection_reason}`));
     }
     return block;
+  }
+
+  /* ---------- Ciclo de vida (41, D2) ----------
+     Solo con el interruptor de interfaz encendido (MobauLifecycle.enabled()).
+     Estados y acciones salen de my_products_lifecycle(): la página pinta solo
+     las acciones que devuelve el servidor (allowed_actions). Si la carga
+     falla, se explica y no se ofrece ninguna acción. */
+  async function loadLifecycle(){
+    lifecycle = null;
+    lifecycleError = null;
+    if (!LC.enabled()) return;
+    try {
+      const rows = await LC.myProducts();
+      if (!Array.isArray(rows)) throw { code: "", message: "respuesta no válida" };
+      lifecycle = new Map(rows.map(r => [r.id, r]));
+    } catch (error){
+      const c = LC.classify(error);
+      if (c.kind === "login"){ window.location.href = MobauAccess.accessUrlForCurrentPage(); return; }
+      lifecycleError = c;
+    }
+    showLifecycleNotice();
+  }
+
+  function showLifecycleNotice(){
+    let box = $("lc-notice");
+    if (!lifecycleError){
+      if (box) box.remove();
+      return;
+    }
+    if (!box){
+      box = document.createElement("div");
+      box.id = "lc-notice";
+      box.className = "pl-alert";
+      box.setAttribute("role", "alert");
+      $("pl-content").prepend(box);
+    }
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "pl-toggle";
+    retry.style.marginLeft = "8px";
+    retry.textContent = "Reintentar";
+    retry.addEventListener("click", async () => { retry.disabled = true; await loadLifecycle(); render(); });
+    box.replaceChildren(document.createTextNode(lifecycleError.message), retry);
+  }
+
+  function lifecycleState(product){
+    const lc = lifecycle && lifecycle.get(product.id);
+    return lc ? lc.lifecycle_state : null;
+  }
+
+  function lifecycleLines(lc){
+    const lines = [];
+    if (["retired", "legacy_retired", "trashed"].includes(lc.lifecycle_state)){
+      const st = LC.stateInfo(lc.lifecycle_state);
+      const head = document.createElement("div");
+      head.className = "pl-proposal";
+      head.append(chip(st.label, st.kind));
+      lines.push(head);
+    }
+    if (lc.lifecycle_state === "retired" && lc.retired_at){
+      const by = lc.retired_by_kind === "mobau" ? " por Mobau" : (lc.retired_by_kind === "distributor" ? " por tu empresa" : "");
+      lines.push(textDiv("lc-line", `Retirado${by} el ${LC.formatDate(lc.retired_at)}${lc.retired_reason ? ` · Motivo: ${lc.retired_reason}` : ""}`));
+    }
+    if (lc.lifecycle_state === "legacy_retired") lines.push(textDiv("lc-line", LC.BLOCKS.legacy_pending_review));
+    if (lc.lifecycle_state === "trashed"){
+      lines.push(textDiv("lc-line", `En papelera desde el ${LC.formatDate(lc.trashed_at)} · se puede restaurar hasta el ${LC.formatDate(lc.purge_after)}`));
+    }
+    if (lc.has_open_proposal && ["published", "retired", "draft"].includes(lc.lifecycle_state)){
+      lines.push(textDiv("lc-line", LC.BLOCKS.open_proposal));
+    }
+    return lines;
+  }
+
+  /* Error de una acción: conflicto → recargar; sin servidor o sin permiso →
+     se retiran las acciones; el resto se explica en el panel. */
+  async function lifecycleFailure(error, msg){
+    const c = LC.classify(error);
+    if (c.kind === "login"){ window.location.href = MobauAccess.accessUrlForCurrentPage(); return true; }
+    if (c.kind === "version_conflict"){ showAlert(c.message); await load(); return true; }
+    if (["server_disabled", "no_permission", "ui_disabled"].includes(c.kind)){
+      lifecycleError = c;
+      showLifecycleNotice();
+      render();
+      return true;
+    }
+    if (msg) msg.textContent = c.message;
+    return false;
+  }
+
+  function openPanel(product, lc, action, anchor){
+    anchor.parentElement.querySelectorAll(".lc-panel").forEach(p => p.remove());
+    const panel = document.createElement("div");
+    panel.className = "lc-panel";
+    const intro = document.createElement("p");
+    intro.textContent = LC.CONFIRM[action];
+    panel.append(intro);
+    let textarea = null;
+    if (action === "retire"){
+      const label = document.createElement("label");
+      label.htmlFor = `lc-reason-${product.id}`;
+      label.textContent = `Motivo de la retirada (obligatorio, hasta ${LC.REASON_MAX} caracteres)`;
+      textarea = document.createElement("textarea");
+      textarea.id = `lc-reason-${product.id}`;
+      panel.append(label, textarea);
+    }
+    const msg = document.createElement("p");
+    msg.className = "lc-msg";
+    msg.setAttribute("role", "status");
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "btn btn-primary btn-sm";
+    ok.textContent = `Confirmar: ${LC.ACTIONS[action].toLowerCase()}`;
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn-outline btn-sm";
+    cancel.textContent = "Cancelar";
+    const buttons = document.createElement("div");
+    buttons.className = "lc-actions";
+    buttons.append(ok, cancel);
+    panel.append(buttons, msg);
+    cancel.addEventListener("click", () => panel.remove());
+    ok.addEventListener("click", async () => {
+      msg.textContent = "";
+      let reason = null;
+      if (action === "retire"){
+        const problem = LC.reasonError(textarea.value, true);
+        if (problem){ msg.textContent = problem; textarea.focus(); return; }
+        reason = textarea.value.trim();
+      }
+      ok.disabled = true;
+      cancel.disabled = true;
+      try {
+        if (action === "retire") await LC.retire(product.id, reason, lc.updated_at);
+        else if (action === "trash") await LC.trash(product.id, lc.updated_at);
+        else if (action === "restore") await LC.restore(product.id, lc.updated_at);
+        else if (action === "request_republish") await LC.requestRepublish(product.id);
+        else return;
+      } catch (error){
+        if (action === "request_republish"){
+          /* Pudo quedar un borrador: se muestra el error y se recarga. */
+          showAlert(LC.classify(error).message);
+          await load();
+          return;
+        }
+        if (!(await lifecycleFailure(error, msg))){ ok.disabled = false; cancel.disabled = false; }
+        return;
+      }
+      LC.invalidateCatalog();
+      showToast(LC.DONE[action]);
+      await load();
+    });
+    anchor.after(panel);
+    (textarea || ok).focus();
+  }
+
+  function historyToggle(product, container){
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "pl-toggle";
+    toggle.textContent = "Ver historial";
+    let list = null;    // historial ya cargado
+    let problem = null; // mensaje del último fallo (se puede reintentar)
+    toggle.addEventListener("click", async () => {
+      if (list){
+        list.hidden = !list.hidden;
+        toggle.textContent = list.hidden ? "Ver historial" : "Ocultar historial";
+        return;
+      }
+      toggle.disabled = true;
+      if (problem) problem.remove();
+      try {
+        const events = await LC.myEvents(product.id);
+        list = document.createElement("ol");
+        list.className = "lc-history";
+        const rows = Array.isArray(events) ? events : [];
+        list.append(...(rows.length ? rows : [null]).map(ev => {
+          const li = document.createElement("li");
+          li.textContent = ev
+            ? `${LC.formatDate(ev.created_at)} · ${LC.ACTORS[ev.actor_kind] || ev.actor_kind} · ${LC.EVENTS[ev.action] || ev.action}${ev.reason ? ` · ${ev.reason}` : ""}`
+            : "Sin eventos de ciclo de vida.";
+          return li;
+        }));
+        container.after(list);
+        toggle.textContent = "Ocultar historial";
+      } catch (error){
+        problem = textDiv("lc-line", LC.classify(error).message);
+        container.after(problem);
+      }
+      toggle.disabled = false;
+    });
+    return toggle;
+  }
+
+  function lifecycleActions(product, lc){
+    const wrap = document.createElement("div");
+    wrap.className = "lc-actions";
+    (lc.allowed_actions || []).filter(a => LC.ACTIONS[a] && a !== "purge").forEach(action => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = (action === "retire" || action === "trash") ? "pp-withdraw-btn" : "pl-toggle";
+      b.textContent = LC.ACTIONS[action];
+      b.dataset.lcAction = action;
+      b.addEventListener("click", () => openPanel(product, lc, action, wrap));
+      wrap.append(b);
+    });
+    wrap.append(historyToggle(product, wrap));
+    return wrap;
+  }
+
+  /* Solicitud de republicación abierta: enviarla (borrador o cambios
+     solicitados) o retirarla. Retirarla vuelve a dejar el producto retirado. */
+  function republishBlock(proposal){
+    const info = PROPOSAL[proposal.status];
+    const line = document.createElement("div");
+    line.className = "pl-proposal";
+    const parts = [`versión ${proposal.version}`];
+    if (proposal.submitted_at) parts.push(`enviada el ${formatDate(proposal.submitted_at)}`);
+    line.append(chip(`Republicación: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
+    const nodes = [line];
+    if (proposal.status === "changes_requested" && proposal.rejection_reason) nodes.push(textDiv("pl-note", `Nota de Mobau: ${proposal.rejection_reason}`));
+    const actions = document.createElement("div");
+    actions.className = "lc-actions";
+    const msg = document.createElement("p");
+    msg.className = "lc-line";
+    msg.setAttribute("role", "status");
+    if (proposal.status === "draft" || proposal.status === "changes_requested"){
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "pl-toggle";
+      send.textContent = "Enviar solicitud";
+      send.addEventListener("click", async () => {
+        send.disabled = true;
+        try {
+          await LC.submitRepublish(proposal.id);
+        } catch (error){
+          msg.textContent = LC.classify(error).message;
+          send.disabled = false;
+          return;
+        }
+        showToast(LC.DONE.request_republish);
+        await load();
+      });
+      actions.append(send);
+    }
+    const withdraw = document.createElement("button");
+    withdraw.type = "button";
+    withdraw.className = "pp-withdraw-btn";
+    withdraw.textContent = "Retirar solicitud";
+    withdraw.addEventListener("click", async () => {
+      if (!confirm("¿Retirar la solicitud de republicación?\nEl producto seguirá retirado.")) return;
+      withdraw.disabled = true;
+      let data = null;
+      let error = null;
+      try {
+        data = await LC.withdrawRepublish(proposal.id);
+      } catch (err){
+        error = err;
+      }
+      if (error || !data || data.status !== "withdrawn"){
+        msg.textContent = withdrawError(error);
+        withdraw.disabled = false;
+        return;
+      }
+      showToast("Solicitud retirada.");
+      await load();
+    });
+    actions.append(withdraw);
+    nodes.push(actions, msg);
+    return nodes;
   }
 
   function buildProductRow(product){
@@ -512,6 +798,14 @@
       statusLine
     );
     if (open) info.append(...proposalBlock(open));
+    if (LC.enabled() && lifecycle){
+      const lc = lifecycle.get(product.id) || null;
+      if (lc) info.append(...lifecycleLines(lc));
+      else info.append(textDiv("lc-line", LC.TEXT.notChecked));
+      const republish = openRepublish.get(product.id);
+      if (republish) info.append(...republishBlock(republish));
+      if (lc && !lifecycleError) info.append(lifecycleActions(product, lc));
+    }
 
     const publication = PUBLICATION[product.publication_status] || { label: "Sin estado", kind: "neutral" };
     /* Una propuesta abierta se continúa; nunca se ofrece crear una segunda.
@@ -697,7 +991,7 @@
     if (nothingYet){ $("pl-proposed").hidden = true; return; }
 
     const visible = products.filter(p =>
-      (!catalog || CATALOG_FILTER[catalog].includes(p.publication_status)) &&
+      (!catalog || (catalog === "lc-trashed" ? lifecycleState(p) === "trashed" : CATALOG_FILTER[catalog].includes(p.publication_status))) &&
       (!category || p.category_id === category) &&
       (!query || `${p.name} ${p.brand || ""}`.toLowerCase().includes(query)) &&
       matchesProposal(openUpdates.get(p.id), proposal)
@@ -716,7 +1010,7 @@
     /* Productos propuestos: aún no están en el catálogo, así que solo se
        muestran con "Todos" o "Pendientes de publicación"; y siempre tienen
        propuesta abierta, así que no con "Sin propuesta abierta". */
-    const showProposed = openCreates.length > 0 && (!catalog || catalog === "pending") && proposal !== "none";
+    const showProposed = openCreates.length > 0 && (!catalog || catalog === "pending") && proposal !== "none"; // «En papelera» (D2) no los incluye
     $("pl-proposed").hidden = !showProposed;
     if (showProposed){
       const proposed = openCreates.filter(p => {
@@ -764,6 +1058,13 @@
 
       const select = $("pl-category");
       select.replaceChildren(new Option("Todas", ""), ...categoriesRes.data.map(c => new Option(c.name, c.id)));
+
+      /* Ciclo de vida (D2): solo con el interruptor encendido; un fallo no
+         impide ver la página, pero deja la página sin acciones de ciclo de vida. */
+      await loadLifecycle();
+      if (LC.enabled() && !$("pl-status").querySelector('option[value="lc-trashed"]')){
+        $("pl-status").append(new Option("En papelera", "lc-trashed"));
+      }
 
       showOnly("pl-content");
       render();

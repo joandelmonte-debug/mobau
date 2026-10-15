@@ -89,6 +89,7 @@
 <script src="supabase-client.js"></script>
 <script src="nav-session.js"></script>
 <script src="moderacion-acceso.js"></script>
+<script src="product-lifecycle.js"></script>
 <script>
 /* Detalle de una propuesta (39). Solo lee después de que la puerta
    confirme { admin: true, aal2: true } en el servidor. La ÚNICA escritura
@@ -113,6 +114,10 @@
   let approveBlocked = false;
   let actionsLocked = false;
   let prefill = null;      // texto para «Solicitar cambios» tras un conflicto
+  let userId = null;       // quien modera (para no ofrecer moderar una republicación propia)
+  /* 41-04: «republish» = solicitud de volver a publicar un producto retirado,
+     sin cambios de datos ni de precio. Solo existe con el ciclo de vida activo. */
+  const isRepublish = (p) => p.proposal_kind === "republish";
 
   function clearAll(){
     loadId++;
@@ -200,6 +205,12 @@
   function fieldsSection(){
     const p = ctx.proposal;
     const section = M.el("section", "mod-section");
+    if (isRepublish(p)){
+      section.append(M.el("h2", "", "Solicitud de republicación"));
+      section.append(M.el("p", "card-meta", "Sin cambios de datos ni de precio: la empresa pide volver a publicar el producto retirado tal como está."));
+      if (ctx.product) section.append(M.el("p", "card-meta", `Estado actual en el catálogo: ${PUBLICATION[ctx.product.publication_status] || ctx.product.publication_status}.`));
+      return { section, conflicts: [] };
+    }
     section.append(M.el("h2", "", p.proposal_kind === "create" ? "Datos del producto nuevo" : "Cambios propuestos"));
     const keys = proposedKeys(p);
     if (!keys.length){
@@ -319,6 +330,11 @@
         const s = payload.subcategory;
         box.append(M.el("p", "", s.result === "added" ? `Subcategoría «${s.value}» añadida a la categoría.` : `Se usó la subcategoría existente «${s.value}».`));
       }
+      if (isRepublish(p)){
+        box.append(M.el("p", "", ctx.product && ctx.product.publication_status === "published"
+          ? "Producto republicado en el catálogo."
+          : `Estado actual en el catálogo: ${ctx.product ? (PUBLICATION[ctx.product.publication_status] || ctx.product.publication_status) : "el producto ya no existe"}.`));
+      }
       if (p.proposal_kind === "create"){
         /* 40-01: aprobar un create publica el producto. El texto sale del
            estado real del producto, no del momento de la aprobación. */
@@ -405,7 +421,7 @@
       counter.classList.toggle("is-over", n > MAX_MESSAGE);
     });
 
-    const approve = M.el("button", "btn btn-primary", ctx.proposal.proposal_kind === "create" ? "Aprobar y publicar" : "Aprobar propuesta");
+    const approve = M.el("button", "btn btn-primary", ctx.proposal.proposal_kind === "create" ? "Aprobar y publicar" : (isRepublish(ctx.proposal) ? "Aprobar y republicar" : "Aprobar propuesta"));
     approve.type = "button";
     approve.id = "mod-approve";
     const changes = M.el("button", "btn btn-outline", "Solicitar cambios");
@@ -457,6 +473,7 @@
 
   function approveSummary(){
     const p = ctx.proposal;
+    if (isRepublish(p)) return "¿Aprobar la republicación?\nEl producto volverá a publicarse en el catálogo de inmediato, tal como está.";
     const lines = [];
     const keys = proposedKeys(p);
     if (keys.length) lines.push(`Se aplicarán: ${keys.map(k => (k === "subcategory" && p.proposed_new_subcategory) ? "Subcategoría (nueva)" : M.fieldLabel(k)).join(", ")}.`);
@@ -530,8 +547,10 @@
     busy = false;
 
     if (!error && data && data.ok === true){
+      /* Republicar cambia el catálogo: la caché de esta pestaña ya no vale. */
+      if (isRepublish(p) && data.result === "approved") MobauLifecycle.invalidateCatalog();
       const texts = {
-        approved: p.proposal_kind === "create" ? "Propuesta aprobada y producto publicado." : "Propuesta aprobada.",
+        approved: p.proposal_kind === "create" ? "Propuesta aprobada y producto publicado." : (isRepublish(p) ? "Republicación aprobada: el producto vuelve a estar publicado." : "Propuesta aprobada."),
         changes_requested: "Has solicitado cambios a la empresa.",
         rejected: "Propuesta rechazada."
       };
@@ -603,7 +622,7 @@
     const st = M.STATUS[p.status] || { label: p.status, kind: "neutral" };
     const nodes = [];
 
-    nodes.push(M.el("div", "eyebrow", isCreate ? "Producto nuevo" : "Cambio de producto"));
+    nodes.push(M.el("div", "eyebrow", isCreate ? "Producto nuevo" : (isRepublish(p) ? "Republicación de producto" : "Cambio de producto")));
     const title = M.el("h1", "pd-head", isCreate ? (changes.name || "Producto nuevo sin nombre") : ((ctx.product && ctx.product.name) || p.product_id));
     title.style.cssText = "font-size:28px; margin:8px 0 0; overflow-wrap:anywhere;";
     nodes.push(title);
@@ -612,6 +631,12 @@
     if (!isCreate) parts.push(`producto ${p.product_id}`);
     if (p.submitted_at) parts.push(`enviada el ${M.formatDate(p.submitted_at)}`);
     meta.append(M.chip(st.label, st.kind), M.el("span", "", parts.join(" · ")));
+    /* Acceso a la vista de ciclo de vida (D2), solo con la interfaz encendida. */
+    if (MobauLifecycle.enabled() && p.product_id && ctx.product){
+      const lifecycleLink = M.el("a", "pd-link", "Ver ciclo de vida del producto");
+      lifecycleLink.href = `moderacion-producto.html?id=${encodeURIComponent(p.product_id)}`;
+      meta.append(lifecycleLink);
+    }
     nodes.push(meta);
     if (p.internal_note){
       const note = M.el("div", "mod-box");
@@ -642,6 +667,12 @@
 
     $("mod-detail").replaceChildren(...nodes);
     setState("detail");
+    /* Republicación propia: no se ofrece decidirla. El servidor rechaza además
+       a cualquiera de la misma empresa (self_moderation_forbidden). */
+    if (p.status === "submitted" && isRepublish(p) && userId && p.author_id === userId){
+      actionsLocked = true;
+      feedback(M.el("p", "", MobauLifecycle.TEXT.selfCompany));
+    }
     refreshButtons();
   }
 
@@ -701,7 +732,7 @@
   }
 
   $("mod-retry").addEventListener("click", () => load());
-  gate = M.start({ onReady: () => load(), onLock: clearAll });
+  gate = M.start({ onReady: ({ session } = {}) => { userId = (session && session.user && session.user.id) || null; load(); }, onLock: clearAll });
 })();
 </script>
 </body>

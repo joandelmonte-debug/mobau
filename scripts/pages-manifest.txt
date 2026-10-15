@@ -25,6 +25,7 @@ index.html
 inscripcion-profesional.html
 login.html
 moderacion-acceso.js
+moderacion-producto.html
 moderacion-propuesta.html
 moderacion.html
 nav-account-hint.js
@@ -33,6 +34,7 @@ panel-distribuidor.html
 perfil-distribuidor.html
 perfil-profesional.js
 planes.html
+product-lifecycle.js
 producto.html
 proyecto.html
 proyectos-cotizacion.html

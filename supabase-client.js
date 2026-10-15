@@ -280,6 +280,12 @@ const MobauAccess = {
      product_prices desde el cliente. */
   SUPPLIER_PRODUCTS_ENABLED: false,
 
+  /* Punto 41 (D2): pantallas y acciones de ciclo de vida (retirar, papelera,
+     restaurar, republicar, purgar). Apagado: ninguna página llama a esas
+     funciones ni muestra nada nuevo. Es solo un interruptor de interfaz: la
+     protección real es el interruptor del servidor y los permisos (41-06). */
+  LIFECYCLE_UI_ENABLED: false,
+
   /* Avisos que el panel sabe mostrar (?aviso=...). Cualquier otro valor se
      ignora; nunca se pinta un texto recibido en la URL. */
   SUPPLIER_AVISOS: ["solo-profesionales", "plan"],

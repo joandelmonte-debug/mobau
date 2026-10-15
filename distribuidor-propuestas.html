@@ -287,7 +287,9 @@
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
   }
 
-  function kindOf(p){ return p.proposal_kind === "create" ? "create" : "update"; }
+  /* 41-04: una solicitud de republicación no tiene campos que editar: nunca
+     se abre en este formulario (se gestiona desde Mis productos). */
+  function kindOf(p){ return p.proposal_kind === "create" ? "create" : (p.proposal_kind === "republish" ? "republish" : "update"); }
   function productById(id){ return products.find(p => p.id === id) || null; }
   function categoryName(id){ const c = categories.find(x => x.id === id); return c ? c.name : id; }
   function sameText(a, b){ return (a || "").trim().replace(/\s+/g, " ").toLowerCase() === (b || "").trim().replace(/\s+/g, " ").toLowerCase(); }
@@ -688,15 +690,17 @@
         /* Compatibilidad: solo se abre si es editable; si no (en revisión o
            cerrada), se consulta desde Mis productos. */
         const proposal = proposals.find(p => p.id === presetProposalId);
-        if (proposal && EDITABLE.includes(proposal.status)) openForm({ proposal });
+        if (proposal && kindOf(proposal) !== "republish" && EDITABLE.includes(proposal.status)) openForm({ proposal });
         else backToProducts("consulta", proposal ? proposal.id : null);
       } else if (presetNew){
         openForm({ kind: "create" });
       } else {
         const product = productById(presetProductId);
         if (!product) return backToProducts("no-encontrado");
-        const open = proposals.find(p => kindOf(p) === "update" && p.product_id === product.id);
-        if (!open) openForm({ kind: "update", product });
+        /* Una abierta por producto, sea cambio o republicación (índice único de 41-04). */
+        const open = proposals.find(p => kindOf(p) !== "create" && p.product_id === product.id);
+        if (open && kindOf(open) === "republish") backToProducts("consulta", open.id);
+        else if (!open) openForm({ kind: "update", product });
         else if (EDITABLE.includes(open.status)) openForm({ proposal: open });
         else backToProducts("en-revision", open.id); // nunca una segunda propuesta
       }
