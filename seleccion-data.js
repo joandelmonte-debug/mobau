@@ -36,6 +36,15 @@ function getSelectionStorage(){
   return hasSession ? localStorage : sessionStorage;
 }
 
+/* Punto 41 (D1): PRODUCTS empieza vacío y solo contiene productos que el
+   servidor ha confirmado. Un elemento sin unidad (formato antiguo) cuyo
+   producto aún no está en PRODUCTS —catálogo sin cargar, fallo de red o
+   producto no visible— no se convierte adivinando la unidad: en memoria
+   lleva una unidad provisional y en el almacenamiento se conserva tal
+   cual (PENDING_RAW guarda el original). Se convierte cuando el producto
+   está cargado. */
+const PENDING_RAW = Symbol("selectionPendingRaw");
+
 /* Normaliza un único elemento, sea del formato antiguo (string) o
    ya del formato nuevo (objeto). Nunca descarta un productId válido;
    conserva quantity/unit existentes en vez de recalcularlos. */
@@ -43,7 +52,9 @@ function normalizeSelectionItem(item){
   if (typeof item === "string") {
     const product = (typeof PRODUCTS !== "undefined") ? PRODUCTS.find(p => p.id === item) : null;
     const unit = (typeof getProductUnit === "function") ? getProductUnit(product) : "ud.";
-    return { productId: item, quantity: unit === "ud." ? 1 : 0, unit };
+    const normalized = { productId: item, quantity: unit === "ud." ? 1 : 0, unit };
+    if (!product) normalized[PENDING_RAW] = item;
+    return normalized;
   }
   if (item && typeof item === "object" && item.productId) {
     const product = (typeof PRODUCTS !== "undefined") ? PRODUCTS.find(p => p.id === item.productId) : null;
@@ -51,9 +62,16 @@ function normalizeSelectionItem(item){
     const quantity = (typeof item.quantity === "number" && Number.isFinite(item.quantity))
       ? item.quantity
       : (unit === "ud." ? 1 : 0);
-    return { productId: item.productId, quantity, unit };
+    const normalized = { productId: item.productId, quantity, unit };
+    if (!item.unit && !product) normalized[PENDING_RAW] = item;
+    return normalized;
   }
   return null;
+}
+
+/* Forma guardada: los elementos pendientes vuelven a su original. */
+function serializeSelection(items){
+  return JSON.stringify(items.map(item => (item && item[PENDING_RAW] !== undefined) ? item[PENDING_RAW] : item));
 }
 
 /* Normaliza el arreglo completo. Conserva TODOS los productId, sin
@@ -77,8 +95,9 @@ function normalizeSelection(raw){
 
 /* Devuelve la selección ya normalizada — {productId, quantity, unit}
    por cada elemento. Si lo que había en localStorage era el formato
-   antiguo, lo convierte y lo vuelve a guardar de inmediato (migración
-   transparente, ocurre una sola vez). */
+   antiguo, lo convierte y lo vuelve a guardar (migración transparente);
+   los elementos cuyo producto aún no está cargado se guardan sin tocar
+   y se convierten en una lectura posterior. */
 function getSelection(){
   let raw;
   try {
@@ -94,7 +113,7 @@ function getSelection(){
 
 function saveSelection(items){
   try {
-    getSelectionStorage().setItem(SELECCION_KEY, JSON.stringify(items));
+    getSelectionStorage().setItem(SELECCION_KEY, serializeSelection(items));
     return { success: true };
   } catch (e) {
     console.error("Error guardando la selección:", e);
@@ -202,7 +221,7 @@ function migrateAnonymousSelectionToAccount(){
   });
 
   try {
-    localStorage.setItem(SELECCION_KEY, JSON.stringify(accountItems));
+    localStorage.setItem(SELECCION_KEY, serializeSelection(accountItems));
     sessionStorage.removeItem(SELECCION_KEY);
   } catch (e) {
     console.error("Error migrando la selección anónima a la cuenta:", e);

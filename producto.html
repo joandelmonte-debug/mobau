@@ -146,16 +146,32 @@ MobauAccess.accountKind().then(kind => {
   if (kind === "supplier" || kind === "mobau") document.querySelector(".product-selection-actions").hidden = true;
 });
 
-runWithCatalog(async () => {
+/* Punto 41 (D1): la ficha consulta catalog_products directamente, sin caché;
+   sin id no hay producto por defecto. «No encontrado» solo si el servidor
+   responde sin fila; si la consulta falla, error y «Reintentar». */
+runWithCatalog(async function renderProductPage(){
   const params = new URLSearchParams(window.location.search);
-  const id = params.get("id") || "p1";
-  let product = PRODUCTS.find(p => p.id === id);
-  if (!product){
-    try { [product] = await loadProductsByIds([id]); } catch (e) { product = null; }
+  const id = params.get("id");
+  let product = null;
+  if (id){
+    const { el } = catalogStatusEl();
+    setCatalogHidden("#product-root, .related-strip", true);
+    showCatalogLoading(el);
+    try {
+      product = await fetchCatalogProduct(id);
+    } catch (e){
+      showCatalogError(el, () => renderProductPage(), "No pudimos cargar este producto.");
+      return;
+    }
+    if (product){
+      el.remove();
+      setCatalogHidden("#product-root, .related-strip", false);
+    }
   }
   if (!product){
     const { el } = catalogStatusEl();
-    el.innerHTML = `<div class="cart-empty"><p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No encontramos este producto.</p><p style="margin:0 0 14px;">Puede que ya no esté en el catálogo.</p><a href="catalogo.html" class="btn btn-primary">Ver el catálogo</a></div>`;
+    /* margin auto: el <p> global tiene max-width 62ch; sin él, el texto quedaba a la izquierda del botón centrado. */
+    el.innerHTML = `<div class="cart-empty"><p style="margin:0 auto 4px; color:var(--ink); font-weight:600;">No encontramos este producto.</p><p style="margin:0 auto 14px;">Puede que ya no esté en el catálogo.</p><a href="catalogo.html" class="btn btn-primary">Ver el catálogo</a></div>`;
     setCatalogHidden("#product-root, .related-strip", true);
     return;
   }

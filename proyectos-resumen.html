@@ -453,7 +453,7 @@
     document.getElementById("no-products-back-link").href = backLink;
 
     const rows = await MobauProjects.listProductsInProject(project.id);
-    await loadProductsByIds(rows.map(row => row.product_id)).catch(() => {});
+    if (!(await whenProductsReady(rows.map(row => row.product_id)))) return;
     if (!rows.length){
       document.getElementById("no-products").style.display = "block";
       return;

@@ -377,9 +377,10 @@
     }, 0);
   }
 
+  /* D1: si falla la carga de productos, error y «Reintentar» y devuelve null;
+     nunca se sigue tratándolos como «no disponibles» (se excluirían de la solicitud). */
   async function loadRowProducts(rows){
-    await loadProductsByIds(rows.map(row => row.product_id)).catch(() => {});
-    return rows;
+    return (await whenProductsReady(rows.map(row => row.product_id))) ? rows : null;
   }
   const availableProductRows = () => productRows.filter(row => isProductAvailable(row.product_id));
 
@@ -537,6 +538,29 @@
     document.getElementById("send-contact-phone-help").hidden = !!phone;
   }
 
+  /* Paso 0 del envío desde Mi selección (D1): solo lecturas. Las líneas del
+     proyecto se leen aquí con su error a la vista (listProductsInProject
+     devuelve [] si falla) para no dejar ninguna sin comprobar. El error se
+     muestra en el formulario, con «Reintentar». -> Promise<boolean>. */
+  async function precheckSendProducts(errorEl){
+    const ids = getSelection().map(item => item.productId);
+    if (project){
+      const { data, error } = await supabaseClient
+        .from("project_products")
+        .select("product_id")
+        .eq("project_id", project.id);
+      if (error || !Array.isArray(data)){
+        showCatalogError(errorEl, () => window.location.reload());
+        errorEl.style.display = "block";
+        return false;
+      }
+      ids.push(...data.map(row => row.product_id));
+    }
+    if (await whenProductsReady(ids, { status: `#${errorEl.id}` })) return true;
+    errorEl.style.display = "block";
+    return false;
+  }
+
   async function handleSubmit(submitMode){
     const errorEl = document.getElementById(submitMode === "save" ? "save-form-error" : "send-form-error");
     errorEl.style.display = "none";
@@ -589,6 +613,18 @@
     const originalText = activeBtn.textContent;
     setButtonsDisabled(true);
     activeBtn.textContent = submitMode === "save" ? "Guardando…" : "Enviando…";
+
+    /* Paso 0 (D1): antes de cualquier escritura del envío, comprobar en el
+       servidor los productos de la selección y de las líneas actuales del
+       proyecto. Tras transferir la selección, la recarga de las líneas los
+       reutiliza y no queda ninguna consulta de productos por id que pueda
+       fallar con la selección ya transferida (y que, al reenviar, volvería a
+       sumarla). Si falla, no se escribe nada y la selección no cambia. */
+    if (submitMode === "send" && !arrivedWithProjectId && !(await precheckSendProducts(errorEl))){
+      setButtonsDisabled(false);
+      activeBtn.textContent = originalText;
+      return;
+    }
 
     /* Paso 1: crear el proyecto — nunca reutilizar uno activo en silencio.
        Se comprueba el límite del plan antes de crear, y se guardan todos
@@ -646,7 +682,13 @@
          la transferencia (lo ya guardado + lo recién añadido, sin
          duplicados) — para validar cantidades sobre el estado real. */
       if (submitMode === "send"){
-        productRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
+        const refreshedRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
+        if (!refreshedRows){
+          setButtonsDisabled(false);
+          activeBtn.textContent = originalText;
+          return;
+        }
+        productRows = refreshedRows;
       }
     }
 
@@ -765,7 +807,9 @@
       if (!project){ document.getElementById("not-found").style.display = "block"; return; }
       if (project.status === "archived"){ document.getElementById("is-archived").style.display = "block"; return; }
 
-      productRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
+      const projectRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
+      if (!projectRows) return;
+      productRows = projectRows;
       if (!productRows.length){ document.getElementById("no-products").style.display = "block"; return; }
 
       document.getElementById("bc-project").textContent = project.name;
@@ -802,7 +846,9 @@
         if (activeProjects.length) project = activeProjects[0];
       }
 
-      productRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit })));
+      const selectionRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit })));
+      if (!selectionRows) return;
+      productRows = selectionRows;
 
       if (project){
         const nameField = mode === "save" ? "save-name-field" : "send-name-field";

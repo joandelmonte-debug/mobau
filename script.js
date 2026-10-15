@@ -97,8 +97,11 @@ const CATEGORIES = {
   }
 };
 
-/* ---------- productos ---------- */
-const PRODUCTS = [
+/* ---------- productos estáticos ----------
+   Solo para la fuente "static" (en local) y para fijar el orden del
+   catálogo. Con "db", PRODUCTS empieza vacío y nunca se rellena con
+   estos datos, ni siquiera si falla la base de datos (punto 41, D1). */
+const STATIC_PRODUCTS = [
   {
     id: "p1", nombre: "Lámpara de Piso Meridian", distribuidor: "spectro", marca: "marset",
     categoria: "iluminacion", subcategoria: "Decorativa", uso: "residencial", espacio: "sala",
@@ -341,11 +344,12 @@ const LABELS = {
    CATÁLOGO — fuente de datos (Fase 4, Paso 1)
    PRODUCTS, DISTRIBUTORS, CATEGORIES y LABELS conservan su forma; con
    source "db" se rellenan en sitio y de una vez desde Supabase.
+   Punto 41 (D1): la lista sale de la vista catalog_products; si la base
+   de datos falla, error y «Reintentar», nunca datos estáticos.
    ============================================================ */
 const CATALOG_CONFIG = {
   source: "db",          // "static" | "db"
-  staticFallback: true,  // si "db" falla se conservan los datos estáticos (se elimina en el Paso 4)
-  cacheTtlMs: 60 * 1000,
+  cacheTtlMs: 60 * 1000, // además, la caché solo vale con el mismo sello de catalog_version()
   timeoutMs: 4000,       // corta también los reintentos internos de supabase-js (hasta ~7 s)
   pageSize: 1000         // tope de filas por consulta de PostgREST; se pagina si hay más
 };
@@ -362,11 +366,19 @@ const CATALOG_CONFIG = {
   } catch (e) {}
 })();
 
+const PRODUCTS = CATALOG_CONFIG.source === "db" ? [] : STATIC_PRODUCTS.slice();
 const CATALOG_STATE = { source: "static", status: "ready", error: null };
-const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v1", distributors: "mobau_distributors_v1", categories: "mobau_categories_v1" };
+/* Ids que una respuesta correcta de catalog_products confirmó como ausentes
+   (no visibles) en esta carga de la página, para no volver a consultarlos.
+   Solo en memoria; se vacía al renovar o invalidar el catálogo. Un error,
+   un timeout o una respuesta no válida nunca añade nada. */
+const CATALOG_ABSENT = new Set();
+/* v2: claves nuevas con sello; la interfaz anterior lee las v1 y ninguna lee la caché de la otra. */
+const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v2", distributors: "mobau_distributors_v2", categories: "mobau_categories_v2" };
+/* Las 21 columnas de catalog_products, en su orden. */
 const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at";
 const STATIC_ORDER = Object.freeze({
-  products: PRODUCTS.map(p => p.id),
+  products: STATIC_PRODUCTS.map(p => p.id),
   distributors: Object.keys(DISTRIBUTORS),
   categories: Object.keys(CATEGORIES)
 });
@@ -429,19 +441,38 @@ function replaceContents(target, source){
   Object.assign(target, source);
 }
 
-function readCatalogCache(key){
+/* Una entrada vale si tiene menos de cacheTtlMs y el mismo sello que el servidor.
+   Sin sello (catalog_version() falló) ninguna entrada vale. */
+function readCatalogCache(key, version){
+  if (!version) return null;
   try {
     const cached = JSON.parse(sessionStorage.getItem(key) || "null");
-    return cached && Date.now() - cached.savedAt < CATALOG_CONFIG.cacheTtlMs ? cached.rows : null;
+    return cached && cached.version === version && Date.now() - cached.savedAt < CATALOG_CONFIG.cacheTtlMs ? cached.rows : null;
   } catch (e) { return null; }
 }
-function writeCatalogCache(key, rows){
-  try { sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), rows })); } catch (e) {}
+function writeCatalogCache(key, rows, version){
+  if (!version) return;
+  try { sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), version, rows })); } catch (e) {}
+}
+/* Borra la caché del catálogo de esta pestaña (y las ausencias recordadas):
+   la siguiente carga pide la lista al servidor. */
+function invalidateCatalogCache(){
+  Object.values(CATALOG_CACHE_KEYS).forEach(key => {
+    try { sessionStorage.removeItem(key); } catch (e) {}
+  });
+  CATALOG_ABSENT.clear();
 }
 async function runCatalogQuery(builder){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CATALOG_CONFIG.timeoutMs);
   try { return await builder.abortSignal(controller.signal); } finally { clearTimeout(timer); }
+}
+/* Sello del catálogo público (41-02). Si falla, null: la caché no vale y se pide la lista. */
+async function fetchCatalogVersion(){
+  try {
+    const { data, error } = await runCatalogQuery(supabaseClient.rpc("catalog_version"));
+    return !error && typeof data === "string" && data ? data : null;
+  } catch (e) { return null; }
 }
 async function selectAllRows(query){
   const rows = [];
@@ -453,11 +484,11 @@ async function selectAllRows(query){
     if (!data || data.length < size) return rows;
   }
 }
-async function fetchCatalogRows(key, useCache, query){
-  const cached = useCache ? readCatalogCache(key) : null;
+async function fetchCatalogRows(key, useCache, version, query){
+  const cached = useCache ? readCatalogCache(key, version) : null;
   if (cached) return cached;
   const rows = await selectAllRows(query);
-  writeCatalogCache(key, rows);
+  writeCatalogCache(key, rows, version);
   return rows;
 }
 
@@ -476,12 +507,16 @@ function loadCatalog(options = {}){
   const useCache = options.cache !== false && !options.force;
   CATALOG_STATE.status = "loading";
   CATALOG_STATE.error = null;
+  CATALOG_ABSENT.clear(); // catálogo renovado: las ausencias anteriores ya no valen
   catalogPromise = (async () => {
     try {
+      /* El sello se lee antes que las listas: si algo cambia entre medias,
+         la caché queda con el sello anterior y la siguiente carga la descarta. */
+      const version = await fetchCatalogVersion();
       const [productRows, distributorRows, categoryRows] = await Promise.all([
-        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, () => supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("status", "active").eq("publication_status", "published").order("id")),
-        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, () => supabaseClient.from("distributors").select("id, name, location, description, categories, contact_email, contact_phone, website, created_at").order("id")),
-        fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, () => supabaseClient.from("categories").select("id, name, subcategories").order("id"))
+        fetchCatalogRows(CATALOG_CACHE_KEYS.products, useCache, version, () => supabaseClient.from("catalog_products").select(PRODUCT_COLUMNS).order("id")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.distributors, useCache, version, () => supabaseClient.from("distributors").select("id, name, location, description, categories, contact_email, contact_phone, website, created_at").order("id")),
+        fetchCatalogRows(CATALOG_CACHE_KEYS.categories, useCache, version, () => supabaseClient.from("categories").select("id, name, subcategories").order("id"))
       ]);
       const built = {
         distributors: buildDistributors(distributorRows),
@@ -498,12 +533,6 @@ function loadCatalog(options = {}){
       return PRODUCTS;
     } catch (error){
       CATALOG_STATE.error = error;
-      if (CATALOG_CONFIG.staticFallback){
-        console.warn("Catálogo: no se pudo cargar desde la base de datos; se usan los datos estáticos.", error);
-        CATALOG_STATE.source = "static";
-        CATALOG_STATE.status = "fallback";
-        return PRODUCTS;
-      }
       CATALOG_STATE.status = "error";
       catalogPromise = null;
       throw error;
@@ -515,26 +544,52 @@ function loadCatalog(options = {}){
 async function loadDistributors(options = {}){ await loadCatalog(options); return DISTRIBUTORS; }
 async function loadCategories(options = {}){ await loadCatalog(options); return CATEGORIES; }
 
-/* Con "db" añade a PRODUCTS los que falten (solo publicados: la RLS ya lo
-   limita para profesionales y anónimos, y el filtro evita que una cuenta
-   con más lectura —distribuidor propietario o Mobau con aal2— vea un
-   borrador en el catálogo o en la ficha); con "static" filtra PRODUCTS. */
+/* Con "db" añade a PRODUCTS los que falten, leyéndolos de catalog_products
+   (publicados y activos, igual para todos los roles: una cuenta con más
+   lectura —distribuidor propietario o Mobau con aal2— tampoco ve ahí un
+   borrador ni un retirado). Si la consulta falla, lanza el error: quien
+   llama muestra error y «Reintentar», nunca «no disponible». Los ids que
+   una respuesta correcta no devuelve quedan en CATALOG_ABSENT y no se
+   vuelven a pedir hasta renovar el catálogo.
+   Con "static" filtra PRODUCTS. */
 async function loadProductsByIds(ids, options = {}){
   const wanted = [...new Set((ids || []).filter(Boolean).map(String))];
   if (!wanted.length) return [];
   await loadCatalog(options);
   if (CATALOG_STATE.source === "db"){
-    const missing = wanted.filter(id => !PRODUCTS.some(p => p.id === id));
+    const missing = wanted.filter(id => !PRODUCTS.some(p => p.id === id) && !CATALOG_ABSENT.has(id));
     for (let i = 0; i < missing.length; i += 100){
-      const { data, error } = await runCatalogQuery(supabaseClient.from("products").select(PRODUCT_COLUMNS).eq("publication_status", "published").in("id", missing.slice(i, i + 100)));
+      const chunk = missing.slice(i, i + 100);
+      const { data, error } = await runCatalogQuery(supabaseClient.from("catalog_products").select(PRODUCT_COLUMNS).in("id", chunk));
       if (error) throw error;
-      (data || []).forEach(row => {
+      if (!Array.isArray(data)) throw new Error("Respuesta no válida de catalog_products");
+      data.forEach(row => {
         LABELS.marca[brandKey(row.brand)] = brandLabel(row.brand);
         PRODUCTS.push(mapProductRow(row));
       });
+      const returned = new Set(data.map(row => String(row.id)));
+      chunk.forEach(id => { if (!returned.has(id)) CATALOG_ABSENT.add(id); });
     }
   }
   return PRODUCTS.filter(p => wanted.includes(p.id));
+}
+
+/* Ficha (D1): consulta directa a catalog_products, sin caché. La existencia
+   y el contenido salen solo de esta respuesta. -> producto, o null si no
+   está en el catálogo; lanza el error si la consulta falla. Deja el
+   producto en PRODUCTS (sustituyendo una copia anterior) para que la
+   selección lo encuentre. Con "static" lo busca en PRODUCTS. */
+async function fetchCatalogProduct(id, options = {}){
+  if (!catalogUsesDb(options)) return PRODUCTS.find(p => p.id === id) || null;
+  const { data, error } = await runCatalogQuery(supabaseClient.from("catalog_products").select(PRODUCT_COLUMNS).eq("id", id).limit(1));
+  if (error) throw error;
+  const row = (data || [])[0];
+  if (!row) return null;
+  LABELS.marca[brandKey(row.brand)] = brandLabel(row.brand);
+  const product = mapProductRow(row);
+  const index = PRODUCTS.findIndex(p => p.id === product.id);
+  if (index >= 0) PRODUCTS[index] = product; else PRODUCTS.push(product);
+  return product;
 }
 
 /* ---------- estados de carga y error del catálogo ---------- */
@@ -564,8 +619,8 @@ function setCatalogHidden(selector, hidden){
 function showCatalogLoading(el){
   el.innerHTML = `<p class="card-meta" role="status">Cargando catálogo…</p>`;
 }
-function showCatalogError(el, onRetry){
-  el.innerHTML = `<div class="cart-empty"><p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No pudimos cargar el catálogo.</p><p style="margin:0 0 14px;">Comprueba tu conexión e inténtalo de nuevo.</p><button type="button" class="btn btn-primary">Reintentar</button></div>`;
+function showCatalogError(el, onRetry, title = "No pudimos cargar el catálogo."){
+  el.innerHTML = `<div class="cart-empty"><p style="margin:0 0 4px; color:var(--ink); font-weight:600;">${escapeHtml(title)}</p><p style="margin:0 0 14px;">Comprueba tu conexión e inténtalo de nuevo.</p><button type="button" class="btn btn-primary">Reintentar</button></div>`;
   el.querySelector("button").addEventListener("click", onRetry);
 }
 
@@ -574,7 +629,7 @@ async function whenCatalogReady(options = {}){
   if (!catalogUsesDb(options)) return true;
   const { el, created } = catalogStatusEl(options.status);
   const onRetry = options.onRetry || (() => window.location.reload());
-  const settled = CATALOG_STATE.status === "ready" || CATALOG_STATE.status === "fallback";
+  const settled = CATALOG_STATE.status === "ready";
   if (!settled){
     setCatalogHidden(options.hide, true);
     showCatalogLoading(el);
@@ -590,6 +645,22 @@ async function whenCatalogReady(options = {}){
   if (created) el.remove();
   setCatalogHidden(options.hide, false);
   return true;
+}
+
+/* Catálogo + productos concretos (selección y proyectos). Si falla la
+   consulta, error y «Reintentar» en vez de seguir con productos «no
+   disponibles». Mismas opciones que whenCatalogReady -> Promise<boolean>. */
+async function whenProductsReady(ids, options = {}){
+  if (!(await whenCatalogReady(options))) return false;
+  try {
+    await loadProductsByIds(ids, options);
+    return true;
+  } catch (error){
+    const { el } = catalogStatusEl(options.status);
+    setCatalogHidden(options.hide, true);
+    showCatalogError(el, options.onRetry || (() => window.location.reload()));
+    return false;
+  }
 }
 
 /* Envuelve el script completo de una página. Con "static" ejecuta run() al instante, como antes. */
@@ -1324,7 +1395,19 @@ document.addEventListener("DOMContentLoaded", () => {
   injectIconSprite();
   initNavToggle();
   initHeroCarousel();
-  updateCartBadge();
-  propagateCartLinks();
+  whenCartCatalogReady(() => {
+    updateCartBadge();
+    propagateCartLinks();
+  });
   updateSelectionBadge();
 });
+
+/* ?carrito= (flujo antiguo): getCart() se queda con los productos que hay en
+   PRODUCTS, que con "db" está vacío hasta que carga el catálogo. Se espera a
+   la carga para no quitar el parámetro de los enlaces antes de tiempo; si la
+   carga falla, los enlaces quedan como en el HTML y la URL actual no se toca. */
+function whenCartCatalogReady(run){
+  if (!catalogUsesDb()) return run();
+  if (CATALOG_STATE.status === "error") return;
+  loadCatalog().then(run, () => {});
+}

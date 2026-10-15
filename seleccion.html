@@ -408,8 +408,8 @@
     /* Punto 38-A: una cuenta de distribuidor no usa la selección -> panel.
        Sin sesión no hay consulta de rol extra: accountKind() solo lee la sesión. */
     if (await MobauAccess.redirectSupplierToPanel()) return;
-    if (!(await whenCatalogReady({ status: "#selection-list" }))) return;
-    await loadProductsByIds(getSelection().map(i => i.productId)).catch(() => {});
+    /* D1: aviso de carga o error fuera de #selection-content, que sigue oculto hasta pintar. */
+    if (!(await whenProductsReady(getSelection().map(i => i.productId)))) return;
     await loadPriceState(getSelection().map(i => i.productId));
     renderSelection();
     initActiveProjectState();

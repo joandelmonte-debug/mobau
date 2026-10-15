@@ -1069,7 +1069,7 @@
 
   async function loadSavedProducts(){
     const rows = await MobauProjects.listProductsInProject(project.id);
-    await loadProductsByIds(rows.map(row => row.product_id)).catch(() => {});
+    if (!(await whenProductsReady(rows.map(row => row.product_id), { status: "#project-products-list" }))) return;
     currentRows = rows;
     const counterEl = document.getElementById("products-counter");
     const isArchived = project.status === "archived";

@@ -481,7 +481,8 @@
   </section>
 
   <div class="catalog-toolbar">
-    <span class="result-count" id="result-count">20 productos</span>
+    <!-- Vacío hasta que render() pinta el recuento real (punto 41, D1): durante la carga o con error no se muestra ninguna cifra. -->
+    <span class="result-count" id="result-count"></span>
     <select class="sort-select" id="sort-select">
       <option value="relevancia">Ordenar por relevancia</option>
       <option value="nombre">Nombre A–Z</option>
