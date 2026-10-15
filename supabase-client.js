@@ -284,7 +284,7 @@ const MobauAccess = {
      restaurar, republicar, purgar). Apagado: ninguna página llama a esas
      funciones ni muestra nada nuevo. Es solo un interruptor de interfaz: la
      protección real es el interruptor del servidor y los permisos (41-06). */
-  LIFECYCLE_UI_ENABLED: false,
+  LIFECYCLE_UI_ENABLED: true,
 
   /* Avisos que el panel sabe mostrar (?aviso=...). Cualquier otro valor se
      ignora; nunca se pinta un texto recibido en la URL. */
