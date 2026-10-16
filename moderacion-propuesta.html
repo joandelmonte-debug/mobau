@@ -316,7 +316,7 @@
     }
     if (p.status === "withdrawn"){
       const ev = [...ctx.events].reverse().find(e => e.to_status === "withdrawn");
-      box.append(M.el("p", "", `Retirada por la empresa el ${M.formatDate(ev ? ev.created_at : p.updated_at)}.`));
+      box.append(M.el("p", "", `Cancelada por la empresa el ${M.formatDate(ev ? ev.created_at : p.updated_at)}.`));
       return box;
     }
     if (p.status === "approved"){
@@ -377,7 +377,7 @@
       case "changes_requested": return `Cambios solicitados${note}`;
       case "approved": return `Aprobada${note}`;
       case "rejected": return `Rechazada${note}`;
-      case "withdrawn": return "Retirada";
+      case "withdrawn": return "Cancelada";
       default: return ev.to_status || "Cambio de estado";
     }
   }

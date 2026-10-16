@@ -53,6 +53,22 @@
   .lc-panel textarea{ width:100%; min-height:80px; box-sizing:border-box; }
   .lc-panel .lc-msg{ color: var(--danger); margin:8px 0 0; }
   .lc-history{ margin:8px 0 0; padding-left:18px; font-size:13px; color: var(--ink-soft); }
+  .lc-ack{ display:flex; align-items:flex-start; gap:8px; margin:4px 0 0; font-size:14px; color: var(--ink); cursor:pointer; }
+  .lc-ack input{ margin-top:3px; }
+  .lc-danger{ background: var(--danger); border-color: var(--danger); }
+  /* Productos / Papelera (41-07): pestañas sencillas, 44 px de área táctil. */
+  .pl-tabs{ display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); margin:0 0 24px; }
+  .pl-tabs [role="tab"]{ min-height:44px; padding:10px 14px; margin-bottom:-1px; border:0; border-bottom:2px solid transparent; background:none; font:inherit; font-size:15px; color: var(--ink-soft); cursor:pointer; }
+  .pl-tabs [role="tab"][aria-selected="true"]{ color: var(--ink); font-weight:600; border-bottom-color: var(--accent); }
+  .pl-tabs [role="tab"]:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .pl-tab-count{ margin-left:4px; font-weight:400; color: var(--ink-soft); }
+  .pl-deleted{ margin-top:28px; font-size:14px; }
+  .pl-deleted summary{ min-height:44px; display:flex; align-items:center; cursor:pointer; color: var(--accent); }
+  .pl-deleted-list{ margin:4px 0 0; padding-left:18px; color: var(--ink-soft); }
+  .pl-deleted-list li{ margin:6px 0; overflow-wrap:anywhere; }
+  .pl-deleted-list .c-name{ color: var(--ink); font-weight:600; }
+  .lc-block{ margin-top:10px; padding:10px 12px; border-left:3px solid var(--danger); background: var(--surface); font-size:13px; }
+  .lc-block p{ margin:0; max-width:none; }
   @media (max-width: 900px){ .cart-row .pl-actions{ flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; } }
 </style>
 </head>
@@ -82,7 +98,7 @@
     <p class="card-meta" style="margin:0 0 14px;"><a href="panel-distribuidor.html">← Volver al panel</a></p>
     <div class="eyebrow">Distribuidor</div>
     <h1>Mis productos</h1>
-    <p style="margin-top:14px; max-width:62ch;">Consulta tus productos y propone productos nuevos o cambios para revisión. Mobau revisa cada propuesta antes de crear o actualizar el catálogo.</p>
+    <p style="margin-top:14px; max-width:62ch;">Consulta tus productos y propone productos nuevos o cambios para revisión. Mobau revisa cada propuesta antes de crear o actualizar el catálogo. Los productos que retires pasan a la papelera, desde donde puedes restaurarlos o eliminarlos definitivamente.</p>
     <div class="pl-head-actions">
       <a class="btn btn-primary" href="distribuidor-propuestas.html?nueva=1">Crear nuevo producto</a>
     </div>
@@ -102,12 +118,28 @@
   <div id="pl-content" style="display:none;">
     <p id="pl-alert" class="pl-alert" role="alert" hidden></p>
 
+    <!-- Intervenciones de Mobau de los últimos 30 días (41-07): retirar,
+         papelera, restaurar o eliminar definitivamente, con su motivo. -->
+    <section class="pl-decisions" id="pl-notices" aria-labelledby="pl-notices-title" hidden>
+      <h2 class="pl-section-title" id="pl-notices-title">Avisos de Mobau</h2>
+      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Intervenciones de Mobau sobre tus productos en los últimos 30 días. El motivo sigue disponible después en el historial de cada producto y en «Productos eliminados» de la papelera.</p>
+      <div id="pl-notices-list"></div>
+    </section>
+
     <!-- Decisiones de Mobau de los últimos 30 días (39). Solo lectura. -->
     <section class="pl-decisions" id="pl-decisions" aria-labelledby="pl-decisions-title" hidden>
       <h2 class="pl-section-title" id="pl-decisions-title">Decisiones recientes de Mobau</h2>
       <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Propuestas aprobadas o rechazadas en los últimos 30 días. Las que tienen cambios solicitados siguen en la tarjeta de su producto.</p>
       <div id="pl-decisions-list"></div>
     </section>
+    <!-- Productos / Papelera (41-07). Sin datos de ciclo de vida no se sabe
+         qué está en la papelera: no hay pestañas y se ve la lista completa. -->
+    <div class="pl-tabs" id="pl-tabs" role="tablist" aria-label="Tus productos" hidden>
+      <button type="button" role="tab" id="pl-tab-products" aria-controls="pl-view-products" aria-selected="true">Productos<span class="pl-tab-count" id="pl-tab-products-count"></span></button>
+      <button type="button" role="tab" id="pl-tab-trash" aria-controls="pl-view-trash" aria-selected="false" tabindex="-1">Papelera<span class="pl-tab-count" id="pl-tab-trash-count"></span></button>
+    </div>
+
+    <div id="pl-view-products" role="tabpanel" aria-labelledby="pl-tab-products">
     <div class="pl-filters" id="pl-filters">
       <div class="field" style="margin:0;">
         <label for="pl-search">Buscar</label>
@@ -118,13 +150,13 @@
         <select id="pl-category"><option value="">Todas</option></select>
       </div>
       <div class="field" style="margin:0;">
-        <label for="pl-status">Estado en el catálogo</label>
+        <label for="pl-status">Estado</label>
         <select id="pl-status">
           <option value="">Todos</option>
           <option value="published">Publicados</option>
           <option value="draft">Borradores</option>
           <option value="pending">Pendientes de publicación</option>
-          <option value="archived">Archivados</option>
+          <option value="archived">Retirados por Mobau</option>
         </select>
       </div>
       <div class="field" style="margin:0;">
@@ -146,7 +178,7 @@
     </div>
 
     <section class="pl-section" id="pl-catalog" aria-labelledby="pl-catalog-title">
-      <h2 class="pl-section-title" id="pl-catalog-title">Productos en el catálogo</h2>
+      <h2 class="pl-section-title" id="pl-catalog-title">Productos</h2>
       <p id="pl-count" class="card-meta" style="margin:6px 0 12px;"></p>
       <div id="pl-empty" class="cart-empty pl-empty" hidden>
         <p id="pl-empty-title" style="margin:0; color:var(--ink); font-weight:600;"></p>
@@ -161,6 +193,26 @@
       <p class="card-meta" style="margin:6px 0 12px; max-width:70ch;">Productos nuevos que has creado y que Mobau aún no ha incorporado al catálogo.</p>
       <p id="pl-proposed-empty" class="card-meta" hidden>Ningún producto propuesto coincide con los filtros.</p>
       <div class="cart-list" id="pl-proposed-list"></div>
+    </section>
+    </div>
+
+    <section id="pl-view-trash" class="pl-section" role="tabpanel" aria-labelledby="pl-tab-trash" hidden>
+      <h2 class="pl-section-title">Papelera</h2>
+      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Productos retirados: no aparecen en el catálogo. Puedes restaurarlos o eliminarlos definitivamente.</p>
+      <p id="pl-trash-count" class="card-meta" style="margin:6px 0 12px;"></p>
+      <div id="pl-trash-empty" class="cart-empty pl-empty" hidden>
+        <p style="margin:0; color:var(--ink); font-weight:600;">La papelera está vacía.</p>
+        <p style="margin:0;">Cuando retires un producto, aparecerá aquí.</p>
+        <button type="button" class="btn btn-outline" id="pl-trash-back">Ver productos</button>
+      </div>
+      <div class="cart-list" id="pl-trash-list"></div>
+
+      <!-- Productos ya eliminados (41-07): solo nombre, identificador, fecha,
+           quién lo eliminó y, si fue Mobau, su motivo. Sin límite de fecha. -->
+      <details class="pl-deleted" id="pl-deleted" hidden>
+        <summary id="pl-deleted-summary">Productos eliminados</summary>
+        <ul class="pl-deleted-list" id="pl-deleted-list"></ul>
+      </details>
     </section>
 
   </div>
@@ -222,13 +274,18 @@
      tarjeta de producto propuesto   → ?propuesta=ID (borrador o cambios
                                        solicitados).
    Una propuesta en revisión no se edita: "Ver propuesta enviada" la muestra
-   desplegada en la propia tarjeta, con "Retirar propuesta" (única escritura
+   desplegada en la propia tarjeta, con "Cancelar propuesta" (única escritura
    de esta página: status submitted → withdrawn en product_proposals, una
    transición ya autorizada por 38-C). Las cerradas no se muestran, salvo
    en "Decisiones recientes de Mobau" (39): aprobadas y rechazadas de los
    últimos 30 días, con dos lecturas más (product_proposals y
    proposal_events propios, por RLS) y "leído" solo en este dispositivo
-   (localStorage "mobau_decisiones_vistas"). */
+   (localStorage "mobau_decisiones_vistas").
+   41-07: pestañas Productos / Papelera (la papelera sale de
+   my_products_lifecycle). «Retirar» lleva el producto del catálogo a la
+   papelera en una sola acción; en la papelera, «Restaurar» y «Eliminar
+   definitivamente». «Avisos de Mobau» muestra sus intervenciones de los
+   últimos 30 días con su motivo. */
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -238,9 +295,10 @@
     in_review:         { label: "En revisión",         kind: "wait" },
     changes_requested: { label: "Cambios solicitados", kind: "alert" },
     published:         { label: "Publicado",           kind: "ok" },
-    archived:          { label: "Archivado",           kind: "neutral" }
+    archived:          { label: "Retirado",            kind: "neutral" }
   };
-  /* Filtro "Estado en el catálogo" → valores reales de publication_status. */
+  /* Filtro "Estado" → valores reales de publication_status. Con la papelera
+     separada (41-07), "archived" en Productos son los retirados por Mobau. */
   const CATALOG_FILTER = {
     published: ["published"],
     draft:     ["draft"],
@@ -272,7 +330,7 @@
     consulta: "Esta propuesta se consulta desde Mis productos.",
     "en-revision": "Este producto ya tiene una propuesta en revisión.",
     "no-encontrado": "No encontramos ese producto.",
-    retirada: "Propuesta retirada."
+    retirada: "Propuesta cancelada."
   };
   /* Para mostrar una propuesta enviada (solo lectura). */
   const FIELD_LABELS = {
@@ -293,6 +351,10 @@
   let openRepublish = new Map(); // product_id -> solicitud de republicación abierta
   let lifecycle = null;          // product_id -> fila de my_products_lifecycle(), o null si no se cargó
   let lifecycleError = null;     // { kind, message } si la carga falló: sin acciones de ciclo de vida
+  let lcEvents = [];             // my_product_lifecycle_events() de la empresa (avisos y motivos de Mobau)
+  const OWN = LC.OWN;
+  const NOTICE_DAYS = 30;
+  let view = window.location.hash === "#papelera" ? "trash" : "products";
 
   const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, reviewed_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason";
   const DECISION_DAYS = 30;
@@ -425,8 +487,8 @@
     const withdraw = document.createElement("button");
     withdraw.type = "button";
     withdraw.className = "pp-withdraw-btn";
-    withdraw.textContent = "Retirar propuesta";
-    withdraw.addEventListener("click", () => withdrawSubmitted(proposal, withdraw));
+    withdraw.textContent = "Cancelar propuesta";
+    withdraw.addEventListener("click", () => cancelProposal(proposal, withdraw));
     details.append(list, textDiv("", "Mobau la está revisando; mientras tanto no se puede editar."), withdraw);
 
     toggle.addEventListener("click", () => {
@@ -444,10 +506,10 @@
 
   function withdrawError(error){
     const message = (error && error.message) || "";
-    if (error && error.code === "PGRST116") return "Esta propuesta ya no estaba en revisión; hemos actualizado su estado.";
+    if (error && error.code === "PGRST116") return "Esta propuesta ya no estaba abierta; hemos actualizado su estado.";
     if (error && error.code === "42501") return message && !/permission denied|row-level security/i.test(message)
-      ? `No pudimos retirar la propuesta: ${message}` : "Tu cuenta no tiene permiso para retirar esta propuesta. Comprueba que tu empresa siga verificada.";
-    return "No pudimos retirar la propuesta. Intenta de nuevo.";
+      ? `No pudimos cancelar la propuesta: ${message}` : "Tu cuenta no tiene permiso para cancelar esta propuesta. Comprueba que tu empresa siga verificada.";
+    return "No pudimos cancelar la propuesta. Intenta de nuevo.";
   }
 
   /* Vuelve a leer las propuestas abiertas (tras retirar o tras un error,
@@ -460,10 +522,10 @@
     render();
   }
 
-  /* Retirar una propuesta en revisión (submitted → withdrawn). Cancelar no
-     escribe nada. */
-  async function withdrawSubmitted(proposal, button){
-    if (!confirm("¿Retirar esta propuesta en revisión?\nMobau dejará de revisarla y podrás crear una nueva propuesta para este producto.")) return;
+  /* Cancelar una propuesta abierta (→ withdrawn, transición de 38-C). Si se
+     responde que no al diálogo, no escribe nada. */
+  async function cancelProposal(proposal, button){
+    if (!confirm("¿Cancelar esta propuesta?\nMobau dejará de revisarla y podrás crear una nueva propuesta para este producto cuando la necesites.")) return;
     showAlert("");
     button.disabled = true;
     const { data, error } = await supabaseClient.from("product_proposals")
@@ -478,6 +540,9 @@
       showAlert(withdrawError(error));
       return;
     }
+    /* 41-07: las acciones de ciclo de vida (p. ej. Retirar) dependen de que
+       no haya propuesta abierta; se vuelven a pedir al servidor. */
+    if (LC.enabled()){ await loadLifecycle(); render(); }
     showToast(AVISOS.retirada);
   }
 
@@ -516,16 +581,20 @@
   async function loadLifecycle(){
     lifecycle = null;
     lifecycleError = null;
+    lcEvents = [];
     if (!LC.enabled()) return;
+    const [rowsRes, eventsRes] = await Promise.allSettled([LC.myProducts(), LC.myEvents(null)]);
     try {
-      const rows = await LC.myProducts();
-      if (!Array.isArray(rows)) throw { code: "", message: "respuesta no válida" };
-      lifecycle = new Map(rows.map(r => [r.id, r]));
+      if (rowsRes.status === "rejected") throw rowsRes.reason;
+      if (!Array.isArray(rowsRes.value)) throw { code: "", message: "respuesta no válida" };
+      lifecycle = new Map(rowsRes.value.map(r => [r.id, r]));
     } catch (error){
       const c = LC.classify(error);
       if (c.kind === "login"){ window.location.href = MobauAccess.accessUrlForCurrentPage(); return; }
       lifecycleError = c;
     }
+    /* Sin eventos no hay avisos, pero el resto de la página sigue igual. */
+    if (eventsRes.status === "fulfilled" && Array.isArray(eventsRes.value)) lcEvents = eventsRes.value;
     showLifecycleNotice();
   }
 
@@ -556,27 +625,65 @@
     return lc ? lc.lifecycle_state : null;
   }
 
-  function lifecycleLines(lc){
+  /* Motivo de la última intervención de Mobau (retire | trash) sobre un producto. */
+  function mobauReason(productId, action){
+    const ev = lcEvents.find(e => e.product_id === productId && e.actor_kind === "mobau" && e.action === action);
+    return ev ? ev.reason : null;
+  }
+
+  /* Productos (41-07): solo explica la retirada de Mobau (con su motivo) y
+     los bloqueos. La papelera tiene su propia vista. */
+  function lifecycleLines(product, lc){
     const lines = [];
-    if (["retired", "legacy_retired", "trashed"].includes(lc.lifecycle_state)){
-      const st = LC.stateInfo(lc.lifecycle_state);
-      const head = document.createElement("div");
-      head.className = "pl-proposal";
-      head.append(chip(st.label, st.kind));
-      lines.push(head);
-    }
     if (lc.lifecycle_state === "retired" && lc.retired_at){
-      const by = lc.retired_by_kind === "mobau" ? " por Mobau" : (lc.retired_by_kind === "distributor" ? " por tu empresa" : "");
-      lines.push(textDiv("lc-line", `Retirado${by} el ${LC.formatDate(lc.retired_at)}${lc.retired_reason ? ` · Motivo: ${lc.retired_reason}` : ""}`));
+      if (lc.retired_by_kind === "mobau"){
+        if (lc.retired_reason) lines.push(textDiv("pl-note", `Motivo de Mobau: ${lc.retired_reason}`));
+        lines.push(textDiv("lc-line", `Mobau lo retiró del catálogo el ${LC.formatDate(lc.retired_at)}. Para publicarlo de nuevo, solicita la revisión a Mobau.`));
+      } else {
+        lines.push(textDiv("lc-line", `Retirado del catálogo el ${LC.formatDate(lc.retired_at)}.`));
+      }
     }
     if (lc.lifecycle_state === "legacy_retired") lines.push(textDiv("lc-line", LC.BLOCKS.legacy_pending_review));
-    if (lc.lifecycle_state === "trashed"){
-      lines.push(textDiv("lc-line", `En papelera desde el ${LC.formatDate(lc.trashed_at)} · se puede restaurar hasta el ${LC.formatDate(lc.purge_after)}`));
-    }
-    if (lc.has_open_proposal && ["published", "retired", "draft"].includes(lc.lifecycle_state)){
-      lines.push(textDiv("lc-line", LC.BLOCKS.open_proposal));
-    }
+    if (lc.has_open_proposal && ["published", "retired", "draft"].includes(lc.lifecycle_state)) lines.push(openProposalBlock(product, "retirarlo"));
     return lines;
+  }
+
+  /* Propuesta abierta que bloquea Retirar o Eliminar definitivamente: dice
+     cuál es y ofrece cancelarla (no se cancela sola). */
+  function openProposalBlock(product, what){
+    const box = document.createElement("div");
+    box.className = "lc-block";
+    const update = openUpdates.get(product.id);
+    const republish = openRepublish.get(product.id);
+    const proposal = update || republish;
+    const p = document.createElement("p");
+    if (!proposal){
+      p.textContent = OWN.hints.open_proposal;
+      box.append(p);
+      return box;
+    }
+    const kind = update ? "su propuesta de cambios" : "su solicitud de revisión";
+    const sent = proposal.submitted_at ? `, enviada el ${formatDate(proposal.submitted_at)}` : "";
+    p.textContent = `Para ${what}, primero cancela ${kind} (${PROPOSAL[proposal.status].label.toLowerCase()}${sent}) o espera la decisión de Mobau.`;
+    box.append(p);
+    if (update){
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pp-withdraw-btn";
+      b.textContent = "Cancelar propuesta";
+      b.addEventListener("click", () => cancelProposal(update, b));
+      box.append(b);
+    }
+    return box;
+  }
+
+  /* Chip de estado de la tarjeta: con ciclo de vida, «Retirado por Mobau» en
+     vez de «Archivado» (una sola etiqueta para cada situación). */
+  function statusChip(product, lc){
+    if (lc && lc.lifecycle_state === "retired") return chip(lc.retired_by_kind === "mobau" ? "Retirado por Mobau" : "Retirado", "alert");
+    if (lc && lc.lifecycle_state === "legacy_retired") return chip("Retirado", "neutral");
+    const publication = PUBLICATION[product.publication_status] || { label: "Sin estado", kind: "neutral" };
+    return chip(publication.label, publication.kind);
   }
 
   /* Error de una acción: conflicto → recargar; sin servidor o sin permiso →
@@ -591,33 +698,48 @@
       render();
       return true;
     }
-    if (msg) msg.textContent = c.message;
+    if (msg) msg.textContent = (error && OWN.hints[error.hint]) || c.message;
     return false;
   }
 
+  function confirmText(product, lc, action){
+    const C = OWN.confirm;
+    if (action === "purge") return `Vas a eliminar definitivamente «${product.name}» (identificador ${product.id}). ${C.purge}`;
+    if (action === "trash"){
+      if (lc.lifecycle_state === "published") return C.trash_published;
+      if (lc.lifecycle_state === "draft") return C.trash_draft;
+      return lc.mobau_hold ? C.trash_retired : C.trash_other;
+    }
+    if (action === "restore") return `«${product.name}»: ${(C[`restore_${lc.restore_to}`] || C.restore_retired).replace(/^E/, "e")}`;
+    return C[action];
+  }
+  const CONFIRM_BUTTON = { trash: "Retirar", restore: "Restaurar", purge: "Eliminar definitivamente", request_republish: "Enviar solicitud" };
+
+  /* Una confirmación por acción. Eliminar definitivamente pide además marcar
+     una casilla. Cancelar no escribe nada. */
   function openPanel(product, lc, action, anchor){
     anchor.parentElement.querySelectorAll(".lc-panel").forEach(p => p.remove());
     const panel = document.createElement("div");
     panel.className = "lc-panel";
     const intro = document.createElement("p");
-    intro.textContent = LC.CONFIRM[action];
+    intro.textContent = confirmText(product, lc, action);
     panel.append(intro);
-    let textarea = null;
-    if (action === "retire"){
+    let ack = null;
+    if (action === "purge"){
       const label = document.createElement("label");
-      label.htmlFor = `lc-reason-${product.id}`;
-      label.textContent = `Motivo de la retirada (obligatorio, hasta ${LC.REASON_MAX} caracteres)`;
-      textarea = document.createElement("textarea");
-      textarea.id = `lc-reason-${product.id}`;
-      panel.append(label, textarea);
+      label.className = "lc-ack";
+      ack = document.createElement("input");
+      ack.type = "checkbox";
+      label.append(ack, document.createTextNode(OWN.confirm.purge_ack));
+      panel.append(label);
     }
     const msg = document.createElement("p");
     msg.className = "lc-msg";
     msg.setAttribute("role", "status");
     const ok = document.createElement("button");
     ok.type = "button";
-    ok.className = "btn btn-primary btn-sm";
-    ok.textContent = `Confirmar: ${LC.ACTIONS[action].toLowerCase()}`;
+    ok.className = action === "purge" ? "btn btn-primary btn-sm lc-danger" : "btn btn-primary btn-sm";
+    ok.textContent = CONFIRM_BUTTON[action];
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "btn btn-outline btn-sm";
@@ -629,18 +751,13 @@
     cancel.addEventListener("click", () => panel.remove());
     ok.addEventListener("click", async () => {
       msg.textContent = "";
-      let reason = null;
-      if (action === "retire"){
-        const problem = LC.reasonError(textarea.value, true);
-        if (problem){ msg.textContent = problem; textarea.focus(); return; }
-        reason = textarea.value.trim();
-      }
+      if (ack && !ack.checked){ msg.textContent = "Marca la casilla para confirmar la eliminación definitiva."; ack.focus(); return; }
       ok.disabled = true;
       cancel.disabled = true;
       try {
-        if (action === "retire") await LC.retire(product.id, reason, lc.updated_at);
-        else if (action === "trash") await LC.trash(product.id, lc.updated_at);
+        if (action === "trash") await LC.trash(product.id, lc.updated_at);
         else if (action === "restore") await LC.restore(product.id, lc.updated_at);
+        else if (action === "purge") await LC.purgeOwn(product.id, lc.updated_at);
         else if (action === "request_republish") await LC.requestRepublish(product.id);
         else return;
       } catch (error){
@@ -654,11 +771,11 @@
         return;
       }
       LC.invalidateCatalog();
-      showToast(LC.DONE[action]);
+      showToast(action === "restore" && lc.restore_to === "published" ? OWN.done.restore_published : OWN.done[action]);
       await load();
     });
     anchor.after(panel);
-    (textarea || ok).focus();
+    (ack || ok).focus();
   }
 
   function historyToggle(product, container){
@@ -684,7 +801,7 @@
         list.append(...(rows.length ? rows : [null]).map(ev => {
           const li = document.createElement("li");
           li.textContent = ev
-            ? `${LC.formatDate(ev.created_at)} · ${LC.ACTORS[ev.actor_kind] || ev.actor_kind} · ${LC.EVENTS[ev.action] || ev.action}${ev.reason ? ` · ${ev.reason}` : ""}`
+            ? `${LC.formatDate(ev.created_at)} · ${ev.actor_kind === "distributor" ? "Tu empresa" : (LC.ACTORS[ev.actor_kind] || ev.actor_kind)} · ${LC.EVENTS[ev.action] || ev.action}${ev.reason && ev.actor_kind === "mobau" ? ` · Motivo: ${ev.reason}` : ""}`
             : "Sin eventos de ciclo de vida.";
           return li;
         }));
@@ -699,14 +816,18 @@
     return toggle;
   }
 
-  function lifecycleActions(product, lc){
+  /* Acciones del servidor (allowed_actions) que corresponden a cada vista:
+     Productos → solicitar revisión y Retirar; Papelera → Restaurar y
+     Eliminar definitivamente. */
+  const VIEW_ACTIONS = { products: ["request_republish", "trash"], trash: ["restore", "purge"] };
+  function lifecycleActions(product, lc, where){
     const wrap = document.createElement("div");
     wrap.className = "lc-actions";
-    (lc.allowed_actions || []).filter(a => LC.ACTIONS[a] && a !== "purge").forEach(action => {
+    VIEW_ACTIONS[where].filter(a => (lc.allowed_actions || []).includes(a)).forEach(action => {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = (action === "retire" || action === "trash") ? "pp-withdraw-btn" : "pl-toggle";
-      b.textContent = LC.ACTIONS[action];
+      b.className = (action === "trash" || action === "purge") ? "pp-withdraw-btn" : "pl-toggle";
+      b.textContent = OWN.actions[action];
       b.dataset.lcAction = action;
       b.addEventListener("click", () => openPanel(product, lc, action, wrap));
       wrap.append(b);
@@ -716,14 +837,14 @@
   }
 
   /* Solicitud de republicación abierta: enviarla (borrador o cambios
-     solicitados) o retirarla. Retirarla vuelve a dejar el producto retirado. */
+     solicitados) o cancelarla. Cancelarla deja el producto como estaba (retirado). */
   function republishBlock(proposal){
     const info = PROPOSAL[proposal.status];
     const line = document.createElement("div");
     line.className = "pl-proposal";
     const parts = [`versión ${proposal.version}`];
     if (proposal.submitted_at) parts.push(`enviada el ${formatDate(proposal.submitted_at)}`);
-    line.append(chip(`Republicación: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
+    line.append(chip(`Solicitud de revisión: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
     const nodes = [line];
     if (proposal.status === "changes_requested" && proposal.rejection_reason) nodes.push(textDiv("pl-note", `Nota de Mobau: ${proposal.rejection_reason}`));
     const actions = document.createElement("div");
@@ -745,7 +866,7 @@
           send.disabled = false;
           return;
         }
-        showToast(LC.DONE.request_republish);
+        showToast(OWN.done.request_republish);
         await load();
       });
       actions.append(send);
@@ -753,9 +874,9 @@
     const withdraw = document.createElement("button");
     withdraw.type = "button";
     withdraw.className = "pp-withdraw-btn";
-    withdraw.textContent = "Retirar solicitud";
+    withdraw.textContent = "Cancelar solicitud";
     withdraw.addEventListener("click", async () => {
-      if (!confirm("¿Retirar la solicitud de republicación?\nEl producto seguirá retirado.")) return;
+      if (!confirm("¿Cancelar la solicitud de revisión?\nEl producto seguirá retirado.")) return;
       withdraw.disabled = true;
       let data = null;
       let error = null;
@@ -769,7 +890,7 @@
         withdraw.disabled = false;
         return;
       }
-      showToast("Solicitud retirada.");
+      showToast("Solicitud cancelada.");
       await load();
     });
     actions.append(withdraw);
@@ -800,14 +921,13 @@
     if (open) info.append(...proposalBlock(open));
     if (LC.enabled() && lifecycle){
       const lc = lifecycle.get(product.id) || null;
-      if (lc) info.append(...lifecycleLines(lc));
+      if (lc) info.append(...lifecycleLines(product, lc));
       else info.append(textDiv("lc-line", LC.TEXT.notChecked));
       const republish = openRepublish.get(product.id);
       if (republish) info.append(...republishBlock(republish));
-      if (lc && !lifecycleError) info.append(lifecycleActions(product, lc));
+      if (lc && !lifecycleError) info.append(lifecycleActions(product, lc, "products"));
     }
 
-    const publication = PUBLICATION[product.publication_status] || { label: "Sin estado", kind: "neutral" };
     /* Una propuesta abierta se continúa; nunca se ofrece crear una segunda.
        En revisión no se edita: se muestra en la propia tarjeta. */
     let action;
@@ -822,12 +942,108 @@
     /* .c-qty ya ocupa todo el ancho en móvil (regla existente de .cart-row). */
     const actions = document.createElement("div");
     actions.className = "c-qty pl-actions";
-    actions.append(chip(publication.label, publication.kind), action);
+    actions.append(statusChip(product, LC.enabled() && lifecycle ? lifecycle.get(product.id) : null), action);
     if (product.publication_status === "published") actions.append(link("Ver producto", `producto.html?id=${encodeURIComponent(product.id)}`));
 
     row.append(makeThumb(product.name, product.image_url), info, actions);
     makeClickable(row, action);
     return row;
+  }
+
+  const RESTORE_TO = {
+    published: "Al restaurarlo volverá al catálogo.",
+    retired:   "Al restaurarlo volverá a Productos, retirado por Mobau.",
+    draft:     "Al restaurarlo volverá a Productos como borrador."
+  };
+
+  /* Papelera (41-07): sin «Proponer cambios» ni enlace a la ficha. */
+  function buildTrashRow(product){
+    const lc = lifecycle.get(product.id);
+    const row = document.createElement("div");
+    row.className = "cart-row";
+    const info = document.createElement("div");
+    info.append(
+      textDiv("c-name", product.name),
+      textDiv("c-brand", product.brand || "Sin marca"),
+      textDiv("c-meta", [categoryNames.get(product.category_id) || product.category_id, product.subcategory || "Sin subcategoría"].filter(Boolean).join(" · "))
+    );
+    const byMobau = lc.trashed_by_kind === "mobau";
+    if (byMobau){
+      const reason = mobauReason(product.id, "trash") || (lc.retired_by_kind === "mobau" ? lc.retired_reason : null);
+      if (reason) info.append(textDiv("pl-note", `Motivo de Mobau: ${reason}`));
+      info.append(textDiv("lc-line", `Mobau lo movió a la papelera el ${LC.formatDate(lc.trashed_at)}. Solo Mobau puede restaurarlo; tú puedes eliminarlo definitivamente.`));
+    } else {
+      info.append(textDiv("lc-line", `Retirado el ${LC.formatDate(lc.trashed_at)}. ${RESTORE_TO[lc.restore_to] || ""}`.trim()));
+    }
+    if (lc.has_open_proposal) info.append(openProposalBlock(product, "eliminarlo definitivamente"));
+    if (!lifecycleError) info.append(lifecycleActions(product, lc, "trash"));
+
+    const side = document.createElement("div");
+    side.className = "c-qty pl-actions";
+    side.append(chip(byMobau ? "Movido por Mobau" : "En la papelera", byMobau ? "alert" : "neutral"));
+    row.append(makeThumb(product.name, product.image_url), info, side);
+    return row;
+  }
+
+  /* ---------- Avisos de Mobau (41-07) ----------
+     Intervenciones de Mobau de los últimos 30 días, desde
+     my_product_lifecycle_events(), con su fecha. No hay estado leído/no
+     leído en el servidor: no se marca nada como «Nueva». */
+  const NOTICE = {
+    retire:  { label: "Retirado por Mobau",            kind: "alert" },
+    trash:   { label: "Movido a la papelera por Mobau", kind: "alert" },
+    purge:   { label: "Eliminado por Mobau",           kind: "alert" },
+    restore: { label: "Restaurado por Mobau",          kind: "ok" }
+  };
+  function renderNotices(){
+    const since = Date.now() - NOTICE_DAYS * 24 * 3600 * 1000;
+    const notices = lcEvents.filter(ev => ev.actor_kind === "mobau" && NOTICE[ev.action] && new Date(ev.created_at).getTime() >= since);
+    $("pl-notices").hidden = notices.length === 0;
+    if (!notices.length) return;
+    $("pl-notices-list").replaceChildren(...notices.map(ev => {
+      const row = document.createElement("div");
+      row.className = "pl-decision";
+      const head = document.createElement("div");
+      head.className = "pl-decision-head";
+      head.append(chip(NOTICE[ev.action].label, NOTICE[ev.action].kind));
+      const name = document.createElement("span");
+      name.className = "c-name";
+      name.textContent = ev.product_name ? `${ev.product_name} · ${ev.product_id}` : `Producto ${ev.product_id}`;
+      head.append(name);
+      const meta = document.createElement("p");
+      meta.className = "pl-decision-meta";
+      meta.textContent = LC.formatDate(ev.created_at);
+      row.append(head, meta);
+      if (ev.reason) row.append(textDiv("pl-note", `Motivo: ${ev.reason}`));
+      const product = products.find(p => p.id === ev.product_id);
+      if (product && lifecycleState(product) === "trashed") row.append(viewLink("Ver en la papelera", "trash"));
+      else if (product) row.append(viewLink("Ver en Productos", "products"));
+      return row;
+    }));
+  }
+
+  /* Productos eliminados (41-07): todo el historial, sin límite de fecha. */
+  function renderDeleted(){
+    const deleted = lcEvents.filter(ev => ev.action === "purge");
+    $("pl-deleted").hidden = deleted.length === 0;
+    $("pl-deleted-summary").textContent = `Productos eliminados · ${deleted.length}`;
+    $("pl-deleted-list").replaceChildren(...deleted.map(ev => {
+      const li = document.createElement("li");
+      const name = document.createElement("span");
+      name.className = "c-name";
+      name.textContent = ev.product_name || "Producto sin nombre";
+      const by = ev.actor_kind === "mobau" ? "Eliminado por Mobau" : "Eliminado por tu empresa";
+      li.append(name, document.createTextNode(` · ${ev.product_id} · ${LC.formatDate(ev.created_at)} · ${by}${ev.reason ? ` · Motivo: ${ev.reason}` : ""}`));
+      return li;
+    }));
+  }
+  function viewLink(text, target){
+    const a = document.createElement("a");
+    a.className = "pd-link";
+    a.href = target === "trash" ? "#papelera" : "#productos";
+    a.textContent = text;
+    a.addEventListener("click", (e) => { e.preventDefault(); setView(target); $(target === "trash" ? "pl-tab-trash" : "pl-tab-products").focus(); });
+    return a;
   }
 
   function buildProposedRow(proposal){
@@ -977,40 +1193,78 @@
     return !!open && open.status === filter;
   }
 
+  function setView(target){
+    view = target;
+    history.replaceState(null, "", window.location.pathname + (target === "trash" ? "#papelera" : ""));
+    render();
+  }
+
   function render(){
     const query = $("pl-search").value.trim().toLowerCase();
     const category = $("pl-category").value;
     const catalog = $("pl-status").value;
     const proposal = $("pl-proposal").value;
 
+    /* Sin datos de ciclo de vida no se sabe qué está en la papelera: sin
+       pestañas, todos los productos en una lista (como antes de 41). */
+    const trashKnown = LC.enabled() && !!lifecycle;
+    const active = trashKnown ? products.filter(p => lifecycleState(p) !== "trashed") : products;
+    const trashed = trashKnown ? products.filter(p => lifecycleState(p) === "trashed") : [];
+
     /* Distribuidor sin productos ni productos propuestos: un solo estado vacío. */
     const nothingYet = products.length === 0 && openCreates.length === 0;
     $("pl-first").hidden = !nothingYet;
+    $("pl-tabs").hidden = nothingYet || !trashKnown;
+    if (!trashKnown) view = "products";
+    $("pl-tab-products").setAttribute("aria-selected", String(view === "products"));
+    $("pl-tab-trash").setAttribute("aria-selected", String(view === "trash"));
+    $("pl-tab-products").tabIndex = view === "products" ? 0 : -1;
+    $("pl-tab-trash").tabIndex = view === "trash" ? 0 : -1;
+    $("pl-tab-products-count").textContent = ` · ${active.length}`;
+    $("pl-tab-trash-count").textContent = ` · ${trashed.length}`;
+    $("pl-view-products").hidden = view !== "products";
+    $("pl-view-trash").hidden = view !== "trash" || nothingYet;
     $("pl-filters").hidden = nothingYet;
     $("pl-catalog").hidden = nothingYet;
     if (nothingYet){ $("pl-proposed").hidden = true; return; }
 
-    const visible = products.filter(p =>
-      (!catalog || (catalog === "lc-trashed" ? lifecycleState(p) === "trashed" : CATALOG_FILTER[catalog].includes(p.publication_status))) &&
+    /* ---- Papelera ---- */
+    $("pl-trash-list").replaceChildren(...(view === "trash" ? trashed.map(buildTrashRow) : []));
+    $("pl-trash-count").textContent = `${trashed.length} ${trashed.length === 1 ? "producto" : "productos"} en la papelera`;
+    $("pl-trash-count").hidden = trashed.length === 0;
+    $("pl-trash-empty").hidden = trashed.length > 0;
+    $("pl-trash-list").hidden = trashed.length === 0;
+
+    /* ---- Productos (sin los de la papelera) ---- */
+    const visible = active.filter(p =>
+      (!catalog || CATALOG_FILTER[catalog].includes(p.publication_status)) &&
       (!category || p.category_id === category) &&
       (!query || `${p.name} ${p.brand || ""}`.toLowerCase().includes(query)) &&
       matchesProposal(openUpdates.get(p.id), proposal)
     );
     $("pl-list").replaceChildren(...visible.map(buildProductRow));
-    $("pl-count").textContent = `${visible.length} de ${products.length} ${products.length === 1 ? "producto" : "productos"}`;
+    const inCatalog = active.filter(p => p.publication_status === "published").length;
+    const noun = active.length === 1 ? "producto" : "productos";
+    $("pl-count").textContent = visible.length === active.length
+      ? `${active.length} ${noun} · ${inCatalog} en el catálogo`
+      : `${visible.length} de ${active.length} ${noun} · ${inCatalog} en el catálogo`;
     const empty = visible.length === 0;
     $("pl-empty").hidden = !empty;
     $("pl-list").hidden = empty;
     if (empty){
-      const noProductsAtAll = products.length === 0;
-      $("pl-empty-title").textContent = noProductsAtAll ? "Todavía no tienes productos en el catálogo." : "Ningún producto coincide con los filtros.";
-      $("pl-empty-text").textContent = noProductsAtAll ? "Tus productos propuestos aparecen más abajo hasta que Mobau los incorpore." : "Prueba con otra búsqueda, categoría o estado.";
+      const noneActive = active.length === 0;
+      $("pl-empty-title").textContent = noneActive
+        ? (trashed.length ? "No tienes productos fuera de la papelera." : "Todavía no tienes productos en el catálogo.")
+        : "Ningún producto coincide con los filtros.";
+      $("pl-empty-text").textContent = noneActive
+        ? (trashed.length ? "Los productos que has retirado están en la papelera." : "Tus productos propuestos aparecen más abajo hasta que Mobau los incorpore.")
+        : "Prueba con otra búsqueda, categoría o estado.";
     }
 
     /* Productos propuestos: aún no están en el catálogo, así que solo se
        muestran con "Todos" o "Pendientes de publicación"; y siempre tienen
        propuesta abierta, así que no con "Sin propuesta abierta". */
-    const showProposed = openCreates.length > 0 && (!catalog || catalog === "pending") && proposal !== "none"; // «En papelera» (D2) no los incluye
+    const showProposed = openCreates.length > 0 && (!catalog || catalog === "pending") && proposal !== "none";
     $("pl-proposed").hidden = !showProposed;
     if (showProposed){
       const proposed = openCreates.filter(p => {
@@ -1062,12 +1316,11 @@
       /* Ciclo de vida (D2): solo con el interruptor encendido; un fallo no
          impide ver la página, pero deja la página sin acciones de ciclo de vida. */
       await loadLifecycle();
-      if (LC.enabled() && !$("pl-status").querySelector('option[value="lc-trashed"]')){
-        $("pl-status").append(new Option("En papelera", "lc-trashed"));
-      }
 
       showOnly("pl-content");
       render();
+      renderNotices();
+      renderDeleted();
       loadDecisions();
 
       /* Al volver del formulario: aviso (?aviso=…) y, si procede, la
@@ -1075,7 +1328,7 @@
       const params = new URLSearchParams(window.location.search);
       const aviso = params.get("aviso");
       const ver = params.get("ver");
-      if (aviso || ver) history.replaceState(null, "", window.location.pathname);
+      if (aviso || ver) history.replaceState(null, "", window.location.pathname + window.location.hash);
       if (AVISOS[aviso]) showToast(AVISOS[aviso]);
       const toggle = ver ? [...document.querySelectorAll(".pl-toggle")].find(b => b.dataset.proposalId === ver) : null;
       if (toggle){
@@ -1093,6 +1346,17 @@
     ["pl-search", "pl-category", "pl-status", "pl-proposal"].forEach(id => $(id).addEventListener(evt, render));
   });
   $("pl-retry-btn").addEventListener("click", load);
+  $("pl-tab-products").addEventListener("click", () => setView("products"));
+  $("pl-tab-trash").addEventListener("click", () => setView("trash"));
+  $("pl-trash-back").addEventListener("click", () => { setView("products"); $("pl-tab-products").focus(); });
+  /* Flechas izquierda/derecha entre pestañas (patrón ARIA de pestañas). */
+  $("pl-tabs").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const target = view === "products" ? "trash" : "products";
+    setView(target);
+    $(target === "trash" ? "pl-tab-trash" : "pl-tab-products").focus();
+  });
 
   (async () => {
     session = await MobauAuth.requireSession();

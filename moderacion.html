@@ -70,7 +70,7 @@
           <option value="changes_requested">Cambios solicitados</option>
           <option value="approved">Aprobadas</option>
           <option value="rejected">Rechazadas</option>
-          <option value="withdrawn">Retiradas</option>
+          <option value="withdrawn">Canceladas</option>
           <option value="todas">Todas</option>
         </select>
       </div>
@@ -131,7 +131,7 @@
     changes_requested: "No hay propuestas con cambios solicitados.",
     approved: "No hay propuestas aprobadas.",
     rejected: "No hay propuestas rechazadas.",
-    withdrawn: "No hay propuestas retiradas.",
+    withdrawn: "No hay propuestas canceladas.",
     todas: "No hay propuestas."
   };
   const LIMIT = 200;
@@ -306,9 +306,57 @@
     status.id = "lc-status";
     const list = M.el("ul", "mod-list");
     list.id = "lc-list";
-    section.append(title, intro, aviso, status, list);
+    section.append(title, intro, aviso, status, list, lcDeletedBlock());
     $("mod-app").append(section);
     return section;
+  }
+
+  /* Eliminaciones definitivas (41-07): las 200 más recientes, desde la
+     auditoría (mobau_lifecycle_history). Se leen al abrir el bloque; cada una
+     enlaza con su historial en moderacion-producto.html. */
+  function lcDeletedBlock(){
+    const details = M.el("details", "lc-deleted");
+    details.style.marginTop = "24px";
+    const summary = M.el("summary", "", "Eliminaciones definitivas");
+    summary.style.cssText = "min-height:44px; display:flex; align-items:center; cursor:pointer;";
+    const body = M.el("div");
+    details.append(summary, body);
+    let loaded = false;
+    details.addEventListener("toggle", async () => {
+      if (!details.open || loaded) return;
+      body.replaceChildren(M.el("p", "card-meta", "Cargando eliminaciones…"));
+      let rows;
+      try {
+        rows = await LC.history(null);
+      } catch (error){
+        const c = LC.classify(error);
+        if (c.kind === "mfa"){ await gate.relock(c.message); return; }
+        if (c.kind === "denied"){ gate.deny(c.message); return; }
+        body.replaceChildren(M.el("p", "card-meta", c.message));
+        return;
+      }
+      loaded = true;
+      if (!Array.isArray(rows) || !rows.length){
+        body.replaceChildren(M.el("p", "card-meta", "No hay eliminaciones definitivas."));
+        return;
+      }
+      const ul = M.el("ul", "mod-list");
+      rows.forEach(r => {
+        const a = document.createElement("a");
+        a.href = `moderacion-producto.html?id=${encodeURIComponent(r.product_id)}`;
+        const text = M.el("div");
+        const head = M.el("div", "mod-row-title");
+        head.append(M.chip(r.actor_kind === "mobau" ? "Mobau" : "Empresa", r.actor_kind === "mobau" ? "alert" : "neutral"), M.el("span", "", r.product_name || r.product_id));
+        text.append(head, M.el("div", "mod-row-sub", [companies.get(r.distributor_id) || r.distributor_id, r.product_id, `eliminado el ${M.formatDate(r.created_at)}`, r.reason ? `Motivo: ${r.reason}` : null].filter(Boolean).join(" · ")));
+        a.append(text, M.el("span", "mod-row-arrow", "›"));
+        a.querySelector(".mod-row-arrow").setAttribute("aria-hidden", "true");
+        const li = M.el("li", "mod-row");
+        li.append(a);
+        ul.append(li);
+      });
+      body.replaceChildren(M.el("p", "card-meta", `${rows.length} ${rows.length === 1 ? "eliminación" : "eliminaciones"}${rows.length === 200 ? " (las 200 más recientes)" : ""}.`), ul);
+    });
+    return details;
   }
 
   function lcClear(){
@@ -344,7 +392,7 @@
     title.append(M.chip(label.label, label.kind), M.el("span", "", p.name || p.id));
     const parts = [companies.get(p.distributor_id) || p.distributor_id, p.id];
     if (view && view.lifecycle_state === "retired" && view.retired_at) parts.push(`retirado el ${M.formatDate(view.retired_at)}`);
-    if (view && view.lifecycle_state === "trashed" && view.purge_after) parts.push(`papelera hasta el ${M.formatDate(view.purge_after)}`);
+    if (view && view.lifecycle_state === "trashed" && view.trashed_at) parts.push(`en la papelera desde el ${M.formatDate(view.trashed_at)}`);
     if (!view && p.publication_status === "draft") parts.push("papelera sin comprobar");
     const sub = M.el("div", "mod-row-sub", parts.join(" · "));
     if (failed) sub.append(document.createTextNode(" · "), M.el("span", "mod-row-warn", failed.message));

@@ -1,9 +1,14 @@
 /* ============================================================
    MOBAU — Ciclo de vida de productos (punto 41, D2)
    ------------------------------------------------------------
-   Único punto de la interfaz que llama a las nueve funciones de ciclo de
-   vida (41-03 y 41-05) y que crea, envía o retira propuestas «republish»
-   (41-04).
+   Único punto de la interfaz que llama a las diez funciones de ciclo de
+   vida (41-03, 41-05 y 41-07) y que crea, envía o cancela propuestas
+   «republish» (41-04).
+   41-07: para el distribuidor, «Retirar» es distributor_trash_product (del
+   catálogo directamente a la papelera); distributor_retire_product ya no se
+   llama. La papelera propia (sin caducidad) se gestiona con restore y
+   distributor_purge_product. Mobau consulta las eliminaciones con
+   mobau_lifecycle_history.
    Lo usan distribuidor-productos.html, moderacion.html,
    moderacion-propuesta.html y moderacion-producto.html.
 
@@ -18,11 +23,12 @@
    ============================================================ */
 
 const MobauLifecycle = (() => {
-  /* Las nueve funciones nuevas: solo se llaman desde call(). */
+  /* Las diez funciones de ciclo de vida: solo se llaman desde call(). */
   const FUNCTIONS = Object.freeze([
     "my_products_lifecycle", "my_product_lifecycle_events",
-    "distributor_retire_product", "distributor_trash_product", "distributor_restore_product",
-    "mobau_product_lifecycle", "mobau_purge_product", "mobau_product_references", "mobau_product_lifecycle_view"
+    "distributor_trash_product", "distributor_restore_product", "distributor_purge_product",
+    "mobau_product_lifecycle", "mobau_purge_product", "mobau_product_references", "mobau_product_lifecycle_view",
+    "mobau_lifecycle_history"
   ]);
   const REASON_MAX = 500;
   const CATALOG_CACHE_KEYS = ["mobau_catalog_v2", "mobau_distributors_v2", "mobau_categories_v2"]; // las de script.js (D1)
@@ -41,27 +47,62 @@ const MobauLifecycle = (() => {
     in_review:         { label: "En revisión",          kind: "wait" },
     changes_requested: { label: "Cambios solicitados",  kind: "alert" }
   };
+  /* Acciones de Mobau (moderacion-producto.html). */
   const ACTIONS = {
-    retire:            "Retirar del catálogo",
+    retire:            "Retirar temporalmente",
     trash:             "Mover a la papelera",
     restore:           "Restaurar",
     request_republish: "Solicitar republicación",
     purge:             "Eliminar definitivamente"
   };
   const CONFIRM = {
-    retire:  "El producto dejará de verse en el catálogo y en su ficha de inmediato. Para volver a publicarlo hará falta que Mobau apruebe una solicitud de republicación.",
-    trash:   "El producto pasará a la papelera. Podrás restaurarlo durante 30 días; después Mobau podrá eliminarlo definitivamente.",
+    retire:  "El producto dejará de verse en el catálogo y en su ficha de inmediato. La empresa verá el motivo en Mis productos y no podrá volver a publicarlo sin que Mobau apruebe una solicitud de revisión.",
+    trash:   "El producto se moverá a la papelera. La empresa verá el motivo.",
     restore: "El producto volverá al estado que tenía antes de la papelera (retirado o borrador). No se publicará.",
     request_republish: "Mobau revisará la solicitud. El producto seguirá retirado hasta que la apruebe.",
-    mobau_trash:   "El producto pasará a la papelera. Durante 30 días solo se podrá eliminar definitivamente de forma anticipada.",
+    mobau_trash:   "El producto pasará a la papelera. La empresa verá el motivo y no podrá restaurarlo: solo Mobau puede hacerlo.",
     mobau_restore: "El producto volverá al estado que tenía antes de la papelera. No se publicará.",
-    purge:   "Eliminar definitivamente borra el producto, su precio, sus propuestas y el historial de esas propuestas; solo queda un registro de auditoría con recuentos, sin el contenido. No se puede deshacer. El servidor lo impide si el producto está en alguna línea de proyecto (activo o archivado, también las incluidas en solicitudes de cotización), si otra tabla lo referencia, si hay referencias que no se pueden comprobar o si tiene una propuesta abierta."
+    purge:   "Eliminar definitivamente borra el producto, su precio, sus propuestas y el historial de esas propuestas; solo queda un registro de auditoría con el nombre, el identificador, los recuentos y el motivo, que verá la empresa. No se puede deshacer. El servidor lo impide si el producto está en alguna línea de proyecto (activo o archivado, también las incluidas en solicitudes de cotización), si otra tabla lo referencia, si hay referencias que no se pueden comprobar o si tiene una propuesta abierta."
+  };
+  /* Distribuidor (41-07): una sola acción «Retirar» (a la papelera) y la
+     papelera propia con «Restaurar» y «Eliminar definitivamente». */
+  const OWN = {
+    actions: {
+      trash:             "Retirar",
+      restore:           "Restaurar",
+      purge:             "Eliminar definitivamente",
+      request_republish: "Solicitar revisión a Mobau"
+    },
+    confirm: {
+      trash_published: "El producto dejará de aparecer en el catálogo y se moverá a la papelera. Podrás restaurarlo desde allí.",
+      trash_draft:     "El borrador se moverá a la papelera. Podrás restaurarlo desde allí.",
+      trash_other:     "El producto se moverá a la papelera. Podrás restaurarlo desde allí.",
+      trash_retired:   "El producto se moverá a la papelera. Podrás restaurarlo desde allí; seguirá retirado por Mobau.",
+      restore_published: "El producto volverá a Productos y al catálogo, con el mismo contenido que tenía.",
+      restore_retired:   "El producto volverá a Productos, todavía retirado por Mobau. Para publicarlo tendrás que solicitar la revisión.",
+      restore_draft:     "El borrador volverá a Productos.",
+      purge: "Se borrarán el producto, su precio y sus propuestas. No se puede deshacer. Si el producto está en proyectos o solicitudes de cotización de clientes, no se podrá eliminar y seguirá en la papelera. Solo quedará constancia de su nombre y su identificador en tu historial.",
+      purge_ack: "Entiendo que esta acción no se puede deshacer.",
+      request_republish: "Mobau revisará el producto. Seguirá retirado hasta que lo apruebe."
+    },
+    done: {
+      trash:   "Producto retirado y movido a la papelera.",
+      restore_published: "Producto restaurado y publicado de nuevo.",
+      restore: "Producto restaurado.",
+      purge:   "Producto eliminado definitivamente.",
+      request_republish: "Solicitud de revisión enviada a Mobau."
+    },
+    hints: {
+      purge_blocked_references: "Este producto está en proyectos o solicitudes de cotización de clientes, así que no se puede eliminar definitivamente. Seguirá en la papelera, fuera del catálogo.",
+      purge_unknown_reference:  "No pudimos comprobar si el producto se usa en otros registros, así que no se puede eliminar definitivamente. Seguirá en la papelera.",
+      open_proposal:            "Tiene una propuesta abierta: cancélala o espera la decisión de Mobau antes de continuar.",
+      mobau_intervention:       "Mobau movió este producto a la papelera: solo Mobau puede restaurarlo."
+    }
   };
   const BLOCKS = {
     open_proposal:            "Tiene una propuesta abierta: no se puede retirar ni mover a la papelera hasta que se cierre.",
     legacy_pending_review:    "Retirado antes del ciclo de vida: pendiente de revisión individual por Mobau. Sin acciones.",
     in_review:                "El producto está en revisión: sin acciones de ciclo de vida.",
-    purge_not_due:            "El plazo de la papelera no ha terminado: solo cabe la eliminación definitiva anticipada, con motivo.",
     purge_blocked_references: "Está en proyectos o solicitudes de cotización: la eliminación definitiva está bloqueada.",
     purge_unknown_reference:  "Hay referencias que no se pueden comprobar: la eliminación definitiva está bloqueada."
   };
@@ -110,10 +151,11 @@ const MobauLifecycle = (() => {
     open_proposal:             BLOCKS.open_proposal,
     legacy_pending_review:     BLOCKS.legacy_pending_review,
     in_review:                 BLOCKS.in_review,
-    restore_window_expired:    "El plazo para restaurar terminó. Contacta con Mobau.",
+    restore_window_expired:    "El plazo para restaurar terminó. Contacta con Mobau.", // solo servidores anteriores a 41-07
+    mobau_intervention:        "Mobau movió este producto a la papelera: solo Mobau puede restaurarlo.",
     republish_requires_retired: "Solo se puede solicitar republicar un producto retirado.",
     confirm_mismatch:          TEXT.confirmMismatch,
-    purge_not_due:             BLOCKS.purge_not_due,
+    purge_not_due:             "El plazo de la papelera no ha terminado.", // solo servidores anteriores a 41-07
     purge_blocked_references:  BLOCKS.purge_blocked_references,
     purge_unknown_reference:   BLOCKS.purge_unknown_reference
   };
@@ -180,12 +222,15 @@ const MobauLifecycle = (() => {
   /* Distribuidor (41-03) */
   const myProducts = () => call("my_products_lifecycle", {});
   const myEvents = (productId) => call("my_product_lifecycle_events", { p_product_id: productId });
-  const retire = (productId, reason, updatedAt) =>
-    call("distributor_retire_product", { p_product_id: productId, p_reason: reason, p_expected_updated_at: updatedAt });
+  /* «Retirar» (41-07): publicado, retirado o borrador → papelera. */
   const trash = (productId, updatedAt) =>
     call("distributor_trash_product", { p_product_id: productId, p_expected_updated_at: updatedAt });
   const restore = (productId, updatedAt) =>
     call("distributor_restore_product", { p_product_id: productId, p_expected_updated_at: updatedAt });
+  /* Eliminación definitiva propia (41-07): el id de confirmación lo pone la
+     página tras la casilla de confirmación; el servidor lo compara igual. */
+  const purgeOwn = (productId, updatedAt) =>
+    call("distributor_purge_product", { p_product_id: productId, p_confirm_id: productId, p_expected_updated_at: updatedAt });
 
   /* Republicación (41-04): propuesta sin cambios; se crea como borrador y se
      envía, igual que el resto de propuestas. Si falla el envío, queda un
@@ -204,7 +249,7 @@ const MobauLifecycle = (() => {
     if (error) throw error;
     return data;
   }
-  /* Retirar una solicitud abierta: el mismo cambio de estado (→ withdrawn)
+  /* Cancelar una solicitud abierta: el mismo cambio de estado (→ withdrawn)
      que el resto de propuestas (38-C); el servidor decide si se permite. */
   async function withdrawRepublish(proposalId){
     if (!enabled()) throw uiDisabled();
@@ -221,8 +266,12 @@ const MobauLifecycle = (() => {
     call("mobau_product_lifecycle", { p_product_id: productId, p_action: action, p_reason: reason || null, p_expected_updated_at: updatedAt });
   /* El id de confirmación se envía tal cual se escribió: el servidor lo
      compara exactamente con el del producto. */
-  const purge = (productId, confirmId, reason, early, updatedAt) =>
-    call("mobau_purge_product", { p_product_id: productId, p_confirm_id: confirmId, p_reason: reason, p_early: !!early, p_expected_updated_at: updatedAt });
+  /* p_early (41-05) se conserva en la firma; desde 41-07 no hay plazo y no bloquea. */
+  const purge = (productId, confirmId, reason, updatedAt) =>
+    call("mobau_purge_product", { p_product_id: productId, p_confirm_id: confirmId, p_reason: reason, p_early: false, p_expected_updated_at: updatedAt });
+  /* Historial (41-07): con id, los eventos de ese id aunque ya no exista el
+     producto; sin id, las últimas 200 eliminaciones definitivas. */
+  const history = (productId) => call("mobau_lifecycle_history", { p_product_id: productId || null });
 
   /* ---------- utilidades ---------- */
   /* Tras una acción correcta: la caché del catálogo de esta pestaña ya no vale. */
@@ -256,9 +305,9 @@ const MobauLifecycle = (() => {
   function stateInfo(state){ return STATES[state] || { label: state || TEXT.notChecked, kind: "neutral" }; }
 
   return {
-    FUNCTIONS, REASON_MAX, STATES, ACTIONS, CONFIRM, BLOCKS, TEXT, DONE, HINTS, EVENTS, ACTORS,
+    FUNCTIONS, REASON_MAX, STATES, ACTIONS, CONFIRM, BLOCKS, TEXT, DONE, HINTS, EVENTS, ACTORS, OWN,
     enabled, classify, reasonError, reasonLength, stateInfo, formatDate,
-    myProducts, myEvents, retire, trash, restore, requestRepublish, submitRepublish, withdrawRepublish,
-    view, references, act, purge, invalidateCatalog, runLimited
+    myProducts, myEvents, trash, restore, purgeOwn, requestRepublish, submitRepublish, withdrawRepublish,
+    view, references, act, purge, history, invalidateCatalog, runLimited
   };
 })();

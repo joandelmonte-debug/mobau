@@ -14,7 +14,7 @@
   .pp-form-wrap{ max-width:760px; }
   .pp-product{ margin:0; font-weight:600; color: var(--ink); }
   .pp-product-meta{ margin:2px 0 0; font-size:13.5px; color: var(--ink-soft); }
-  /* Retirar: botón secundario (sin fondo fuerte), color de alerta discreto,
+  /* Cancelar propuesta: botón secundario (sin fondo fuerte), color de alerta discreto,
      44 px de área táctil y foco visible. */
   .pp-withdraw-btn{ display:inline-flex; align-items:center; min-height:44px; padding:0 12px; margin:14px 0 0 -12px; border:1px solid transparent; border-radius: var(--radius); background:transparent; color: var(--danger); font:inherit; font-size:14px; font-weight:500; cursor:pointer; }
   .pp-withdraw-btn:hover{ background: rgba(162, 59, 46, .07); background: color-mix(in srgb, var(--danger) 7%, transparent); text-decoration:underline; text-underline-offset:3px; }
@@ -136,7 +136,7 @@
         <button type="button" class="btn btn-primary" id="pf-submit-btn">Enviar a Mobau</button>
       </div>
       <!-- Solo al continuar una propuesta en borrador o con cambios solicitados. -->
-      <button type="button" class="pp-withdraw-btn" id="pf-withdraw-btn" hidden>Retirar propuesta</button>
+      <button type="button" class="pp-withdraw-btn" id="pf-withdraw-btn" hidden>Cancelar propuesta</button>
     </form>
   </section>
 
@@ -619,13 +619,13 @@
     backToProducts(submit ? "enviada" : "borrador");
   }
 
-  /* Retirar la propuesta abierta (draft o changes_requested → withdrawn,
-     transiciones ya autorizadas por 38-C). Cancelar no escribe nada. Si
+  /* Cancelar la propuesta abierta (draft o changes_requested → withdrawn,
+     transiciones ya autorizadas por 38-C). Responder que no al diálogo no escribe nada. Si
      falla, se explica y se relee la propuesta para no mostrar un estado
      desactualizado. */
   async function withdraw(){
     if (!editing || !EDITABLE.includes(editing.status)) return;
-    if (!confirm("¿Retirar esta propuesta?\nPodrás crear una nueva propuesta para este producto cuando la necesites.")) return;
+    if (!confirm("¿Cancelar esta propuesta?\nPodrás crear una nueva propuesta para este producto cuando la necesites.")) return;
     const errorEl = $("pf-error");
     errorEl.style.display = "none";
     const buttons = [$("pf-save-btn"), $("pf-submit-btn"), $("pf-withdraw-btn")];
@@ -644,11 +644,11 @@
       editing = current;
       applyMode();
       buttons.forEach(b => { b.disabled = false; });
-      errorEl.textContent = `No pudimos retirar la propuesta. ${reason}`;
+      errorEl.textContent = `No pudimos cancelar la propuesta. ${reason}`;
     } else {
       /* Ya no está abierta para editar (otra pestaña, Mobau…): sin acciones. */
       buttons.forEach(b => { b.hidden = true; });
-      errorEl.textContent = `No pudimos retirar la propuesta: ya no está abierta para editar. Vuelve a Mis productos para ver su estado.`;
+      errorEl.textContent = `No pudimos cancelar la propuesta: ya no está abierta para editar. Vuelve a Mis productos para ver su estado.`;
     }
     errorEl.style.display = "block";
   }

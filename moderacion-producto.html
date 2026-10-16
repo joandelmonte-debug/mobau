@@ -91,7 +91,11 @@
    interfaz apagado solo informa: no consulta nada de ciclo de vida.
    Encendido: lee mobau_product_lifecycle_view(id) y ofrece SOLO las
    acciones de allowed_actions, mediante mobau_product_lifecycle() y
-   mobau_purge_product(). El servidor valida todo de nuevo. */
+   mobau_purge_product(). El servidor valida todo de nuevo.
+   41-07: toda intervención (retirar, papelera, eliminar) pide motivo, que
+   la empresa ve en Mis productos; eliminar definitivamente se puede hacer
+   desde cualquier estado gestionable y la papelera no caduca. Si el
+   producto ya no existe, muestra su historial (mobau_lifecycle_history). */
 (() => {
   const M = MobauModeracion;
   const LC = MobauLifecycle;
@@ -191,10 +195,11 @@
       rows.push(row("Retirado", `${M.formatDate(view.retired_at)}${by ? ` · ${by}` : ""}`));
       rows.push(row("Motivo de la retirada", view.retired_reason));
     }
+    rows.push(row("Intervención de Mobau vigente", view.mobau_hold ? "Sí: la empresa no puede volver a publicarlo por su cuenta" : "No"));
     if (view.trashed_at){
       rows.push(row("En papelera desde", M.formatDate(view.trashed_at)));
+      rows.push(row("Movido a la papelera por", view.trashed_by_kind === "mobau" ? "Mobau" : (view.trashed_by_kind === "distributor" ? "Empresa (voluntario)" : "—")));
       rows.push(row("Estado anterior", LC.stateInfo(view.trash_from).label));
-      rows.push(row("Eliminación definitiva sin anticipar desde", M.formatDate(view.purge_after)));
     }
     section.append(table(rows));
     return section;
@@ -278,19 +283,17 @@
 
     const reason = document.createElement("textarea");
     reason.id = "lc-reason";
-    const reasonRequired = action === "retire" || action === "purge";
-    panel.append(field("Motivo", reason, reasonRequired ? `(obligatorio, hasta ${LC.REASON_MAX} caracteres)` : `(opcional, hasta ${LC.REASON_MAX} caracteres)`));
+    const reasonRequired = action === "retire" || action === "trash" || action === "purge";
+    panel.append(field("Motivo", reason, reasonRequired ? `(obligatorio, hasta ${LC.REASON_MAX} caracteres; la empresa lo verá)` : `(opcional, hasta ${LC.REASON_MAX} caracteres)`));
 
     let confirmInput = null;
-    let early = false;
     if (action === "purge"){
       confirmInput = document.createElement("input");
       confirmInput.id = "lc-confirm-id";
       confirmInput.autocomplete = "off";
       confirmInput.spellcheck = false;
       panel.append(field("Identificador del producto", confirmInput, `(escribe exactamente «${view.product_id}»)`));
-      early = !!(view.purge_after && Date.now() < new Date(view.purge_after).getTime());
-      if (early) panel.append(M.el("p", "", `Eliminación definitiva anticipada: el plazo de la papelera termina el ${M.formatDate(view.purge_after)}.`));
+      if (view.lifecycle_state !== "trashed") panel.append(M.el("p", "", "Eliminación definitiva directa: el producto no está en la papelera."));
     }
 
     const msg = M.el("p", "lc-msg");
@@ -317,7 +320,7 @@
       cancel.disabled = true;
       const text = reason.value.trim();
       try {
-        if (action === "purge") await LC.purge(view.product_id, confirmInput.value, text, early, view.updated_at);
+        if (action === "purge") await LC.purge(view.product_id, confirmInput.value, text, view.updated_at);
         else await LC.act(view.product_id, action, text || null, view.updated_at);
       } catch (error){
         if (!(await actionFailure(error, msg))){ ok.disabled = false; cancel.disabled = false; }
@@ -326,7 +329,7 @@
       LC.invalidateCatalog();
       if (action === "purge"){
         view = null;
-        message(LC.DONE.purge, "El producto ya no existe; queda solo su registro de auditoría.", backLink());
+        await showDeleted(productId, LC.DONE.purge);
         return;
       }
       await load();
@@ -342,7 +345,7 @@
     if (c.kind === "login"){ window.location.href = MobauAccess.accessUrlForCurrentPage(); return true; }
     if (c.kind === "mfa"){ if (await gate.relock(c.message)) msg.textContent = c.message; return true; }
     if (c.kind === "denied"){ gate.deny(c.message); return true; }
-    if (c.kind === "not_found"){ message(LC.TEXT.notFound, "", backLink()); return true; }
+    if (c.kind === "not_found"){ await showDeleted(productId); return true; }
     if (c.kind === "version_conflict"){ await load(); result(c.message, true); return true; }
     if (["server_disabled", "no_permission", "ui_disabled"].includes(c.kind) || (c.kind === "blocked" && error && error.hint === "self_moderation_forbidden")){
       locked = true;
@@ -372,6 +375,54 @@
     setState("detail");
   }
 
+  /* ---------- producto eliminado (41-07) ----------
+     El producto ya no existe: su historial sigue en la auditoría. Se lee con
+     mobau_lifecycle_history(id) y se pinta como el historial de siempre. */
+  async function showDeleted(id, doneTitle){
+    let rows;
+    try {
+      rows = await LC.history(id);
+    } catch (error){
+      message(doneTitle || LC.TEXT.notFound, "", backLink());
+      return;
+    }
+    if (!Array.isArray(rows) || !rows.length){
+      message(doneTitle || LC.TEXT.notFound, "", backLink());
+      return;
+    }
+    const purge = rows.find(r => r.action === "purge");
+    const name = (rows.find(r => r.product_name) || {}).product_name || id;
+    const distId = rows[0].distributor_id;
+    const { data: d } = await supabaseClient.from("distributors").select("id, name").eq("id", distId).maybeSingle();
+    const nodes = [M.el("div", "eyebrow", "Ciclo de vida del producto")];
+    const title = M.el("h1", "pd-head", name);
+    title.style.cssText = "font-size:28px; margin:8px 0 0; overflow-wrap:anywhere;";
+    nodes.push(title);
+    const meta = M.el("div", "mod-head-meta");
+    meta.append(M.chip(purge ? "Eliminado definitivamente" : "No existe", "alert"), M.el("span", "", `producto ${id}`));
+    nodes.push(meta);
+    if (doneTitle) nodes.push(M.el("p", "", doneTitle));
+    if (purge){
+      nodes.push(table([
+        row("Eliminado", M.formatDate(purge.created_at)),
+        row("Por", purge.actor_kind === "mobau" ? "Mobau" : "La empresa"),
+        row("Motivo", purge.reason),
+        row("Empresa", d ? d.name : distId)
+      ]));
+    }
+    const section = M.el("section", "mod-section");
+    section.append(M.el("h2", "", "Historial de ciclo de vida"));
+    const list = M.el("ol", "mod-history");
+    rows.forEach(ev => {
+      const states = ev.from_state || ev.to_state ? ` (${LC.stateInfo(ev.from_state).label} → ${LC.stateInfo(ev.to_state).label})` : "";
+      list.append(M.el("li", "", `${M.formatDate(ev.created_at)} · ${LC.ACTORS[ev.actor_kind] || ev.actor_kind} · ${LC.EVENTS[ev.action] || ev.action}${ev.action === "purge" ? "" : states}${ev.reason ? ` · ${ev.reason}` : ""}`));
+    });
+    section.append(list);
+    nodes.push(section, backLink());
+    $("mod-detail").replaceChildren(...nodes);
+    setState("detail");
+  }
+
   /* ---------- carga ---------- */
   async function load(){
     const id = ++loadId;
@@ -397,7 +448,7 @@
       if (c.kind === "login"){ window.location.href = MobauAccess.accessUrlForCurrentPage(); return; }
       if (c.kind === "mfa"){ if (await gate.relock(c.message)) load(); return; }
       if (c.kind === "denied"){ gate.deny(c.message); return; }
-      if (c.kind === "not_found"){ message(LC.TEXT.notFound, "", backLink()); return; }
+      if (c.kind === "not_found"){ await showDeleted(productId); return; }
       if (["server_disabled", "no_permission", "ui_disabled"].includes(c.kind)){ message(c.message, "", retryButton(), backLink()); return; }
       message("No pudimos cargar el producto.", c.message, retryButton(), backLink());
       return;
