@@ -77,7 +77,7 @@
 
     <p class="section-note">Archivos descargables — para incorporar el producto directamente en tu proyecto:</p>
     <div class="resource-list" id="resource-list"></div>
-    <p class="resource-note">Descargas de demostración. En la versión completa, cada archivo se sirve directamente desde el distribuidor.</p>
+    <p class="resource-note" id="resource-note"></p>
 
     <div class="supplier-box">
       <div>
@@ -146,6 +146,68 @@ MobauAccess.accountKind().then(kind => {
   if (kind === "supplier" || kind === "mobau") document.querySelector(".product-selection-actions").hidden = true;
 });
 
+/* Punto 42: recursos reales del producto — los enlaces externos que el
+   distribuidor indicó en su propuesta y Mobau aprobó. Sin enlace, «No
+   disponible»; no hay descargas simuladas. Profesionales y Mobau pueden
+   abrirlos; un distribuidor, solo en productos de su empresa verificada.
+   Mientras no se confirme la cuenta, o si la comprobación falla, ningún
+   botón tiene enlace. Controla las herramientas de la ficha: no hace
+   privados los enlaces, que siguen siendo consultables en el catálogo. */
+const PRODUCT_RESOURCES = [
+  { label: "Ficha técnica", key: "ficha" },
+  { label: "CAD / BIM / 3D", key: "cad" }
+];
+const RESOURCE_NOTES = {
+  pending: "Comprobando tu cuenta…",
+  allowed: "Los archivos se abren en el sitio indicado por el distribuidor.",
+  foreign: "Las descargas solo están disponibles para los productos de tu empresa verificada.",
+  anon: "Inicia sesión para abrir los archivos.",
+  error: "No pudimos comprobar tu cuenta. Recarga la página.",
+  empty: "Este producto todavía no tiene archivos descargables."
+};
+
+/* -> "allowed" | "foreign" | "anon" | "error". Distribuidor: su fila de
+   distributor_profiles (verificada y con distributor_id), como en
+   distribuidor-producto.html, comparada con la empresa del producto. */
+async function resourceAccess(product){
+  try {
+    const kind = await MobauAccess.accountKind();
+    if (kind === "client" || kind === "mobau") return "allowed";
+    if (kind === "anon") return "anon";
+    if (kind !== "supplier") return "error";
+    const session = await MobauAuth.getSession();
+    if (!session) return "error";
+    const { data, error } = await supabaseClient
+      .from("distributor_profiles").select("verification_status, distributor_id").eq("user_id", session.user.id).maybeSingle();
+    if (error) return "error";
+    if (!data || data.verification_status !== "verified" || !data.distributor_id) return "foreign";
+    return data.distributor_id === product.distribuidor ? "allowed" : "foreign";
+  } catch (e) {
+    return "error";
+  }
+}
+
+function renderResources(product, access){
+  const items = PRODUCT_RESOURCES.map(r => ({ label: r.label, url: safeUrl(product[r.key]) }));
+  document.getElementById("resource-list").innerHTML = items.map(({ label, url }) => {
+    if (!url) return `
+    <div class="resource-row">
+      <span class="r-label">${label}</span>
+      <span class="r-ext">No disponible</span>
+    </div>`;
+    const action = access === "allowed"
+      ? `<a class="btn btn-outline" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Abrir</a>`
+      : `<button type="button" class="btn btn-outline" disabled>Abrir</button>`;
+    return `
+    <div class="resource-row">
+      <span class="r-label">${label}</span>
+      <span class="r-ext">${escapeHtml(new URL(url).hostname)}</span>
+      ${action}
+    </div>`;
+  }).join("");
+  document.getElementById("resource-note").textContent = items.some(i => i.url) ? RESOURCE_NOTES[access] : RESOURCE_NOTES.empty;
+}
+
 /* Punto 41 (D1): la ficha consulta catalog_products directamente, sin caché;
    sin id no hay producto por defecto. «No encontrado» solo si el servidor
    responde sin fila; si la consulta falla, error y «Reintentar». */
@@ -210,37 +272,9 @@ runWithCatalog(async function renderProductPage(){
   document.getElementById("s-loc").textContent = distribuidor.ubicacion;
   document.getElementById("s-more-link").href = `catalogo.html?distribuidor=${encodeURIComponent(product.distribuidor)}`;
 
-  /* Enlaces reales cuando el distribuidor los cargó; el resto sigue simulado. */
-  const realDownloads = { "BIM": safeUrl(product.cad), "Ficha técnica": safeUrl(product.ficha) };
-  const cadCovered = ["BIM", "CAD", "Modelo 3D"];
-  let hasRealDownload = false;
-  document.getElementById("resource-list").innerHTML = DOWNLOADS.map(d => {
-    const url = realDownloads[d.label] || (d.label === "CAD" || d.label === "Modelo 3D" ? realDownloads["BIM"] : "");
-    if (url && cadCovered.includes(d.label) && d.label !== "BIM") return "";
-    if (url){
-      hasRealDownload = true;
-      const host = new URL(url).hostname;
-      return `
-    <div class="resource-row">
-      <span class="r-label">${d.label === "BIM" ? "CAD / BIM / 3D" : d.label}</span>
-      <span class="r-ext">${escapeHtml(host)}</span>
-      <a class="btn btn-outline" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Descargar</a>
-    </div>`;
-    }
-    return `
-    <div class="resource-row">
-      <span class="r-label">${d.label}</span>
-      <span class="r-ext">${d.ext}</span>
-      <button type="button" class="btn btn-outline" data-download="${d.label}">Descargar</button>
-    </div>`;
-  }).join("");
-  if (hasRealDownload){
-    document.getElementById("resource-list").nextElementSibling.textContent = "Los archivos con enlace se descargan directamente del distribuidor; el resto son descargas de demostración.";
-  }
-
-  document.querySelectorAll('[data-download]').forEach(btn => {
-    btn.addEventListener("click", () => showToast(`Descarga simulada — ${btn.dataset.download}`));
-  });
+  /* Punto 42: sin enlace hasta confirmar la cuenta. */
+  renderResources(product, "pending");
+  resourceAccess(product).then(access => renderResources(product, access));
 
   const qtyInput = document.getElementById("product-qty-input");
   const qtyDecrementBtn = document.getElementById("product-qty-decrement");

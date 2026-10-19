@@ -811,15 +811,6 @@ function priceLineHtmlForQuantity(productId, quantity, className){
   return `<span class="${className || "price-line"} price-published">${formatUSD(lineTotal)} · ITBIS incluido</span>`;
 }
 
-/* ---------- archivos descargables por producto (simulado) ---------- */
-const DOWNLOADS = [
-  { label: "BIM", ext: ".rfa · .ifc" },
-  { label: "CAD", ext: ".dwg · .dxf" },
-  { label: "Modelo 3D", ext: ".3ds · .obj · .skp" },
-  { label: "Ficha técnica", ext: ".pdf" },
-  { label: "Fotos y renders", ext: ".jpg · .png" }
-];
-
 /* ---------- sprite de íconos de línea (placeholders, sin fotografía) ---------- */
 const ICON_SPRITE = `
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
