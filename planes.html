@@ -45,7 +45,7 @@
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección (0)</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -69,8 +69,7 @@
       <p class="pl-price-alt">Sin caducidad</p>
       <ul class="pl-list">
         <li>Explorar el catálogo y las fichas</li>
-        <li>Consultar tus proyectos y solicitudes anteriores, si los tienes</li>
-        <li>Moodboards</li>
+        <li>1 moodboard independiente · Próximamente</li>
       </ul>
       <p class="pl-list-title">No incluye</p>
       <ul class="pl-list pl-excluded">
@@ -90,11 +89,11 @@
       <p class="pl-price">18 USD/mes</p>
       <p class="pl-price-alt">ITBIS incluido · o 144 USD el primer año: 12 meses de acceso por el precio de 8</p>
       <ul class="pl-list">
-        <li>Todo lo del plan Gratis</li>
-        <li>Precios de los productos</li>
+        <li>Explorar el catálogo y las fichas</li>
+        <li>Consulta de precios publicados y solicitudes de cotización*</li>
         <li>Selección, proyectos y presupuestos</li>
+        <li>1 moodboard por proyecto · Próximamente</li>
         <li>Hasta 2 proyectos activos</li>
-        <li>Solicitudes de cotización sin límite mensual</li>
         <li>Para 1 persona</li>
       </ul>
       <p class="pl-list-title">No incluye</p>
@@ -112,6 +111,7 @@
       <p class="pl-price-alt">ITBIS incluido · o 312 USD el primer año: 12 meses de acceso por el precio de 8</p>
       <ul class="pl-list">
         <li>Todo lo del plan Individual</li>
+        <li>1 moodboard por proyecto · Próximamente</li>
         <li><strong>Múltiples proyectos</strong><br>Hasta 20 proyectos activos para tu estudio.</li>
         <li><strong>Incluye 3 usuarios</strong><br>Cada integrante con su propio acceso.</li>
         <li><strong>Amplía tu equipo hasta 5 personas</strong><br>2 plazas adicionales disponibles · US$10/mes cada una, ITBIS incluido.</li>
@@ -124,6 +124,9 @@
 
   </div>
 
+  <!-- Punto 43 (O1): nota del asterisco, visible bajo las tarjetas. -->
+  <p id="plan-price-note" style="margin:18px 0 0; max-width:none; font-size:13px; color:var(--ink-soft);">*La disponibilidad de precios depende de cada producto. El plan permite consultar los importes publicados y solicitar cotizaciones, pero no garantiza que todos los productos tengan un precio publicado.</p>
+
   <div class="pl-faq">
     <h2>Preguntas frecuentes</h2>
     <h3>¿Se cobra algo ahora?</h3>
@@ -132,6 +135,8 @@
     <p>Las personas del estudio, cada una con su propia cuenta, comparten hasta 20 proyectos activos y sus solicitudes de cotización. Las personas adicionales suman acceso, no más proyectos. No es edición simultánea en tiempo real.</p>
     <h3>¿Los precios incluyen ITBIS?</h3>
     <p>Sí. Los importes de los planes y todos los precios que se muestran en Mobau incluyen ITBIS.</p>
+    <h3>¿Todos los productos tienen precio publicado?</h3>
+    <p>No. Algunos productos tienen un precio publicado; otros requieren cotización o están pendientes de confirmación. Con un plan Individual o Estudio puedes consultar los precios publicados y enviar solicitudes de cotización desde tus proyectos.</p>
     <h3>¿Están disponibles ya todas las funciones?</h3>
     <p>Algunas funciones de los planes se están incorporando durante el piloto.</p>
     <p>¿Tienes dudas sobre los planes? <a href="mailto:hola@mobau.do?subject=Consulta%20sobre%20los%20planes%20de%20Mobau&amp;body=Hola%2C%20Mobau%3A%0D%0A%0D%0A">Hablar con Mobau</a></p>
@@ -153,7 +158,7 @@
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
+          <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>

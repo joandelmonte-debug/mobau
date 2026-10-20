@@ -263,7 +263,7 @@
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección (0)</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -281,12 +281,9 @@
     <a href="proyectos.html" class="btn btn-primary">Volver a mis proyectos</a>
   </div>
 
+  <!-- Punto 43 (CC1): sin plan Individual o Estudio, solo el aviso de planes. -->
+  <div id="plan-gate" style="display:none;"></div>
   <div id="project-view" style="display:none;">
-    <!-- Punto 43: sin plan Individual o Estudio, el proyecto se consulta en solo lectura. -->
-    <div id="plan-readonly-note" hidden style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border:1px solid var(--line-strong); border-radius:var(--radius-lg); padding:14px 18px; margin:0 0 24px;">
-      <p id="plan-readonly-text" style="margin:0; font-size:14px; color:var(--ink);">Tus proyectos se conservan. Para editarlos, elaborar presupuestos o enviar solicitudes necesitas un plan Individual o Estudio.</p>
-      <a href="planes.html" class="btn btn-primary btn-sm" id="plan-readonly-link">Ver planes</a>
-    </div>
     <div class="project-layout">
 
       <div class="project-info-col">
@@ -443,7 +440,7 @@
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
+          <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>
@@ -481,11 +478,6 @@
      en el HTML) y solo puede mostrarse después de que esto sea true —
      nunca se trata el proyecto como activo mientras se está cargando. */
   let isProjectLoaded = false;
-  /* Punto 43: sin herramientas profesionales (Gratis, o acceso sin
-     comprobar), todo el proyecto es de solo lectura, como uno archivado:
-     sin precios, total, edición, archivar, añadir productos, resumen ni
-     solicitudes. */
-  let readOnly = true;
 
   /* Punto 30 — filtro de categorías, en memoria únicamente:
      currentRows es la última respuesta real de listProductsInProject()
@@ -518,9 +510,7 @@
     statusEl.className = "status-chip " + (isActive ? "sent" : (isRequested ? "quoted" : "closed"));
 
     const isStudioPlan = planAllowsMultipleActive(currentPlan);
-    document.getElementById("p-meta").textContent = readOnly
-      ? "Este proyecto se conserva para consulta."
-      : isActive
+    document.getElementById("p-meta").textContent = isActive
       ? "Este proyecto cuenta como tu proyecto activo del plan."
       : (isStudioPlan
           ? "Este proyecto está archivado y se conserva únicamente para consulta."
@@ -536,9 +526,7 @@
     document.getElementById("p-updated").textContent = relativeDate(project.updated_at);
 
     const archiveBtn = document.getElementById("archive-btn");
-    if (readOnly){
-      archiveBtn.style.display = "none";
-    } else if (isActive){
+    if (isActive){
       archiveBtn.style.display = "inline-flex";
       archiveBtn.disabled = false;
       archiveBtn.textContent = "Archivar";
@@ -562,7 +550,7 @@
        renderProject() de por medio, y el formulario sigue con lo que
        el usuario ya escribió, sin releerlo de "project". */
     if (!isProjectInfoEditing){
-      document.getElementById("edit-project-btn").style.display = isActive && !readOnly ? "inline-flex" : "none";
+      document.getElementById("edit-project-btn").style.display = isActive ? "inline-flex" : "none";
     }
 
     renderAddProductsNav(project);
@@ -585,7 +573,7 @@
      currentProject.status y LABELS.categoria, ambos ya en memoria. */
   function renderAddProductsNav(currentProject){
     const aside = document.getElementById("project-add-products");
-    const isActive = currentProject.status === "active" && !readOnly;
+    const isActive = currentProject.status === "active";
     aside.hidden = !isActive;
     if (!isActive) return;
 
@@ -964,7 +952,6 @@
   function renderProductsView(){
     const rows = currentRows;
     const isArchived = project.status === "archived";
-    const locked = isArchived || readOnly;
     const listEl = document.getElementById("project-products-list");
     const emptyEl = document.getElementById("products-empty");
     const priceSummaryEl = document.getElementById("products-price-summary");
@@ -991,9 +978,7 @@
       statusEl.style.display = "none";
     }
 
-    if (readOnly){
-      priceSummaryEl.innerHTML = "";
-    } else if (isArchived){
+    if (isArchived){
       priceSummaryEl.innerHTML = `<p class="price-summary-line price-archived-note">Los precios no están disponibles para proyectos archivados.</p>`;
     } else if (!hasFilter){
       priceSummaryEl.innerHTML = buildProjectPriceSummaryHtml(rows);
@@ -1007,10 +992,10 @@
       /* Proyecto realmente vacío — sin productos guardados, con
          independencia del filtro. Mismo mensaje de siempre. */
       listEl.innerHTML = "";
-      emptyEl.innerHTML = locked
+      emptyEl.innerHTML = isArchived
         ? `<div class="empty-state-content">
              <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto no tiene productos guardados.</p>
-             <p style="margin:0;">${isArchived ? "Está archivado y es solo de consulta — no se pueden añadir productos." : "Para añadir productos necesitas un plan Individual o Estudio."}</p>
+             <p style="margin:0;">Está archivado y es solo de consulta — no se pueden añadir productos.</p>
            </div>`
         : `<div class="empty-state-content">
              <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has añadido productos a este proyecto.</p>
@@ -1041,7 +1026,7 @@
        categoría solo se usa para el filtro, en memoria). El orden es
        el que ya trae "rows" (order_position/created_at de
        listProductsInProject) — no se introduce ningún orden nuevo. */
-    listEl.innerHTML = visibleRows.map(row => renderProductRow(row, locked)).join("");
+    listEl.innerHTML = visibleRows.map(row => renderProductRow(row, isArchived)).join("");
 
     listEl.querySelectorAll(".remove-product-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -1092,17 +1077,17 @@
     currentRows = rows;
     const counterEl = document.getElementById("products-counter");
     const isArchived = project.status === "archived";
-    const locked = isArchived || readOnly;
 
     /* Archivado: nunca se consulta product_prices. Activo: una sola
        consulta agrupada por todos los product_id del proyecto (nunca
        una por fila) — el precio en sí se pinta más abajo, en
        renderProductsView(), que nunca vuelve a tocar Supabase (ni al
        cargar ni al cambiar el filtro de categorías). */
-    if (!locked){
+    if (!isArchived){
       await loadPriceState(rows.map(row => row.product_id));
-      /* El servidor puede negar los precios por plan: pasa a solo lectura. */
-      if (!MobauAccess.hasProfessionalTools()) return applyReadOnly();
+      /* Punto 43 (CC1): si el servidor niega los precios por plan, la cuenta
+         ya no tiene herramientas profesionales: solo el aviso de planes. */
+      if (!MobauAccess.hasProfessionalTools()) return showPlanGate();
     }
 
     const quoteBtn = document.getElementById("request-quote-btn");
@@ -1117,9 +1102,9 @@
        isArchived. Solo necesita que ya haya al menos un producto. */
     const summaryLink = document.getElementById("summary-link");
     summaryLink.href = `proyectos-resumen.html?id=${project.id}`;
-    summaryLink.hidden = !isProjectLoaded || rows.length === 0 || readOnly;
+    summaryLink.hidden = !isProjectLoaded || rows.length === 0;
 
-    if (!isProjectLoaded || locked){
+    if (!isProjectLoaded || isArchived){
       /* Nunca visible antes de confirmar que el proyecto cargó de verdad,
          y un proyecto archivado no admite nuevas solicitudes de
          cotización — se usa el atributo hidden (igual que en el HTML
@@ -1283,8 +1268,11 @@
     session = await MobauAuth.requireSession();
     if (!session) return;
     if (await MobauAccess.redirectSupplierToPanel()) return; // Punto 38-A: distribuidor -> panel
+    /* Punto 43 (CC1): Gratis no tiene proyectos, presupuestos ni solicitudes.
+       Sin herramientas profesionales solo el aviso de planes: no se consulta
+       ni se muestra nada del proyecto (el servidor tampoco lo permite). */
+    if ((await MobauAccess.access()) !== "pro") return showPlanGate();
     if (!(await whenCatalogReady())) return;
-    readOnly = (await MobauAccess.access()) !== "pro";
     currentPlan = await MobauProjects.myPlan(session.user.id);
 
     const params = new URLSearchParams(window.location.search);
@@ -1298,24 +1286,18 @@
 
     isProjectLoaded = true;
     document.getElementById("project-view").style.display = "block";
-    if (readOnly) showReadOnlyNote();
     await renderProject();
     loadSavedProducts();
   })();
 
-  function showReadOnlyNote(){
-    if (MobauAccess.confirmedAccess === "unknown"){
-      document.getElementById("plan-readonly-text").textContent = "No pudimos comprobar tu acceso. Recarga la página para editar este proyecto.";
-      document.getElementById("plan-readonly-link").hidden = true;
-    }
-    document.getElementById("plan-readonly-note").hidden = false;
-  }
-
-  async function applyReadOnly(){
-    readOnly = true;
-    showReadOnlyNote();
-    await renderProject();
-    loadSavedProducts();
+  function showPlanGate(){
+    const gate = document.getElementById("plan-gate");
+    renderPlanGate(gate, MobauAccess.confirmedAccess, PROJECTS_PLAN_GATE);
+    gate.style.display = "";
+    const crumb = document.querySelector(".breadcrumb");
+    if (crumb) crumb.hidden = true;
+    document.getElementById("project-view").style.display = "none";
+    document.getElementById("not-found").style.display = "none";
   }
 </script>
 </body>

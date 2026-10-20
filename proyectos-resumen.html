@@ -199,7 +199,7 @@
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección</a>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -291,7 +291,7 @@
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
+          <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>
@@ -435,15 +435,14 @@
     const session = await MobauAuth.requireSession();
     if (!session) return;
     if (await MobauAccess.redirectSupplierToPanel()) return; // Punto 38-A: distribuidor -> panel
-    /* Punto 43: sin plan Individual o Estudio no hay presupuesto (ni la
-       tabla ni «Imprimir»); el proyecto se sigue consultando en su página. */
+    /* Punto 43 (CC1): sin plan Individual o Estudio no hay presupuesto ni
+       proyecto que mostrar: solo el aviso de planes (ni tabla ni «Imprimir»). */
     const showPlanGate = () => {
       const gate = document.getElementById("plan-gate");
-      renderPlanGate(gate, MobauAccess.confirmedAccess, {
-        title: "El presupuesto está incluido en los planes Individual y Estudio.",
-        body: "Tus proyectos se conservan y puedes consultarlos en Mis proyectos."
-      });
+      renderPlanGate(gate, MobauAccess.confirmedAccess, PROJECTS_PLAN_GATE);
       gate.style.display = "";
+      const crumb = document.querySelector(".breadcrumb");
+      if (crumb) crumb.hidden = true;
       document.getElementById("summary-content").style.display = "none";
     };
     if ((await MobauAccess.access()) !== "pro") return showPlanGate();

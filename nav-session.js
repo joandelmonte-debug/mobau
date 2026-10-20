@@ -43,20 +43,35 @@
 
 (async () => {
   /* Punto 43: «Mi selección» solo con herramientas profesionales (plan
-     Individual o Estudio, MobauAccess.access() = "pro"). Se oculta desde ya
-     en todas las páginas y solo aparece cuando se confirma; vuelve a
-     ocultarse si el acceso baja después (respuesta del servidor). */
+     Individual o Estudio, MobauAccess.access() = "pro"). El enlace llega
+     oculto en el HTML de cada cabecera (atributo hidden, CC1): así no se ve
+     en la primera pintura, mientras se descargan los scripts. Este es el
+     único punto que lo muestra, y solo cuando se confirma el acceso; vuelve
+     a ocultarse si el acceso baja después (respuesta del servidor). */
   const selectionLink = document.getElementById("selection-count-link");
   if (selectionLink){
-    selectionLink.style.display = "none";
+    selectionLink.hidden = true;
     const showSelectionLink = (access) => {
       if (!selectionLink.isConnected) return;
-      selectionLink.style.display = access === "pro" ? "" : "none";
+      selectionLink.hidden = access !== "pro";
       if (access === "pro" && typeof updateSelectionBadge === "function") updateSelectionBadge();
     };
     MobauAccess.access().then(showSelectionLink);
     document.addEventListener("mobau:access", (e) => showSelectionLink(e.detail.access));
   }
+
+  /* Punto 43 (CC1): Gratis no tiene proyectos, presupuestos ni solicitudes.
+     «Mis proyectos» del pie llega oculto en el HTML de cada página (como «Mi
+     selección») y solo se muestra con herramientas profesionales
+     confirmadas: sin sesión, Gratis o acceso sin comprobar, nunca aparece.
+     Distribuidor y Mobau lo pierden más abajo. */
+  const showFooterProjectLinks = (access) => {
+    document.querySelectorAll('.site-footer a[href="proyectos.html"]').forEach(a => {
+      (a.closest("li") || a).hidden = access !== "pro";
+    });
+  };
+  MobauAccess.access().then(showFooterProjectLinks);
+  document.addEventListener("mobau:access", (e) => showFooterProjectLinks(e.detail.access));
 
   const slot = document.getElementById("nav-session-slot");
   if (!slot) return;
@@ -94,9 +109,10 @@
           <div class="account-menu-email">${escapeHtml(email)}</div>
         </div>
         <a href="inscripcion-profesional.html" id="account-menu-profile" role="menuitem">Mi perfil</a>
-        <a href="proyectos.html?status=active" data-architect-only role="menuitem">Mis proyectos</a>
-        <a href="proyectos.html?status=active" id="account-menu-active-project" data-architect-only role="menuitem">Mi proyecto activo</a>
-        <a href="proyectos.html?status=requested" data-architect-only role="menuitem">Solicitudes</a>
+        <a href="proyectos.html?status=active" data-architect-only data-pro-only hidden role="menuitem">Mis proyectos</a>
+        <a href="proyectos.html?status=active" id="account-menu-active-project" data-architect-only data-pro-only hidden role="menuitem">Mi proyecto activo</a>
+        <a href="proyectos.html?status=requested" data-architect-only data-pro-only hidden role="menuitem">Solicitudes</a>
+        <a href="moodboard.html" id="account-menu-moodboard" data-architect-only hidden role="menuitem">Mi moodboard</a>
         <button type="button" class="account-menu-item" id="account-menu-logout" role="menuitem">Cerrar sesión</button>
       </div>
     </div>`;
@@ -135,6 +151,20 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && panel.classList.contains("is-open")) closeMenu({ focusTrigger: true });
   });
+
+  /* Punto 43 (CC1): «Mis proyectos», «Mi proyecto activo» y «Solicitudes»
+     salen ocultos y solo aparecen con herramientas profesionales (Individual
+     o Estudio); vuelven a ocultarse si el acceso baja. «Mi moodboard» (por
+     ahora una pantalla informativa) aparece para las cuentas profesionales,
+     con plan o Gratis; nunca para distribuidor ni Mobau, que pierden todos
+     estos enlaces más abajo (data-architect-only). */
+  const applyAccessToMenu = (access) => {
+    panel.querySelectorAll("[data-pro-only]").forEach(el => { el.hidden = access !== "pro"; });
+    const moodboardLink = document.getElementById("account-menu-moodboard");
+    if (moodboardLink) moodboardLink.hidden = !(access === "pro" || access === "gratis");
+  };
+  MobauAccess.access().then(applyAccessToMenu);
+  document.addEventListener("mobau:access", (e) => applyAccessToMenu(e.detail.access));
 
   /* Cerrar sesión: MobauAuth.signOut() es la única lógica de logout de
      toda la app (supabase-client.js) — aquí solo se cierra el menú
@@ -335,6 +365,9 @@
          conocido y documentado, no un bug — el fallback es el
          resultado correcto en esas páginas, siempre. */
       if (typeof MobauProjects === "undefined") return fallback;
+      /* Punto 43 (CC1): sin herramientas profesionales no hay proyectos que
+         consultar (el enlace ni siquiera se muestra). */
+      if ((await MobauAccess.access()) !== "pro") return fallback;
       /* 3) Reutiliza MobauAuth.getSession() — nunca una consulta nueva
          de sesión. Si ya no hay sesión (cerró sesión entre que se
          montó el menú y el clic — caso extremo pero real), nunca se

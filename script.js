@@ -764,11 +764,13 @@ function priceAccessInfo(){
     return { kind: "loading", text: "Consultando precio…" };
   }
   const access = MobauAccess.confirmedAccess;
+  /* Punto 43 (O1): sin acceso nunca se insinúa que el plan garantice un
+     importe para cada producto; el asterisco remite a la nota del catálogo. */
   if (access === "anon"){
-    return { kind: "no-session", text: "Accede a precios y elabora presupuestos con un plan Individual o Estudio", cardText: "Precio con plan Individual o Estudio" };
+    return { kind: "no-session", text: "Con un plan Individual o Estudio puedes consultar los precios publicados y elaborar presupuestos. No todos los productos tienen precio publicado; puedes solicitar una cotización desde tus proyectos.", cardText: "Consulta de precios con plan Individual o Estudio*" };
   }
   if (access === "gratis"){
-    return { kind: "plan-required", text: "El acceso a precios y la elaboración de presupuestos están incluidos en los planes Individual y Estudio", cardText: "Precio con plan Individual o Estudio" };
+    return { kind: "plan-required", text: "Los planes Individual y Estudio incluyen la consulta de precios publicados, la elaboración de presupuestos y el envío de solicitudes de cotización. No todos los productos tienen precio publicado.", cardText: "Consulta de precios con plan Individual o Estudio*" };
   }
   if (access === "supplier_unverified"){
     return { kind: "distributor-unverified", text: "Verás los precios publicados cuando Mobau verifique tu empresa", cardText: "Precio tras verificar tu empresa" };
@@ -1342,6 +1344,14 @@ function renderPlanGate(container, access, { title, body } = {}){
     body || "Con un plan puedes ver precios, reunir productos en tu selección, elaborar presupuestos y solicitar cotizaciones.",
     `<a class="btn btn-primary" href="planes.html">Ver planes</a>${login}`);
 }
+
+/* Punto 43 (CC1): Gratis no tiene proyectos, presupuestos ni solicitudes.
+   Aviso único de las páginas de proyectos sin herramientas profesionales:
+   no se lista, abre ni cuenta nada. */
+const PROJECTS_PLAN_GATE = {
+  title: "Los proyectos, los presupuestos y las solicitudes de cotización están incluidos en los planes Individual y Estudio.",
+  body: "Con un plan puedes crear proyectos, elaborar presupuestos y enviar solicitudes de cotización."
+};
 
 /* Actualiza el enlace "Mi selección (N)" del header, en las
    páginas que lo tengan — no hace nada si el elemento no existe. */

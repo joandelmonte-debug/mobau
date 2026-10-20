@@ -28,6 +28,7 @@ moderacion-acceso.js
 moderacion-producto.html
 moderacion-propuesta.html
 moderacion.html
+moodboard.html
 nav-account-hint.js
 nav-session.js
 panel-distribuidor.html

@@ -44,7 +44,9 @@ const MobauPerfil = {
   /* Longitud máxima de cada campo de texto: evita guardar (o insertar)
      valores desproporcionados. */
   MAX_LENGTHS: {
-    professional_name: 120,
+    first_name: 60,
+    last_name: 60,
+    professional_name: 121,
     city: 80,
     studio_name: 120,
     phone: 40,
@@ -82,11 +84,24 @@ const MobauPerfil = {
   /* Valida y normaliza un perfil. Devuelve { ok: true, record } con la fila
      lista para professional_profiles (sin user_id), o { ok: false, error }
      con un texto fijo para mostrar. requirePhone: teléfono obligatorio
-     (alta profesional). */
-  validate(input, { requirePhone = false } = {}) {
+     (alta profesional).
+     Punto 43 (43-C1): nombre y apellidos van en campos separados y son la
+     fuente de verdad; professional_name es siempre «Nombre Apellidos» (lo
+     mismo que calcula el servidor), para no romper a quien ya lo lee.
+     legacyName: SOLO para un borrador de alta guardado antes de 43-C1, que
+     trae el nombre en un único campo; se conserva tal cual, sin dividirlo,
+     hasta que caduque (el alta nueva siempre pide nombre y apellidos). */
+  validate(input, { requirePhone = false, legacyName = false } = {}) {
     const text = (value) => (typeof value === "string" ? value.trim() : "");
+    const name = (value) => text(value).replace(/\s+/g, " ");
+    const firstName = legacyName ? null : name(input && input.first_name);
+    const lastName = legacyName ? null : name(input && input.last_name);
     const record = {
-      professional_name: text(input && input.professional_name),
+      first_name: firstName,
+      last_name: lastName,
+      professional_name: legacyName
+        ? text(input && input.professional_name)
+        : (firstName && lastName ? `${firstName} ${lastName}` : ""),
       professional_type: text(input && input.professional_type),
       city: text(input && input.city),
       studio_name: text(input && input.studio_name) || null,
@@ -94,8 +109,9 @@ const MobauPerfil = {
       website: text(input && input.website) || null,
       instagram: text(input && input.instagram) || null
     };
-    if (!record.professional_name || !record.professional_type || !record.city) {
-      return { ok: false, error: "Completa nombre, tipo de perfil y ciudad para continuar." };
+    const hasName = legacyName ? !!record.professional_name : !!(record.first_name && record.last_name);
+    if (!hasName || !record.professional_type || !record.city) {
+      return { ok: false, error: "Completa nombre, apellidos, tipo de perfil y ciudad para continuar." };
     }
     if (!this.TYPES.has(record.professional_type)) {
       return { ok: false, error: "Selecciona un tipo de perfil de la lista." };
@@ -119,11 +135,11 @@ const MobauPerfil = {
     const safePlan = MobauAccess.normalizePlan(plan);
     const result = this.validate(profile, { requirePhone: true });
     if (!safePlan || !result.ok) return false;
-    const { professional_name, professional_type, city, studio_name, phone } = result.record;
+    const { first_name, last_name, professional_name, professional_type, city, studio_name, phone } = result.record;
     try {
       localStorage.setItem(this.DRAFT_KEY, JSON.stringify({
         plan: safePlan,
-        profile: { professional_name, professional_type, city, studio_name, phone },
+        profile: { first_name, last_name, professional_name, professional_type, city, studio_name, phone },
         createdAt: Date.now()
       }));
       return true;
@@ -150,15 +166,23 @@ const MobauPerfil = {
     }
     const age = data && typeof data.createdAt === "number" ? Date.now() - data.createdAt : -1;
     const plan = data ? MobauAccess.normalizePlan(data.plan) : null;
-    const result = data && data.profile && typeof data.profile === "object"
-      ? this.validate(data.profile, { requirePhone: true })
+    const hasProfile = !!(data && data.profile && typeof data.profile === "object");
+    /* 43-C1: borrador anterior (nombre en un solo campo, sin nombre ni
+       apellidos): se acepta hasta su caducidad, con el nombre tal cual. */
+    const legacyName = hasProfile && !data.profile.first_name && !data.profile.last_name
+      && typeof data.profile.professional_name === "string";
+    const result = hasProfile
+      ? this.validate(data.profile, { requirePhone: true, legacyName })
       : { ok: false };
     if (!(age >= 0 && age <= this.DRAFT_TTL_MS) || !plan || !result.ok) {
       this.clearDraft();
       return null;
     }
-    const { professional_name, professional_type, city, studio_name, phone } = result.record;
-    return { plan, profile: { professional_name, professional_type, city, studio_name, phone }, createdAt: data.createdAt };
+    const { first_name, last_name, professional_name, professional_type, city, studio_name, phone } = result.record;
+    const profile = legacyName
+      ? { professional_name, professional_type, city, studio_name, phone }
+      : { first_name, last_name, professional_name, professional_type, city, studio_name, phone };
+    return { plan, profile, createdAt: data.createdAt };
   },
 
   clearDraft() {

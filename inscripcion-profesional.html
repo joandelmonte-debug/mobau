@@ -20,7 +20,7 @@
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección (0)</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -30,7 +30,7 @@
   <div class="wrap">
     <div class="eyebrow" id="page-eyebrow">Perfil</div>
     <h1 id="page-title">Completa tu perfil</h1>
-    <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Estos datos nos ayudan a identificarte ante los distribuidores cuando solicites una cotización.</p>
+    <p id="page-subtitle" style="margin-top:14px; max-width:60ch;">Estos datos identifican tu cuenta profesional en Mobau. Con un plan Individual o Estudio, también te identifican ante los distribuidores cuando solicitas una cotización.</p>
   </div>
 </div>
 
@@ -62,8 +62,12 @@
        existe). -->
   <form class="form-card" id="pp-form" style="display:none;">
     <div class="field full">
-      <label for="pp-name">Nombre</label>
-      <input id="pp-name" type="text" required placeholder="Ej. Ana María Rosario">
+      <label for="pp-first-name">Nombre</label>
+      <input id="pp-first-name" type="text" autocomplete="given-name" required maxlength="60" placeholder="Ej. Ana María">
+    </div>
+    <div class="field full">
+      <label for="pp-last-name">Apellidos</label>
+      <input id="pp-last-name" type="text" autocomplete="family-name" required maxlength="60" placeholder="Ej. Rosario Pérez">
     </div>
     <div class="field full">
       <label for="pp-type">Tipo de perfil</label>
@@ -133,8 +137,13 @@
 
       <div class="field-grid" id="personal-edit" style="display:none;">
         <div class="field" style="margin-bottom:0;">
-          <label for="personal-edit-name">Nombre</label>
-          <input id="personal-edit-name" type="text" required>
+          <label for="personal-edit-first-name">Nombre</label>
+          <input id="personal-edit-first-name" type="text" autocomplete="given-name" maxlength="60">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="personal-edit-last-name">Apellidos</label>
+          <input id="personal-edit-last-name" type="text" autocomplete="family-name" maxlength="60">
+          <p class="card-meta" id="personal-edit-name-hint" style="margin:7px 0 0;" hidden></p>
         </div>
         <div>
           <p style="font-size:13.5px; font-weight:600; margin:0 0 7px;">Email</p>
@@ -236,7 +245,7 @@
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
+          <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>
@@ -290,13 +299,12 @@
   function setupOnboardingView(){
     document.getElementById("page-eyebrow").textContent = "Crear cuenta · Perfil";
     document.getElementById("page-title").textContent = "Completa tu perfil";
-    document.getElementById("page-subtitle").textContent = "Tu correo ya está confirmado. Con estos datos te identificamos ante los distribuidores cuando solicites una cotización. Podrás editarlos después desde Mi perfil.";
+    document.getElementById("page-subtitle").textContent = "Tu correo ya está confirmado. Estos datos identifican tu cuenta profesional en Mobau y, al solicitar una cotización, te identifican ante los distribuidores. Podrás editarlos después desde Mi perfil.";
     document.getElementById("pp-phone").required = true;
     document.getElementById("pp-phone-optional").hidden = true;
     document.getElementById("pp-submit-btn").textContent = "Continuar";
-    const metadata = session.user.user_metadata || {};
-    const nameInput = document.getElementById("pp-name");
-    if (!nameInput.value && typeof metadata.name === "string") nameInput.value = metadata.name.trim().slice(0, 120);
+    /* 43-C1: el nombre del alta (un solo texto en los metadatos) no se
+       divide automáticamente en nombre y apellidos: se piden aquí. */
   }
 
   /* Ayuda bajo el tipo de perfil (p. ej. "Propietario / particular"). */
@@ -315,7 +323,8 @@
     errorEl.style.display = "none";
 
     const result = MobauPerfil.validate({
-      professional_name: fieldValue("pp-name"),
+      first_name: fieldValue("pp-first-name"),
+      last_name: fieldValue("pp-last-name"),
       professional_type: document.getElementById("pp-type").value,
       city: fieldValue("pp-city"),
       studio_name: fieldValue("pp-studio"),
@@ -406,7 +415,16 @@
 
   document.getElementById("personal-edit-btn").addEventListener("click", () => {
     enterEditMode("personal", () => {
-      document.getElementById("personal-edit-name").value = profile.professional_name || "";
+      /* 43-C1: con nombre y apellidos ya separados, se precargan. Un perfil
+         anterior solo tiene professional_name: no se divide ni se toca; se
+         muestra como referencia y los dos campos quedan vacíos y opcionales
+         (vacíos = se conserva el nombre actual tal cual). */
+      const hasParts = !!(profile.first_name && profile.last_name);
+      document.getElementById("personal-edit-first-name").value = hasParts ? profile.first_name : "";
+      document.getElementById("personal-edit-last-name").value = hasParts ? profile.last_name : "";
+      const hint = document.getElementById("personal-edit-name-hint");
+      hint.textContent = hasParts ? "" : `Tu nombre actual es «${profile.professional_name || ""}». Para cambiarlo, indica nombre y apellidos; si los dejas vacíos, se conserva tal cual.`;
+      hint.hidden = hasParts;
       document.getElementById("personal-edit-email-display").textContent = session.user.email || "—";
       document.getElementById("personal-edit-phone").value = profile.phone || "";
     });
@@ -417,22 +435,38 @@
     const errorEl = document.getElementById("personal-edit-error");
     errorEl.style.display = "none";
 
-    const professional_name = fieldValue("personal-edit-name");
-    if (!professional_name){
-      errorEl.textContent = "El nombre no puede quedar vacío.";
+    const phone = fieldValue("personal-edit-phone") || null;
+    const nameOf = (id) => fieldValue(id).replace(/\s+/g, " ");
+    const first_name = nameOf("personal-edit-first-name");
+    const last_name = nameOf("personal-edit-last-name");
+    const hadParts = !!(profile.first_name && profile.last_name);
+    /* 43-C1: perfil anterior con los dos campos vacíos = el nombre no se
+       edita y se conserva intacto (solo se guarda el teléfono). */
+    const keepLegacyName = !hadParts && !first_name && !last_name;
+    if (!keepLegacyName && (!first_name || !last_name)){
+      errorEl.textContent = hadParts
+        ? "El nombre y los apellidos no pueden quedar vacíos."
+        : "Indica tu nombre y tus apellidos, o deja los dos vacíos para conservar tu nombre actual.";
       errorEl.style.display = "block";
       return;
     }
-    const phone = fieldValue("personal-edit-phone") || null;
-
+    if (first_name.length > 60 || last_name.length > 60){
+      errorEl.textContent = "El nombre o los apellidos son demasiado largos.";
+      errorEl.style.display = "block";
+      return;
+    }
+    /* El servidor calcula lo mismo; se envía para que el perfil quede
+       coherente en cualquier caso. */
+    const professional_name = keepLegacyName ? profile.professional_name : `${first_name} ${last_name}`;
+    const changes = keepLegacyName ? { phone } : { first_name, last_name, professional_name, phone };
     const btn = document.getElementById("personal-save-btn");
     btn.disabled = true;
 
-    /* UPDATE parcial: solo estas dos columnas — nunca toca studio_name,
-       professional_type, city, website ni instagram (grupo aparte). */
+    /* UPDATE parcial: solo nombre, apellidos y teléfono — nunca toca
+       studio_name, professional_type, city, website ni instagram (grupo aparte). */
     const { error } = await supabaseClient
       .from("professional_profiles")
-      .update({ professional_name, phone })
+      .update(changes)
       .eq("user_id", session.user.id);
 
     btn.disabled = false;
@@ -443,7 +477,7 @@
       return;
     }
 
-    profile = { ...profile, professional_name, phone };
+    profile = keepLegacyName ? { ...profile, phone } : { ...profile, first_name, last_name, professional_name, phone };
     renderProfileView();
     exitEditMode("personal");
     showToast("Información personal guardada.");

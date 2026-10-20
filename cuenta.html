@@ -20,7 +20,7 @@
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección (0)</a>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección (0)</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -30,7 +30,7 @@
   <div class="wrap">
     <div class="eyebrow">Tu área Mobau</div>
     <h1>Mi cuenta</h1>
-    <p style="margin-top:14px; max-width:60ch;">Esto es lo que tienes en marcha. Retoma tu proyecto actual o revisa proyectos anteriores.</p>
+    <p id="account-intro" style="margin-top:14px; max-width:60ch;">Esto es lo que tienes en marcha. Retoma tu proyecto actual o revisa proyectos anteriores.</p>
     <p id="session-info" style="margin-top:10px; font-size:13px; color:var(--ink-faint);"></p>
     <button type="button" id="logout-btn" class="btn btn-outline btn-sm" style="margin-top:14px;">Cerrar sesión</button>
   </div>
@@ -42,7 +42,7 @@
     <h2>Tu perfil</h2>
     <div id="profile-empty" style="display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:160px;" class="cart-empty">
       <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no has completado tu perfil.</p>
-      <p style="margin:0;">Complétalo para que tus solicitudes de cotización se precarguen automáticamente.</p>
+      <p id="profile-empty-text" style="margin:0;">Complétalo para que tus solicitudes de cotización se precarguen automáticamente.</p>
       <a href="inscripcion-profesional.html" class="btn btn-primary">Completar perfil</a>
     </div>
     <div id="profile-box" style="display:none;" class="current-project-box">
@@ -54,7 +54,7 @@
     </div>
   </div>
 
-  <div class="account-section">
+  <div class="account-section" data-pro-only>
     <h2>Proyecto activo</h2>
     <div id="current-project-empty" style="display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:220px;" class="cart-empty">
       <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">No tienes un proyecto activo</p>
@@ -70,7 +70,7 @@
     </div>
   </div>
 
-  <div class="account-section">
+  <div class="account-section" data-pro-only>
     <h2>Tus solicitudes</h2>
     <div id="rfqs-empty" style="display:none;" class="cart-empty">
       <p style="margin:0;">Aquí aparecerán las solicitudes que prepares desde tus proyectos.</p>
@@ -78,7 +78,7 @@
     <div id="rfqs-list"></div>
   </div>
 
-  <div class="account-section">
+  <div class="account-section" data-pro-only>
     <h2>Proyectos guardados</h2>
     <p class="demo-note">Datos de ejemplo para esta demo — en la versión completa reflejarán tus proyectos reales.</p>
 
@@ -121,7 +121,7 @@
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
+          <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>
@@ -232,6 +232,18 @@
 
     document.getElementById("session-info").textContent =
       `Sesión iniciada como ${session.user.email}`;
+
+    /* Punto 43 (CC1): Gratis no tiene proyectos, presupuestos ni
+       solicitudes: sin herramientas profesionales solo se muestra el perfil,
+       sin consultar proyectos ni solicitudes. El perfil se puede completar
+       cuando se quiera; no se exige para entrar. */
+    if ((await MobauAccess.access()) !== "pro"){
+      document.querySelectorAll("main [data-pro-only]").forEach(el => el.remove());
+      document.getElementById("account-intro").textContent = "Tu perfil profesional en Mobau.";
+      document.getElementById("profile-empty-text").textContent = "Complétalo cuando quieras para identificar tu cuenta profesional en Mobau.";
+      await renderProfessionalProfile(session.user.id);
+      return;
+    }
 
     const projects = await MobauProjects.list("active");
     const empty = document.getElementById("current-project-empty");

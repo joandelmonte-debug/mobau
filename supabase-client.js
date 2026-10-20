@@ -104,6 +104,7 @@ const MobauAccess = {
     ["proyectos-resumen", { id: UUID_PATTERN }],
     ["proyectos-cotizacion", { mode: /^(save|send)$/, id: UUID_PATTERN }],
     ["moderacion", {}],
+    ["moodboard", {}],
     ["moderacion-propuesta", { id: UUID_PATTERN }]
   ]),
 
@@ -301,6 +302,7 @@ const MobauAccess = {
   _accountKindPromise: null,
   confirmedKind: null,
   accountKind() {
+    this._syncAccountCaches();
     if (!this._accountKindPromise) {
       this._accountKindPromise = (async () => {
         const session = await MobauAuth.getSession();
@@ -350,6 +352,7 @@ const MobauAccess = {
   confirmedAccess: null,
   accessUserId: null,
   access() {
+    this._syncAccountCaches();
     if (!this._accessPromise) {
       this._accessPromise = (async () => {
         const kind = await this.accountKind();
@@ -379,6 +382,29 @@ const MobauAccess = {
 
   hasPriceAccess() {
     return this.PRICE_ACCESS_STATES.includes(this.confirmedAccess);
+  },
+
+  /* Punto 43 (CC1): accountKind() y access() se piden una vez por página,
+     pero solo valen mientras la sesión guardada en este navegador sea la
+     misma cuenta. Si cambia sin recargar (por ejemplo, se inicia sesión en
+     otra pestaña con acceso.html abierta, que no se recarga), se descartan
+     y se vuelven a pedir: nunca se decide un destino ni un acceso con el
+     estado de otra cuenta o de "sin sesión". */
+  _cacheUserId: undefined,
+  _syncAccountCaches() {
+    const userId = MobauAuth.storedUserId();
+    if (this._cacheUserId === undefined) {
+      this._cacheUserId = userId;
+      return;
+    }
+    if (userId === this._cacheUserId) return;
+    this._cacheUserId = userId;
+    this._accountKindPromise = null;
+    this.confirmedKind = null;
+    this._accessPromise = null;
+    this.confirmedAccess = null;
+    this.accessUserId = null;
+    this._adminSessionPromise = null;
   },
 
   /* Solo con "pro": selección, proyectos editables y solicitudes. */
@@ -535,7 +561,18 @@ const MobauAccess = {
     const intent = this.peekIntent() || fallbackIntent;
     const plan = this.normalizePlan(explicitPlan)
       || this.planForNavigation({ intent, session, hasProfessionalProfile: facts.hasProfessionalProfile });
-    const step = this.resolveOnboardingStep({ isSupplier: facts.isSupplier, hasProfessionalProfile: facts.hasProfessionalProfile, plan });
+    /* Punto 43 (CC1): el perfil profesional solo se exige antes de entrar a
+       quien va a solicitar la activación de un plan (Individual o Estudio) o
+       ya tiene las herramientas profesionales (lo necesitan las solicitudes
+       de cotización). Gratis no se bloquea: lo completa cuando quiera desde
+       Mi cuenta, y no se crea ningún perfil vacío. */
+    const profileRequired = !facts.hasProfessionalProfile
+      && (this.planRequiresActivation(plan) || (await this.access()) === "pro");
+    const step = this.resolveOnboardingStep({
+      isSupplier: facts.isSupplier,
+      hasProfessionalProfile: facts.hasProfessionalProfile || !profileRequired,
+      plan
+    });
     if (step) return step;
     return this.finalDestination({ isSupplier: facts.isSupplier, urlNext, fallbackIntent });
   }

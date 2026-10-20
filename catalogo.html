@@ -259,7 +259,7 @@
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link">Mi selección</a>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección</a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -269,6 +269,8 @@
   <div class="wrap">
     <div class="eyebrow">Catálogo</div>
     <h1>Productos para arquitectura e interiorismo</h1>
+    <!-- Punto 43 (O1): aclaración de precios, visible siempre cerca del inicio. -->
+    <p id="catalog-price-note" style="margin-top:12px; max-width:72ch; font-size:13.5px; color:var(--ink-soft);">*Los planes Individual y Estudio permiten consultar los precios publicados y solicitar cotizaciones. No todos los productos tienen precio publicado: algunos requieren cotización o están pendientes de confirmación.</p>
   </div>
 </div>
 
@@ -512,7 +514,7 @@
         <ul>
           <li><a href="catalogo.html">Catálogo</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
-          <li><a href="proyectos.html">Mis proyectos</a></li>
+          <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
       </div>
       <div>
