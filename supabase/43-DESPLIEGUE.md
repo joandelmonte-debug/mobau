@@ -141,8 +141,27 @@ Todo se hizo el 2026-10-20. Cada archivo se ejecutó una vez, con el envoltorio 
 
 La ventana con el servidor nuevo y la web T2 empezó a las 14:32.
 
+## Limpieza de la cuenta Gratis de prueba (Hotmail, `46ea4397`)
+
+**Ejecutada el 2026-10-20**, a petición expresa de la persona titular y con su autorización. Archivos en `limpieza/`:
+
+| Archivo | md5 | Estado |
+|---|---|---|
+| `43_limpieza_46ea4397_v2.sql` | `fe8bf2c86c86b712ef215186105d8d89` | **Ejecutado** una vez |
+| `43_limpieza_ensayo.sql` | `c85208be57aa9515c56ab9e27a5e1dc5` | Ensayo revertido (borrado y restauración); superado antes de la limpieza real |
+| `43_limpieza_lectura.sql` | `b994828d6d1b41e01f4a32d88d384307` | Lectura de solo SELECT, antes y después |
+| `copia_46ea4397.json` | `e09b276fb0ed3a4e6265bbd57633e8f8` | Copia de las filas borradas, con huella `931b6f7a…` |
+| `43_limpieza_restaurar_46ea4397.sql` | `444aa52caf50d9814b97846c452b285f` | **No aplicada.** Restauración desde la copia |
+
+**Qué se borró:** solo los proyectos «Casa Ruiz» (activo) y «Casa Pedrá» (archivado) de esa cuenta, con sus 8 líneas en cascada. No había solicitudes ni moodboards vinculados.
+
+**Qué no cambió:** la cuenta sigue en Gratis (`default`), sin perfil profesional, y no cambió nada de otras cuentas. La huella del resto de datos siguió en `8870284b…`. Los totales pasaron a 11 proyectos, 34 líneas y 2 solicitudes.
+
+Es una operación de datos y no se registró como migración.
+
+**Restauración:** `43_limpieza_restaurar_46ea4397.sql` vuelve a insertar las 10 filas con sus identificadores, fechas y valores originales, y comprueba la huella `931b6f7a…`. Se probó dentro del ensayo, pero **no se ha aplicado**. Cualquier restauración futura necesita su propia autorización.
+
 ## Fuera de este punto
 
 - Pagos y suscripciones.
-- El hallazgo de privilegios de `anon` y `authenticated` en otras tablas, que tiene su propio punto de seguridad.
-- La limpieza de los proyectos de una cuenta Gratis de prueba, que es una decisión aparte.
+- El hallazgo de privilegios de `anon` y `authenticated`, que se resolvió en un punto de seguridad propio: SEG-01, ver `SEG-01-DESPLIEGUE.md`. La opción O3 (privilegio mínimo por tabla) no está aprobada.
