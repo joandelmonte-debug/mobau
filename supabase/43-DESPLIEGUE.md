@@ -7,7 +7,7 @@
 >
 > **Interfaz T2** publicada el 2026-10-20 (commit `19cc646`).
 >
-> **CC1** (Gratis sin proyectos, nombre y apellidos, permisos de moodboards): D3-B, D4 y D5 están versionadas aquí, pero **todavía no se han aplicado**. Cuando se apliquen se anotarán en «Registro de aplicación».
+> **CC1** (Gratis sin proyectos, nombre y apellidos, permisos de moodboards): **D3-B, D4 y D5 están aplicadas y registradas desde el 2026-10-20**. Hay 36 migraciones y la última es `20261020130200`. Los detalles están en «Registro de aplicación de CC1».
 >
 > Pagos y suscripciones quedan fuera de este punto: todo el acceso es `manual_pilot` con auditoría, y `subscription` es solo un valor reservado.
 
@@ -112,7 +112,34 @@ Lecturas: `43_lectura.sql` y `43_lectura_publicacion.sql`. Los generadores de lo
 
 ## Registro de aplicación de CC1
 
-Pendiente.
+Todo se hizo el 2026-10-20. Cada archivo se ejecutó una vez, con el envoltorio md5, y se registró en una llamada aparte. Las horas son UTC y corresponden a las lecturas que confirmaron cada paso.
+
+**Lectura previa (14:31:12):**
+- 33 migraciones, la última `20261020120100`;
+- 25 políticas;
+- huella de comportamiento `b1e8997e…`, datos `5e4accb2…`, permisos de tablas `4154bef2…`;
+- 12 proyectos, 39 líneas y 2 solicitudes;
+- 3 perfiles profesionales, con huella `63b7e678…` y nombres `a4eb2fa3…`;
+- moodboards con 0 filas y su ACL original.
+
+| Paso | COMMIT confirmado | Registro confirmado | Lo observado |
+|---|---|---|---|
+| D3-B (`e3062edb…`) | 14:32:43 | 14:34:59 · `20261020130000 · 43_d3_gratis_sin_proyectos` | 29 políticas, 4 de ellas RESTRICTIVE para `authenticated`. Huella de comportamiento `dc4bfcbc…`; sin las políticas de D3 vuelve a dar `b1e8997e…`. Datos, permisos y perfiles sin cambios |
+| D4 (`23acb265…`) | 14:38:56 | 14:40:49 · `20261020130100 · 43_d4_nombre_apellidos` | Columnas, restricción, trigger y función (`f1e5339f…`, sin EXECUTE para clientes). Nombres `a4eb2fa3…` y perfiles `63b7e678…` sin cambios. Ningún perfil con nombre y apellidos separados |
+| D5 (`77f73498…`) | 14:42:03 | 14:43:56 · `20261020130200 · 43_d5_moodboards_permisos` | ACL de moodboards `{postgres=arwdDxtm/postgres,authenticated=arwm/postgres,service_role=arwdDxtm/postgres}`. Permisos de tablas `46476efe…`; con la ACL anterior de moodboards vuelve a dar `4154bef2…`. 0 filas |
+
+**Estado final verificado (14:43:56):**
+- 36 migraciones, la última `20261020130200`;
+- 29 políticas y huella de comportamiento `dc4bfcbc…`;
+- objetos de D4 presentes y nombres sin cambios;
+- en moodboards, `anon` no tiene ningún privilegio y `authenticated` solo SELECT, INSERT y UPDATE;
+- datos `5e4accb2…`, recuentos 12 / 39 / 2;
+- `e2a655c1` sigue `individual_founder · manual_pilot`, con 1 proyecto activo y 7 archivados;
+- planes (Gratis 1, Individual 2, Estudio 20) y habilitaciones sin cambios: 1 evento y ninguna suscripción;
+- las funciones de precios (`615deb68…`) y del límite de proyectos (`f223bb84…`) no cambian;
+- no existe la copia de R-D4C.
+
+La ventana con el servidor nuevo y la web T2 empezó a las 14:32.
 
 ## Fuera de este punto
 
