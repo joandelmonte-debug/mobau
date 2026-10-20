@@ -47,6 +47,14 @@
 
   <p id="plan-usage" style="font-size:13px; color:var(--ink-faint); margin-bottom:28px;"></p>
 
+  <!-- Punto 43: sin plan Individual o Estudio, los proyectos se conservan en solo lectura. -->
+  <div id="plan-readonly-note" hidden style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border:1px solid var(--line-strong); border-radius:var(--radius-lg); padding:14px 18px; margin:-10px 0 28px;">
+    <p id="plan-readonly-text" style="margin:0; font-size:14px; color:var(--ink);">Tus proyectos se conservan. Para editarlos, elaborar presupuestos o enviar solicitudes necesitas un plan Individual o Estudio.</p>
+    <a href="planes.html" class="btn btn-primary btn-sm" id="plan-readonly-link">Ver planes</a>
+  </div>
+
+  <div id="projects-plan-gate" style="display:none;"></div>
+
   <div id="projects-empty" class="cart-empty" style="display:none;">
     <div class="auth-card">
       <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Todavía no tienes proyectos aquí.</p>
@@ -103,9 +111,21 @@
   let currentStatus = "active";
   let session = null;
   let currentPlan = null;
+  /* Punto 43: sin herramientas profesionales (Gratis, o acceso sin
+     comprobar) la lista es de solo lectura: se consulta todo y solo se
+     puede eliminar un proyecto archivado propio sin solicitudes. */
+  let readOnly = true;
+
+  /* 23503: el proyecto tiene solicitudes (rfqs.project_id). */
+  function deleteErrorMessage(error){
+    return error && error.code === "23503"
+      ? "Este proyecto tiene solicitudes enviadas y no se puede eliminar."
+      : (error && error.message) || "No pudimos eliminar el proyecto.";
+  }
 
   function renderCard(p, productCount, distributorCount, plan, activeCount, isRequested){
     const isActive = p.status === "active";
+    const editable = isActive && !readOnly;
     const typeLabel = p.project_type ? (PROJECT_TYPE_LABELS[p.project_type] || p.project_type) : "Tipo no definido";
     const productsLabel = `${productCount} ${productCount === 1 ? "producto guardado" : "productos guardados"}`;
     const distributorsLabel = `${distributorCount} ${distributorCount === 1 ? "distribuidor" : "distribuidores"}`;
@@ -115,12 +135,12 @@
        <a> y <button> — se aplica siempre (activa o archivada), para
        que "Abrir" quede a la misma altura que "Archivar", "Reactivar
        proyecto" o "Sin cupo para reactivar" en cualquier tarjeta. */
-    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm project-action-btn"${!isActive ? ' style="flex:1;"' : ""}>${isActive ? "Abrir" : "Consultar"}</a>`;
+    let actionsHtml = `<a href="proyectos-detalle.html?id=${p.id}" class="btn btn-outline btn-sm project-action-btn"${!editable ? ' style="flex:1;"' : ""}>${editable ? "Abrir" : "Consultar"}</a>`;
 
-    if (isActive){
+    if (editable){
       actionsHtml += `<button type="button" class="btn btn-outline btn-sm project-action-btn archive-btn" data-id="${p.id}" data-status="active" data-name="${escapeHtml(p.name)}">Archivar</button>`;
-    } else {
-      if (isStudioPlan){
+    } else if (!isActive){
+      if (isStudioPlan && !readOnly){
         const hasCupo = activeCount < plan.max_active_projects;
         actionsHtml += hasCupo
           ? `<button type="button" class="btn btn-outline btn-sm project-action-btn archive-btn" style="flex:1;" data-id="${p.id}" data-status="archived">Reactivar proyecto</button>`
@@ -159,7 +179,7 @@
 
   async function renderPlanUsage(activeCount){
     const el = document.getElementById("plan-usage");
-    if (!currentPlan) { el.textContent = ""; return; }
+    if (!currentPlan || readOnly) { el.textContent = ""; return; }
     const label = currentPlan.max_active_projects === 1 ? "proyecto activo" : "proyectos activos";
     el.textContent = `${activeCount} de ${currentPlan.max_active_projects} ${label} en tu plan.`;
   }
@@ -198,14 +218,16 @@
         ? "Todavía no has archivado ningún proyecto."
         : currentStatus === "requested"
           ? "Todavía no has enviado ninguna solicitud de cotización."
-          : "Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.";
+          : readOnly
+            ? "No tienes proyectos activos."
+            : "Crea un proyecto para guardar productos, preparar una selección visual y solicitar cotizaciones.";
       /* En "Solicitados" vacío, "Crear proyecto" solo tiene sentido si
          tampoco hay un proyecto activo — si ya existe uno, la acción
          correcta no es crear otro (chocaría con el límite del plan),
          así que se muestra solo el mensaje informativo. activeCount ya
          viene calculado una vez por refresco (refreshProjectsView),
          sin ninguna consulta nueva. */
-      createBtnEmpty.hidden = (currentStatus === "requested" && activeCount > 0);
+      createBtnEmpty.hidden = readOnly || (currentStatus === "requested" && activeCount > 0);
       empty.style.display = "block";
     } else {
       empty.style.display = "none";
@@ -255,7 +277,7 @@
 
               const { error: deleteError } = await MobauProjects.deleteProject(id);
               if (deleteError){
-                alert(`El proyecto se archivó, pero no pudimos eliminarlo: ${deleteError.message}`);
+                alert(`El proyecto se archivó, pero no pudimos eliminarlo: ${deleteErrorMessage(deleteError)}`);
                 await setFilter("active");
                 return;
               }
@@ -309,7 +331,7 @@
           btn.disabled = true;
           const { error } = await MobauProjects.deleteProject(btn.dataset.id);
           if (error){
-            alert(error.message);
+            alert(deleteErrorMessage(error));
             btn.disabled = false;
             return;
           }
@@ -358,7 +380,31 @@
     if (!session) return;
     if (await MobauAccess.redirectSupplierToPanel()) return; // Punto 38-A: distribuidor -> panel
     if (!(await whenCatalogReady())) return;
+    readOnly = (await MobauAccess.access()) !== "pro";
     currentPlan = await MobauProjects.myPlan(session.user.id);
+
+    /* Punto 43: sin plan, aviso de solo lectura; sin ningún proyecto, solo
+       el mensaje de planes (no hay nada que consultar). */
+    if (readOnly){
+      const access = MobauAccess.confirmedAccess;
+      const [activeProjects, archivedProjects] = await Promise.all([MobauProjects.list("active"), MobauProjects.list("archived")]);
+      if (access !== "unknown" && !activeProjects.length && !archivedProjects.length){
+        const gate = document.getElementById("projects-plan-gate");
+        renderPlanGate(gate, access, {
+          title: "Los proyectos están incluidos en los planes Individual y Estudio.",
+          body: "Con un plan puedes crear proyectos, elaborar presupuestos y solicitar cotizaciones."
+        });
+        gate.style.display = "";
+        document.getElementById("projects-grid").innerHTML = "";
+        document.getElementById("filter-active").parentElement.parentElement.hidden = true;
+        return;
+      }
+      if (access === "unknown"){
+        document.getElementById("plan-readonly-text").textContent = "No pudimos comprobar tu acceso. Recarga la página para editar tus proyectos.";
+        document.getElementById("plan-readonly-link").hidden = true;
+      }
+      document.getElementById("plan-readonly-note").hidden = false;
+    }
 
     /* Punto 14 — el menú de cuenta enlaza aquí con ?status=active o
        ?status=requested para abrir la pestaña directamente, mismo

@@ -330,6 +330,76 @@ const MobauAccess = {
     return this._accountKindPromise;
   },
 
+  /* Punto 43 (T2): estado de acceso de la sesión actual, una sola vez por
+     página. Decide qué se ofrece en la interfaz (precios, selección,
+     proyectos); la protección real es la del servidor.
+       "anon"                sin sesión
+       "pro"                 cuenta profesional con my_professional_access() = true
+       "gratis"              cuenta profesional sin herramientas profesionales
+       "supplier_verified"   distribuidor verificado con empresa
+       "supplier_unverified" distribuidor sin verificar
+       "mobau"               profiles.role = 'admin' (con o sin aal2)
+       "unknown"             falló alguna lectura: no se concede nada
+     Ante la duda, sin acceso. Si el servidor rechaza los precios con una
+     pista (plan_required, distributor_unverified), downgradeAccess() baja
+     el estado aunque esta lectura dijera otra cosa. accessUserId: cuenta
+     con la que se decidió "pro" (la selección solo se lee con esa cuenta).
+     Avisa con el evento "mobau:access". */
+  PRICE_ACCESS_STATES: ["pro", "supplier_verified", "mobau"],
+  _accessPromise: null,
+  confirmedAccess: null,
+  accessUserId: null,
+  access() {
+    if (!this._accessPromise) {
+      this._accessPromise = (async () => {
+        const kind = await this.accountKind();
+        if (kind === "anon" || kind === "unknown" || kind === "mobau") return kind;
+        const session = await MobauAuth.getSession();
+        if (!session) return "anon";
+        if (kind === "supplier") {
+          const { data, error } = await supabaseClient
+            .from("distributor_profiles").select("verification_status, distributor_id").eq("user_id", session.user.id).maybeSingle();
+          if (error) return "unknown";
+          return data && data.verification_status === "verified" && data.distributor_id ? "supplier_verified" : "supplier_unverified";
+        }
+        const { data, error } = await supabaseClient.rpc("my_professional_access");
+        if (error || typeof data !== "boolean") return "unknown";
+        if (!data) return "gratis";
+        this.accessUserId = session.user.id;
+        return "pro";
+      })().catch(() => "unknown").then((state) => {
+        /* Una pista del servidor que llegara antes manda sobre esta lectura. */
+        if (!this.confirmedAccess) this.confirmedAccess = state;
+        document.dispatchEvent(new CustomEvent("mobau:access", { detail: { access: this.confirmedAccess } }));
+        return this.confirmedAccess;
+      });
+    }
+    return this._accessPromise;
+  },
+
+  hasPriceAccess() {
+    return this.PRICE_ACCESS_STATES.includes(this.confirmedAccess);
+  },
+
+  /* Solo con "pro": selección, proyectos editables y solicitudes. */
+  hasProfessionalTools() {
+    return this.confirmedAccess === "pro";
+  },
+
+  /* El servidor rechazó los precios (42501) con una pista: la interfaz
+     nunca concede más que él. Solo baja el estado, nunca lo sube. */
+  downgradeAccess(hint) {
+    const previous = this.confirmedAccess;
+    if (hint === "distributor_unverified") this.confirmedAccess = "supplier_unverified";
+    else if (previous === "pro" || previous === null) this.confirmedAccess = "gratis";
+    else if (previous === "supplier_verified" || previous === "mobau") this.confirmedAccess = "unknown";
+    if (this.confirmedAccess !== "pro") this.accessUserId = null;
+    if (this.confirmedAccess !== previous) {
+      document.dispatchEvent(new CustomEvent("mobau:access", { detail: { access: this.confirmedAccess } }));
+    }
+    return this.confirmedAccess;
+  },
+
   /* Estado de la sesión para la consola de moderación (Punto 39), calculado
      en el servidor: mobau_admin_session() -> { admin, aal2 }. Solo se pide
      para cuentas "mobau"; una consulta por página, compartida por la
@@ -382,14 +452,16 @@ const MobauAccess = {
 
   /* Destino final (una vez completado el alta, si hacía falta), por prioridad:
      1) distribuidor -> panel-distribuidor.html
-     2) intención con motivo -> ruta del motivo (selección vacía -> seleccion.html con aviso)
+     2) intención con motivo -> ruta del motivo (selección vacía -> seleccion.html
+        con aviso); sin herramientas profesionales (Punto 43) -> planes.html
      3) next válido (de la intención o de la URL)
      4) hay selección -> seleccion.html
      5) index.html */
-  resolveDestination({ isSupplier, intent, urlNext, selectionCount }) {
+  resolveDestination({ isSupplier, intent, urlNext, selectionCount, professionalTools = false }) {
     if (isSupplier) return { url: this.SUPPLIER_HOME };
     const motivo = intent ? this.normalizeMotivo(intent.motivo) : null;
     if (motivo) {
+      if (!professionalTools) return { url: "planes.html" };
       if (!selectionCount) return { url: "seleccion.html", emptySelection: true };
       return { url: this.MOTIVOS.get(motivo).route };
     }
@@ -431,13 +503,15 @@ const MobauAccess = {
     return { isSupplier: false, isMobau: false, hasProfessionalProfile: !profileError && !!profile };
   },
 
-  /* Destino final, sin pasos de alta pendientes: une la selección anónima a
-     la de la cuenta, CONSUME la intención y aplica resolveDestination(). */
-  finalDestination({ isSupplier = false, urlNext = null, fallbackIntent = null } = {}) {
-    if (typeof migrateAnonymousSelectionToAccount === "function") migrateAnonymousSelectionToAccount();
-    const selectionCount = typeof getSelectionCount === "function" ? getSelectionCount() : 0;
+  /* Destino final, sin pasos de alta pendientes: CONSUME la intención y
+     aplica resolveDestination(). Punto 43: ya no hay selección anónima que
+     unir; la selección (por cuenta) solo cuenta con herramientas
+     profesionales. */
+  async finalDestination({ isSupplier = false, urlNext = null, fallbackIntent = null } = {}) {
+    const professionalTools = !isSupplier && (await this.access()) === "pro";
+    const selectionCount = professionalTools && typeof getSelectionCount === "function" ? getSelectionCount() : 0;
     const intent = this.consumeIntent() || fallbackIntent;
-    return this.resolveDestination({ isSupplier, intent, urlNext, selectionCount });
+    return this.resolveDestination({ isSupplier, intent, urlNext, selectionCount, professionalTools });
   },
 
   /* Única regla de "¿y ahora adónde?" tras iniciar sesión o completar un paso
@@ -495,6 +569,19 @@ const MobauAuth = {
     }
   },
 
+  /* Punto 43: id de la cuenta de la sesión guardada en este navegador, sin
+     await (o null). Solo sirve para elegir la clave de la selección por
+     cuenta y comprobar que no cambió; nunca concede nada. */
+  storedUserId() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SUPABASE_SESSION_STORAGE_KEY));
+      const id = stored && stored.user && stored.user.id;
+      return typeof id === "string" && UUID_PATTERN.test(id) ? id : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
   /* Envía el enlace mágico al correo indicado.
      extraData es opcional (por ejemplo { name: "Ana Rosario" })
      y queda disponible luego como raw_user_meta_data en Supabase.
@@ -528,7 +615,9 @@ const MobauAuth = {
   },
 
   /* Cierra la sesión y regresa a acceso.html. */
+  _signingOut: false,
   async signOut() {
+    this._signingOut = true;
     const { error } = await supabaseClient.auth.signOut();
     if (error) console.error("Error cerrando sesión:", error);
     MobauAccountHint.remember(false);
@@ -571,22 +660,37 @@ const MobauAuth = {
   }
 };
 
-/* Migra o limpia la selección temporal (mobau_seleccion) cuando cambia
-   la sesión real de Supabase — las funciones viven en seleccion-data.js
-   (puede no estar cargado en alguna página futura; por eso se
-   comprueba typeof antes de llamarlas). Nunca toca localStorage.clear()
-   ni sessionStorage.clear(): cada función de seleccion-data.js solo
-   lee/escribe la clave "mobau_seleccion", nunca ningún otro dato.
-   - SIGNED_IN / INITIAL_SESSION: une la selección anónima (sessionStorage)
-     a la de la cuenta (localStorage), sin duplicar productos.
-   - SIGNED_OUT: la selección temporal del usuario, ya anónimo de
-     nuevo, queda vacía, y se borra la pista estética de tipo de cuenta. */
-supabaseClient.auth.onAuthStateChange((event) => {
-  if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && typeof migrateAnonymousSelectionToAccount === "function") {
-    migrateAnonymousSelectionToAccount();
-  }
+/* Cambios de la sesión real de Supabase.
+   - SIGNED_OUT: se borra la pista estética de tipo de cuenta y la selección
+     anónima antigua de la pestaña (sessionStorage). La selección de cada
+     cuenta se conserva en el navegador sin mostrarse (Punto 43, E6).
+   - Punto 43: si la página se cargó con una cuenta y la sesión se cierra o
+     pasa a OTRA cuenta (por ejemplo, desde otra pestaña), se recarga para
+     no mostrar datos, precios ni selección de la cuenta anterior. No se
+     recarga en las páginas de acceso y alta (tienen su propio flujo) ni
+     durante MobauAuth.signOut(), que ya redirige. */
+const AUTH_FLOW_PAGES = ["acceso", "crear-cuenta", "verificar-correo", "registro", "inscripcion-profesional"];
+let loadedSessionUserId;
+function currentPageName() {
+  const last = window.location.pathname.split("/").pop() || "index";
+  return last.replace(/\.html$/, "");
+}
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  const userId = session && session.user ? session.user.id : null;
   if (event === "SIGNED_OUT") {
     MobauAccountHint.remember(false);
     if (typeof clearAnonymousSelection === "function") clearAnonymousSelection();
   }
+  if (loadedSessionUserId === undefined) {
+    if (event === "INITIAL_SESSION" || event === "SIGNED_IN") loadedSessionUserId = userId;
+    return;
+  }
+  const changed = loadedSessionUserId !== null
+    && (event === "SIGNED_OUT" || (event === "SIGNED_IN" && userId !== loadedSessionUserId));
+  if (!changed) return;
+  if (MobauAuth._signingOut || AUTH_FLOW_PAGES.includes(currentPageName())) {
+    loadedSessionUserId = userId;
+    return;
+  }
+  window.location.reload();
 });

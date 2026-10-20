@@ -285,7 +285,7 @@
     const needsActivation = MobauAccess.planRequiresActivation(readyPlan);
     $("vc-ready-text").textContent = needsActivation
       ? `Siguiente paso: solicitar la activación del plan ${PLAN_NAMES[readyPlan]}. Durante esta etapa piloto, la activación se gestiona directamente antes de iniciar cualquier suscripción o cobro.`
-      : "Ya puedes guardar tu selección y preparar solicitudes de cotización.";
+      : "Tu cuenta está lista. Ya puedes explorar el catálogo y las fichas.";
     $("vc-ready-existing").hidden = !(result.status === "existing" && result.plan);
     $("vc-ready-continue-btn").textContent = needsActivation ? "Continuar a la activación" : "Continuar";
     $("vc-ready-continue-btn").disabled = false;
@@ -387,7 +387,7 @@
 
   /* Siguiente paso con la regla única de MobauAccess.resolveNext():
      activación del plan si la requiere, o el destino final (que consume
-     la intención y une la selección anónima a la de la cuenta). */
+     la intención). */
   $("vc-ready-continue-btn").addEventListener("click", async () => {
     $("vc-ready-continue-btn").disabled = true;
     const session = await MobauAuth.getSession();

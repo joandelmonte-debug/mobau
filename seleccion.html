@@ -36,6 +36,8 @@
 
 <main class="wrap" style="padding: 28px 0 100px;">
 
+  <!-- Punto 43: sin plan Individual o Estudio, aviso de planes en lugar de la selección. -->
+  <div id="selection-plan" style="display:none;"></div>
   <div id="selection-empty" style="display:none;" class="cart-empty">
     <div class="empty-state-content">
       <p style="color:var(--ink); font-weight:600;">Tu selección está vacía por ahora.</p>
@@ -211,12 +213,9 @@
     const el = document.getElementById("selection-price-summary");
     if (!el) return;
 
-    if (!PRICE_STATE.loggedIn){
-      el.innerHTML = `<p class="price-summary-line price-login-required">Inicia sesión para consultar precios</p>`;
-      return;
-    }
-    if (PRICE_STATE.error){
-      el.innerHTML = `<p class="price-summary-line price-error">Precio no disponible temporalmente</p>`;
+    const blocked = priceAccessInfo();
+    if (blocked){
+      el.innerHTML = `<p class="price-summary-line price-${blocked.kind}">${blocked.text}</p>`;
       return;
     }
 
@@ -235,7 +234,7 @@
       }
     });
 
-    const parts = [`<p class="price-summary-line">${publishedCount} con precio publicado · ${quoteCount} bajo cotización</p>`];
+    const parts = [`<p class="price-summary-line">${publishedCount} con precio publicado · ${quoteCount} sin precio publicado</p>`];
     if (publishedCount > 0){
       parts.push(`<p class="price-summary-total">Subtotal con precios publicados: ${formatUSD(subtotal)}</p>`);
       parts.push(`<p class="price-summary-note">Incluye ITBIS</p>`);
@@ -408,9 +407,24 @@
     /* Punto 38-A: una cuenta de distribuidor no usa la selección -> panel.
        Sin sesión no hay consulta de rol extra: accountKind() solo lee la sesión. */
     if (await MobauAccess.redirectSupplierToPanel()) return;
+    /* Punto 43: la selección está incluida en los planes Individual y
+       Estudio. Sin ellos (o si el servidor rechaza los precios por plan) no
+       se lee ni se muestra; la de la cuenta se conserva en el navegador. */
+    const showPlanGate = () => {
+      const gate = document.getElementById("selection-plan");
+      renderPlanGate(gate, MobauAccess.confirmedAccess, {
+        title: "La selección está incluida en los planes Individual y Estudio.",
+        body: "Con un plan puedes reunir productos, revisar cantidades, crear proyectos y solicitar cotizaciones."
+      });
+      gate.style.display = "";
+      document.getElementById("selection-content").style.display = "none";
+      document.getElementById("selection-empty").style.display = "none";
+    };
+    if ((await MobauAccess.access()) !== "pro") return showPlanGate();
     /* D1: aviso de carga o error fuera de #selection-content, que sigue oculto hasta pintar. */
     if (!(await whenProductsReady(getSelection().map(i => i.productId)))) return;
     await loadPriceState(getSelection().map(i => i.productId));
+    if (!MobauAccess.hasProfessionalTools()) return showPlanGate();
     renderSelection();
     initActiveProjectState();
   })();

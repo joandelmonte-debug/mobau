@@ -297,7 +297,8 @@
         <span class="catalog-filter-trigger__count" hidden></span>
         <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
       </button>
-      <button type="button" class="catalog-filter-trigger" id="filter-trigger-precio" aria-expanded="false" aria-controls="filter-panel-precio">
+      <!-- Punto 43: oculto hasta confirmar acceso a precios (applyPriceFilterAccess). -->
+      <button type="button" class="catalog-filter-trigger" id="filter-trigger-precio" aria-expanded="false" aria-controls="filter-panel-precio" hidden>
         <span class="catalog-filter-trigger__label">Precio</span>
         <span class="catalog-filter-trigger__count" hidden></span>
         <span aria-hidden="true" class="catalog-filter-trigger__caret">▾</span>
@@ -1141,8 +1142,25 @@ runWithCatalog(() => {
   wirePriceFilter();
   updateFilterTriggerCounts();
 
+  /* Punto 43: sin acceso a precios (sin sesión, Gratis, distribuidor sin
+     verificar o acceso sin comprobar) no se ofrece el filtro de precio: ni
+     el botón ni su panel, y sin ningún límite activo. */
+  function applyPriceFilterAccess(){
+    const allowed = MobauAccess.hasPriceAccess();
+    document.getElementById("filter-trigger-precio").hidden = !allowed;
+    if (allowed) return;
+    document.getElementById("filter-panel-precio").hidden = true;
+    state.priceMin = "";
+    state.priceMax = "";
+    document.getElementById("price-min").value = "";
+    document.getElementById("price-max").value = "";
+    document.getElementById("price-range-error").hidden = true;
+    updateFilterTriggerCounts();
+  }
+
   (async () => {
     await loadPriceState();
+    applyPriceFilterAccess();
     /* El texto de ayuda de Precio necesita PRICE_STATE ya cargado
        (getPriceInfo depende de ella) — por eso se actualiza aquí,
        nunca antes. No es una consulta nueva: loadPriceState() es la

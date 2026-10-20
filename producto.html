@@ -50,6 +50,7 @@
     <p class="desc" id="p-desc">Descripción del producto.</p>
     <p class="price-line" id="p-price" style="margin:-10px 0 4px;"></p>
     <p class="price-line price-demo-note" id="p-price-demo-note" style="display:none; margin:0 0 6px;">Precio orientativo</p>
+    <div id="p-price-actions" hidden style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 10px;"></div>
     <p class="resource-note">Precio, disponibilidad y plazo sujetos a confirmación del distribuidor.</p>
 
     <p class="section-note">Antes de sumarlo a tu proyecto, esto es lo que necesitas saber:</p>
@@ -63,7 +64,7 @@
       <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
     </dl>
 
-    <div class="product-actions product-selection-actions">
+    <div class="product-actions product-selection-actions" hidden>
       <div class="product-qty-field">
         <label for="product-qty-input">Cantidad</label>
         <div class="quantity-control">
@@ -140,11 +141,29 @@
 <script>
 /* Punto 38-A: una cuenta de distribuidor ve la ficha en solo lectura —
    sin cantidad ni "Añadir a la selección" (addToSelection() también lo
-   rechaza). Solo interfaz; la protección de servidor llega en 38-B.
-   Punto 39: igual para la cuenta de Mobau. */
-MobauAccess.accountKind().then(kind => {
-  if (kind === "supplier" || kind === "mobau") document.querySelector(".product-selection-actions").hidden = true;
-});
+   rechaza). Punto 39: igual para la cuenta de Mobau. Punto 43: la
+   selección está incluida en los planes Individual y Estudio, así que la
+   cantidad y "Añadir a la selección" empiezan ocultos y solo aparecen con
+   herramientas profesionales confirmadas (ver renderPriceBlock). Solo
+   interfaz; la protección real es la del servidor. */
+
+/* Punto 43: acción junto al precio, según el estado (getPriceInfo). Con
+   plan, los estados sin importe se consultan con la solicitud dentro de
+   Mobau (E7): no hay botón nuevo, solo la indicación. */
+const PRICE_REQUEST_KINDS = ["quote-required", "pending", "no-price", "unavailable"];
+function priceActionsHtml(info, product){
+  if (info.kind === "no-session"){
+    return `<a class="btn btn-primary btn-sm" href="planes.html">Ver planes</a>
+      <a class="btn btn-outline btn-sm" href="${escapeHtml(MobauAccess.accessUrlForCurrentPage())}">Ya tengo cuenta</a>`;
+  }
+  if (info.kind === "plan-required") return `<a class="btn btn-primary btn-sm" href="planes.html">Ver planes</a>`;
+  if (info.kind === "distributor-unverified") return `<a class="btn btn-outline btn-sm" href="perfil-distribuidor.html">Ver mi empresa</a>`;
+  if (info.kind === "error") return `<button type="button" class="btn btn-outline btn-sm" id="p-price-retry">Reintentar</button>`;
+  if (MobauAccess.hasProfessionalTools() && product.status !== "archived" && PRICE_REQUEST_KINDS.includes(info.kind)){
+    return `<span class="resource-note" style="margin:0;">Añádelo a tu selección para solicitar cotización</span>`;
+  }
+  return "";
+}
 
 /* Punto 42: recursos reales del producto — los enlaces externos que el
    distribuidor indicó en su propuesta y Mobau aprobó. Sin enlace, «No
@@ -377,13 +396,28 @@ runWithCatalog(async function renderProductPage(){
     updateSelectionBadge();
   });
 
-  (async () => {
-    const priceIds = [product.id, ...relatedProducts.map(p => p.id)];
-    await loadPriceState(priceIds);
+  const priceIds = [product.id, ...relatedProducts.map(p => p.id)];
+  function renderPriceBlock(){
     document.getElementById("p-price").innerHTML = priceLineHtml(product.id);
     const priceInfo = getPriceInfo(product.id);
     document.getElementById("p-price-demo-note").style.display =
       (priceInfo.kind === "published" && priceInfo.source === "demo") ? "block" : "none";
+    const actions = document.getElementById("p-price-actions");
+    actions.innerHTML = priceActionsHtml(priceInfo, product);
+    actions.hidden = !actions.innerHTML;
+    const retry = document.getElementById("p-price-retry");
+    if (retry) retry.addEventListener("click", async () => {
+      retry.disabled = true;
+      await loadPriceState(priceIds);
+      renderPriceBlock();
+      renderRelated();
+    });
+    document.querySelector(".product-selection-actions").hidden = !MobauAccess.hasProfessionalTools();
+  }
+
+  (async () => {
+    await loadPriceState(priceIds);
+    renderPriceBlock();
     refreshAddButton();
     renderRelated();
     injectIconSprite();

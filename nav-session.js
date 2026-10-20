@@ -42,6 +42,22 @@
    ============================================================ */
 
 (async () => {
+  /* Punto 43: «Mi selección» solo con herramientas profesionales (plan
+     Individual o Estudio, MobauAccess.access() = "pro"). Se oculta desde ya
+     en todas las páginas y solo aparece cuando se confirma; vuelve a
+     ocultarse si el acceso baja después (respuesta del servidor). */
+  const selectionLink = document.getElementById("selection-count-link");
+  if (selectionLink){
+    selectionLink.style.display = "none";
+    const showSelectionLink = (access) => {
+      if (!selectionLink.isConnected) return;
+      selectionLink.style.display = access === "pro" ? "" : "none";
+      if (access === "pro" && typeof updateSelectionBadge === "function") updateSelectionBadge();
+    };
+    MobauAccess.access().then(showSelectionLink);
+    document.addEventListener("mobau:access", (e) => showSelectionLink(e.detail.access));
+  }
+
   const slot = document.getElementById("nav-session-slot");
   if (!slot) return;
 

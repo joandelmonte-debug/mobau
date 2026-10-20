@@ -217,6 +217,8 @@
     <a href="proyectos.html" class="btn btn-primary">Volver a mis proyectos</a>
   </div>
 
+  <!-- Punto 43: el presupuesto está incluido en los planes Individual y Estudio. -->
+  <div id="plan-gate" style="display:none;"></div>
   <div id="no-products" style="display:none;" class="cart-empty">
     <p style="margin:0 0 4px; color:var(--ink); font-weight:600;">Este proyecto todavía no tiene productos.</p>
     <p style="margin:0;">Añade al menos un producto para generar un resumen.</p>
@@ -433,6 +435,18 @@
     const session = await MobauAuth.requireSession();
     if (!session) return;
     if (await MobauAccess.redirectSupplierToPanel()) return; // Punto 38-A: distribuidor -> panel
+    /* Punto 43: sin plan Individual o Estudio no hay presupuesto (ni la
+       tabla ni «Imprimir»); el proyecto se sigue consultando en su página. */
+    const showPlanGate = () => {
+      const gate = document.getElementById("plan-gate");
+      renderPlanGate(gate, MobauAccess.confirmedAccess, {
+        title: "El presupuesto está incluido en los planes Individual y Estudio.",
+        body: "Tus proyectos se conservan y puedes consultarlos en Mis proyectos."
+      });
+      gate.style.display = "";
+      document.getElementById("summary-content").style.display = "none";
+    };
+    if ((await MobauAccess.access()) !== "pro") return showPlanGate();
     if (!(await whenCatalogReady())) return;
 
     if (!projectId){
@@ -530,6 +544,7 @@
     }
 
     await loadPriceState(rows.map(row => row.product_id));
+    if (!MobauAccess.hasProfessionalTools()) return showPlanGate();
     document.getElementById("ps-table-body").innerHTML = rows.map(renderRow).join("");
     renderTotals(rows);
 

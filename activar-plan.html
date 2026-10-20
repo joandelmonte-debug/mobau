@@ -128,14 +128,14 @@
     individual: {
       name: "Individual",
       price: "18 USD/mes",
-      priceAlt: "o 144 USD el primer año: 12 meses de acceso por el precio de 8",
-      text: "Diseñado para hasta 2 proyectos activos."
+      priceAlt: "ITBIS incluido · o 144 USD el primer año: 12 meses de acceso por el precio de 8",
+      text: "Precios, selección, proyectos y solicitudes de cotización, con hasta 2 proyectos activos."
     },
     estudio: {
       name: "Estudio",
       price: "39 USD/mes",
-      priceAlt: "o 312 USD el primer año: 12 meses de acceso por el precio de 8",
-      text: "Diseñado para hasta 10 proyectos activos y cowork para hasta 3 personas."
+      priceAlt: "ITBIS incluido · o 312 USD el primer año: 12 meses de acceso por el precio de 8",
+      text: "Hasta 20 proyectos activos para tu estudio. Incluye 3 usuarios, cada integrante con su propio acceso. Amplía tu equipo hasta 5 personas: 2 plazas adicionales disponibles · US$10/mes cada una, ITBIS incluido."
     }
   };
 
@@ -167,10 +167,10 @@
   }
 
   /* "Continuar con acceso Gratis": destino final seguro (consume la
-     intención: motivo, next, selección o index). */
-  $("ap-continue-btn").addEventListener("click", () => {
+     intención: motivo -> planes.html sin plan habilitado, next o index). */
+  $("ap-continue-btn").addEventListener("click", async () => {
     $("ap-continue-btn").disabled = true;
-    window.location.replace(MobauAccess.finalDestination().url);
+    window.location.replace((await MobauAccess.finalDestination()).url);
   });
 
   (async () => {

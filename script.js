@@ -681,13 +681,18 @@ if (catalogUsesDb()) loadCatalog().catch(() => {});
    estado del precio de cada producto publicado, con importe solo si el
    precio está publicado y sin columnas internas (es_demo sustituye a
    price_source). Un usuario sin sesión no puede obtenerlos ni leyendo el
-   HTML, ni el estado JS, ni una respuesta pública de Supabase. Sin sesión,
-   loadPriceState() no hace ninguna llamada de red: PRICE_STATE.map
-   queda vacío y getPriceInfo() nunca revela un importe.
+   HTML, ni el estado JS, ni una respuesta pública de Supabase.
 
-   Un producto sin fila en product_prices se trata como
-   "quote_required" (Precio bajo cotización), nunca como error ni
-   como US$ 0 — sigue siendo seleccionable en todo momento.
+   Punto 43 (T2): los precios están incluidos en los planes Individual y
+   Estudio. Solo se piden con acceso a precios (MobauAccess.hasPriceAccess():
+   "pro", distribuidor verificado o Mobau); en cualquier otro estado
+   loadPriceState() no hace ninguna llamada: PRICE_STATE.map queda vacío y
+   getPriceInfo() explica por qué, sin agrupar estados. Si el servidor
+   rechaza la consulta con una pista (42501 plan_required o
+   distributor_unverified), la interfaz baja a ese estado.
+
+   Un producto sin fila en product_prices es "Precio por confirmar" (ya no
+   se confunde con "bajo cotización"), nunca un error ni US$ 0.
    ============================================================ */
 const PRICE_IN_LIMIT = 200;
 const PRICE_STATE = {
@@ -696,17 +701,18 @@ const PRICE_STATE = {
   error: false,
   map: {}
 };
+const PRICE_DENIED_HINTS = ["plan_required", "distributor_unverified"];
 
 /* Una sola consulta agrupada por página (nunca una por tarjeta).
    Debe llamarse una vez, antes del primer render que use precios;
    los renders posteriores (filtros, cantidad, quitar producto) leen
    PRICE_STATE ya cargado, sin volver a preguntar por sesión. */
 async function loadPriceState(productIds){
-  const session = await MobauAuth.getSession();
-  PRICE_STATE.loggedIn = !!session;
+  const access = await MobauAccess.access();
+  PRICE_STATE.loggedIn = access !== "anon";
   PRICE_STATE.error = false;
 
-  if (!session){
+  if (!MobauAccess.hasPriceAccess()){
     PRICE_STATE.map = {};
     PRICE_STATE.loaded = true;
     return PRICE_STATE;
@@ -732,11 +738,15 @@ async function loadPriceState(productIds){
     }
     PRICE_STATE.map = map;
   } catch (e) {
-    /* Error de red o de RLS: nunca se confunde con "sin fila" — se
-       marca aparte para mostrar "precio no disponible temporalmente"
-       en vez de "bajo cotización". */
-    PRICE_STATE.error = true;
     PRICE_STATE.map = {};
+    if (e && e.code === "42501" && PRICE_DENIED_HINTS.includes(e.hint)){
+      /* El servidor no concede los precios a esta cuenta: manda él. */
+      MobauAccess.downgradeAccess(e.hint);
+    } else {
+      /* Error de red u otro: nunca se confunde con "sin fila" — se marca
+         aparte para mostrar "No pudimos cargar los precios." */
+      PRICE_STATE.error = true;
+    }
   }
   PRICE_STATE.loaded = true;
   return PRICE_STATE;
@@ -746,19 +756,44 @@ function formatUSD(amount){
   return "US$ " + Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/* Único punto de decisión de qué mostrar para un producto — todas las
-   páginas (catálogo, ficha, selección, proyecto) pasan por aquí, así
-   que las reglas de negocio (Punto 6) están en un solo lugar. */
-function getPriceInfo(productId){
-  if (!PRICE_STATE.loggedIn){
-    return { kind: "login-required", text: "Inicia sesión para consultar precios" };
+/* Punto 43: motivo por el que ahora no hay precios para ningún producto
+   (sin acceso o error al cargarlos), o null si hay precios cargados.
+   text: ficha, selección y proyecto; cardText: tarjeta del catálogo. */
+function priceAccessInfo(){
+  if (!PRICE_STATE.loaded){
+    return { kind: "loading", text: "Consultando precio…" };
+  }
+  const access = MobauAccess.confirmedAccess;
+  if (access === "anon"){
+    return { kind: "no-session", text: "Accede a precios y elabora presupuestos con un plan Individual o Estudio", cardText: "Precio con plan Individual o Estudio" };
+  }
+  if (access === "gratis"){
+    return { kind: "plan-required", text: "El acceso a precios y la elaboración de presupuestos están incluidos en los planes Individual y Estudio", cardText: "Precio con plan Individual o Estudio" };
+  }
+  if (access === "supplier_unverified"){
+    return { kind: "distributor-unverified", text: "Verás los precios publicados cuando Mobau verifique tu empresa", cardText: "Precio tras verificar tu empresa" };
+  }
+  if (!MobauAccess.hasPriceAccess()){
+    return { kind: "access-unknown", text: "No pudimos comprobar tu acceso. Recarga la página.", cardText: "Precio no disponible" };
   }
   if (PRICE_STATE.error){
-    return { kind: "error", text: "Precio no disponible temporalmente" };
+    return { kind: "error", text: "No pudimos cargar los precios.", cardText: "Precio no disponible temporalmente" };
   }
+  return null;
+}
+
+/* Único punto de decisión de qué mostrar para un producto — todas las
+   páginas (catálogo, ficha, selección, proyecto) pasan por aquí, así
+   que las reglas de negocio (Punto 6, Punto 43) están en un solo lugar. */
+function getPriceInfo(productId){
+  const blocked = priceAccessInfo();
+  if (blocked) return blocked;
 
   const row = PRICE_STATE.map[productId];
-  if (!row || row.price_status === "quote_required"){
+  if (!row){
+    return { kind: "no-price", text: "Precio por confirmar" };
+  }
+  if (row.price_status === "quote_required"){
     return { kind: "quote-required", text: "Precio bajo cotización" };
   }
   if (row.price_status === "pending_confirmation"){
@@ -785,14 +820,15 @@ function priceLineHtml(productId, className){
 }
 
 /* Variante SOLO para la tarjeta de producto (catálogo y relacionados):
-   omite "· ITBIS incluido" para que el precio no compita con el resto
-   de la tarjeta — la aclaración de ITBIS se conserva en la ficha, la
-   selección y el proyecto, que siguen usando priceLineHtml() tal cual.
-   No cambia qué se considera "published" ni el importe, solo el texto
-   que se muestra en este contexto. */
+   el importe y, debajo y en pequeño, "ITBIS incluido" (Punto 43, Q3: todo
+   precio visible lleva ITBIS incluido); los estados sin precio usan su
+   texto corto de tarjeta. No cambia qué se considera "published" ni el
+   importe, solo cómo se muestra en este contexto. */
 function cardPriceLineHtml(productId, className){
   const info = getPriceInfo(productId);
-  const text = info.kind === "published" ? formatUSD(info.amount) : info.text;
+  const text = info.kind === "published"
+    ? `${formatUSD(info.amount)}<span class="card-price-tax" style="display:block;font-size:11.5px;font-weight:400;color:var(--ink-soft);">ITBIS incluido</span>`
+    : (info.cardText || info.text);
   return `<span class="${className || "card-price"} price-${info.kind}">${text}</span>`;
 }
 
@@ -800,7 +836,7 @@ function cardPriceLineHtml(productId, className){
    importe mostrado es el total de esa línea (price_amount * quantity),
    no el precio unitario — igual que ya hace el total preliminar. Los
    estados sin importe (quote_required, pending_confirmation,
-   unavailable, sin sesión) no cambian: no hay nada que multiplicar. */
+   unavailable, sin acceso) no cambian: no hay nada que multiplicar. */
 function priceLineHtmlForQuantity(productId, quantity, className){
   const info = getPriceInfo(productId);
   if (info.kind !== "published"){
@@ -1218,10 +1254,13 @@ let myActiveProjects = [];
    botón de proyecto activo (que catalogo.html añade dentro de
    .card-actions): se pinta otro contenedor con solo "Ver ficha". Solo
    interfaz — la protección de servidor llega en 38-B. Punto 39: igual para
-   la cuenta de Mobau. */
+   la cuenta de Mobau. Punto 43: la selección está incluida en los planes
+   Individual y Estudio, así que las tarjetas solo llevan acciones con
+   herramientas profesionales confirmadas (MobauAccess.access() = "pro");
+   en cualquier otro estado, o mientras no se sepa, solo "Ver ficha". */
 const READ_ONLY_CATALOG_KINDS = ["supplier", "mobau"];
-function isSupplierAccount(){
-  return typeof MobauAccess !== "undefined" && READ_ONLY_CATALOG_KINDS.includes(MobauAccess.confirmedKind);
+function cardActionsReadOnly(){
+  return typeof MobauAccess === "undefined" || !MobauAccess.hasProfessionalTools();
 }
 
 function readOnlyCardActionsHtml(fichaUrl){
@@ -1230,15 +1269,21 @@ function readOnlyCardActionsHtml(fichaUrl){
         </div>`;
 }
 
-/* Si el rol llega después de pintar las tarjetas, se pasan a solo lectura. */
-document.addEventListener("mobau:account-kind", (e) => {
-  if (!READ_ONLY_CATALOG_KINDS.includes(e.detail.kind)) return;
+/* Si el rol o el acceso llegan (o bajan) después de pintar las tarjetas, se
+   pasan a solo lectura. */
+function makeCardsReadOnly(){
   document.querySelectorAll(".product-card .card-actions").forEach(actions => {
     const card = actions.closest(".product-card");
     const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(card.dataset.productId)}`);
     actions.insertAdjacentHTML("afterend", readOnlyCardActionsHtml(fichaUrl));
     actions.remove();
   });
+}
+document.addEventListener("mobau:account-kind", (e) => {
+  if (READ_ONLY_CATALOG_KINDS.includes(e.detail.kind)) makeCardsReadOnly();
+});
+document.addEventListener("mobau:access", (e) => {
+  if (e.detail.access !== "pro") makeCardsReadOnly();
 });
 
 function renderProductCard(p){
@@ -1247,7 +1292,7 @@ function renderProductCard(p){
   const inSel = inSelection(p.id);
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
-  const actionsHtml = isSupplierAccount() ? readOnlyCardActionsHtml(fichaUrl) : null;
+  const actionsHtml = cardActionsReadOnly() ? readOnlyCardActionsHtml(fichaUrl) : null;
   const selectButton = p.status === "archived"
     ? `<button type="button" class="btn btn-added" disabled>No disponible actualmente</button>`
     : `
@@ -1271,6 +1316,31 @@ function renderProductCard(p){
         </div>`}
       </div>
     </article>`;
+}
+
+/* Punto 43: aviso centrado (recuadro vacío: título, subtítulo y botones)
+   para las páginas y bloques que necesitan plan Individual o Estudio:
+   "Ver planes", y "Ya tengo cuenta" sin sesión. Si no se pudo comprobar
+   el acceso ("unknown"), solo pide recargar. */
+function renderPlanGate(container, access, { title, body } = {}){
+  const box = (t, b, buttons) => `<div class="cart-empty" data-plan-gate>
+      <p style="margin:0 auto 4px; color:var(--ink); font-weight:600;">${t}</p>
+      <p style="margin:0 auto 4px;">${b}</p>
+      <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px;">${buttons}</div>
+    </div>`;
+  if (access === "unknown"){
+    container.innerHTML = box("No pudimos comprobar tu acceso.", "Recarga la página para intentarlo de nuevo.",
+      `<button type="button" class="btn btn-primary" data-plan-gate-reload>Recargar</button>`);
+    container.querySelector("[data-plan-gate-reload]").addEventListener("click", () => window.location.reload());
+    return;
+  }
+  const login = access === "anon"
+    ? `<a class="btn btn-outline" href="${escapeHtml(MobauAccess.accessUrlForCurrentPage())}">Ya tengo cuenta</a>`
+    : "";
+  container.innerHTML = box(
+    title || "Esta función está incluida en los planes Individual y Estudio.",
+    body || "Con un plan puedes ver precios, reunir productos en tu selección, elaborar presupuestos y solicitar cotizaciones.",
+    `<a class="btn btn-primary" href="planes.html">Ver planes</a>${login}`);
 }
 
 /* Actualiza el enlace "Mi selección (N)" del header, en las

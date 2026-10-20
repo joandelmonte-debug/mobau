@@ -439,9 +439,9 @@
      valor recibido. "moodboard" queda definido para 35B, pero
      normalizeMotivo() todavía no lo devuelve (inactivo). */
   const MOTIVO_COPY = {
-    guardar:    { title: "Guarda tu selección", body: "Inicia sesión con el email de tu cuenta Mobau. Los productos que elegiste se mantienen." },
-    proyecto:   { title: "Organiza tu selección en un proyecto", body: "Inicia sesión con el email de tu cuenta Mobau para organizar tus productos y retomarlos cuando quieras." },
-    cotizacion: { title: "Solicita tu cotización", body: "Inicia sesión con el email de tu cuenta Mobau. Tus productos y cantidades se mantienen." },
+    guardar:    { title: "Accede a tu selección", body: "Inicia sesión con el email de tu cuenta Mobau. La selección está incluida en los planes Individual y Estudio." },
+    proyecto:   { title: "Organiza tus productos en un proyecto", body: "Inicia sesión con el email de tu cuenta Mobau. Los proyectos están incluidos en los planes Individual y Estudio." },
+    cotizacion: { title: "Solicita tu cotización", body: "Inicia sesión con el email de tu cuenta Mobau. Las solicitudes de cotización están incluidas en los planes Individual y Estudio." },
     moodboard:  { title: "Crea un moodboard con tu selección", body: "Inicia sesión con el email de tu cuenta Mobau." }
   };
   const GENERIC_COPY = { title: "Accede a tu cuenta", body: "Entra con el email de tu cuenta Mobau. Te enviamos un enlace de acceso, sin contraseña." };
@@ -563,8 +563,8 @@
   /* Decide el destino tras iniciar sesión con la regla única de
      MobauAccess.resolveNext(): primero el paso de alta pendiente (perfil
      profesional, activación de plan) sin consumir la intención; si no queda
-     ninguno, el destino final, que sí la consume (un solo uso) y une la
-     selección anónima a la de la cuenta sin duplicar productos.
+     ninguno, el destino final, que sí la consume (un solo uso); sin plan
+     Individual o Estudio, un motivo lleva a planes.html (Punto 43).
      Un borrador de alta que hubiera en este dispositivo no es de esta
      cuenta (se entra por inicio de sesión, no por el enlace del alta): se
      descarta. */
