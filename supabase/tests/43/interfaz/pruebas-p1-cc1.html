@@ -1,0 +1,692 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 43 T2 (mocks P1)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:1024px;height:700px;border:0;position:absolute;left:-9999px}small{color:#555}</style>
+<h1>Punto 43 · T2 · pruebas P1 con mocks</h1>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Grupo</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<script>
+const A = "aaaaaaaa-0000-4000-8000-00000000000a", B = "bbbbbbbb-0000-4000-8000-00000000000b";
+const SB_KEY = "sb-skcoxtdppdcietgojdal-auth-token";
+const KEY_A = "mobau_seleccion:" + A, KEY_B = "mobau_seleccion:" + B;
+const COMMON = '["demo-pub",{"productId":"demo-cot","quantity":2,"unit":"ud."}]';
+const P1 = "00000001-1111-4111-8111-111111111111", P2 = "00000002-1111-4111-8111-111111111111", P3 = "00000003-1111-4111-8111-111111111111";
+const T = {
+  anon: "Con un plan Individual o Estudio puedes consultar los precios publicados y elaborar presupuestos. No todos los productos tienen precio publicado; puedes solicitar una cotización desde tus proyectos.",
+  gratis: "Los planes Individual y Estudio incluyen la consulta de precios publicados, la elaboración de presupuestos y el envío de solicitudes de cotización. No todos los productos tienen precio publicado.",
+  unver: "Verás los precios publicados cuando Mobau verifique tu empresa",
+  unk: "No pudimos comprobar tu acceso. Recarga la página.",
+  err: "No pudimos cargar los precios.",
+  pub: "US$ 120.00 · ITBIS incluido",
+  hint: "Añádelo a tu selección para solicitar cotización",
+  cardPlan: "Consulta de precios con plan Individual o Estudio*", cardUnver: "Precio tras verificar tu empresa",
+  cardUnk: "Precio no disponible", cardErr: "Precio no disponible temporalmente"
+};
+const ALL_STORAGE = [];
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const txt = (el) => el ? el.textContent.replace(/\s+/g, " ").trim() : null;
+const vis = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
+const priceCalls = (w) => w.__mock.calls.filter(c => c === "rpc:catalog_published_prices").length;
+
+let frame, loads = 0;
+async function open(url, wait = 1000){
+  if (frame) frame.remove();
+  frame = document.createElement("iframe");
+  loads = 0;
+  document.body.appendChild(frame);
+  await new Promise(res => { frame.onload = () => { loads++; res(); }; frame.src = url; });
+  frame.onload = () => { loads++; harvest(); hook(); observe(); };
+  hook(); observe();
+  await settle(Math.min(wait, 700));
+  return frame.contentWindow;
+}
+/* Espera a que la página se estabilice: sin llamadas simuladas, accesos al
+   almacenamiento ni cambios del DOM durante 500 ms (mínimo "min", máximo 10 s).
+   Evita depender de esperas fijas cuando el navegador frena los temporizadores. */
+let mutations = 0;
+function observe(){
+  try { new MutationObserver(m => { mutations += m.length; }).observe(frame.contentDocument, { subtree: true, childList: true, attributes: true, characterData: true }); } catch (e) {}
+}
+function activity(){
+  try { const m = frame.contentWindow.__mock; return (m ? m.calls.length + m.storage.length : 0) + mutations + loads * 100000; } catch (e) { return -1; }
+}
+async function settle(min = 300, max = 10000){
+  const t0 = Date.now();
+  await sleep(min);
+  let last = activity(), stableSince = Date.now();
+  while (Date.now() - t0 < max){
+    await sleep(100);
+    const n = activity();
+    if (n !== last){ last = n; stableSince = Date.now(); }
+    else if (Date.now() - stableSince >= 500) break;
+  }
+}
+function hook(){
+  const w = frame.contentWindow;
+  w.__alerts = []; w.alert = (m) => w.__alerts.push(String(m)); w.confirm = () => true;
+}
+function harvest(){
+  try { const w = frame.contentWindow; if (w.__mock && !w.__harvested){ w.__harvested = true; ALL_STORAGE.push(...w.__mock.storage.map(s => ({ ...s, page: w.location.pathname.split("/").pop() }))); } } catch (e) {}
+}
+const W = () => frame.contentWindow, D = () => frame.contentDocument;
+const G = (name) => W().eval(name);
+const page = () => W().location.pathname.split("/").pop();
+
+/* ---------- observadores ---------- */
+function ficha(){
+  const d = D(), w = W();
+  const acts = [...d.querySelectorAll("#p-price-actions a, #p-price-actions button, #p-price-actions span")]
+    .map(e => e.tagName === "A" ? `${txt(e)}→${e.getAttribute("href")}` : txt(e));
+  return { price: txt(d.querySelector("#p-price")), acts: vis(d.getElementById("p-price-actions")) ? acts : [],
+           sel: vis(d.querySelector(".product-selection-actions")), calls: priceCalls(w),
+           link: vis(d.getElementById("selection-count-link")), errors: w.__mock.errors };
+}
+function catalogo(){
+  const d = D(), w = W();
+  const card = (id) => d.querySelector(`.product-card[data-product-id="${id}"] .card-price`);
+  return { pub: txt(card("demo-pub")), pubTax: !!(card("demo-pub") && card("demo-pub").querySelector(".card-price-tax")),
+           sin: txt(card("demo-sin")), cot: txt(card("demo-cot")),
+           add: d.querySelectorAll(".btn-add-selection").length, proj: d.querySelectorAll(".btn-add-to-project").length,
+           ro: d.querySelectorAll(".card-actions-readonly").length, cards: d.querySelectorAll(".product-card").length,
+           filter: vis(d.getElementById("filter-trigger-precio")), calls: priceCalls(w),
+           sort: [...d.querySelectorAll("#sort-select option")].map(o => o.value).join(","), errors: w.__mock.errors };
+}
+function gate(sel){
+  const g = D().querySelector(sel);
+  if (!g || !vis(g)) return { visible: false };
+  return { visible: true, title: txt(g.querySelector("p")), buttons: [...g.querySelectorAll("a,button")].map(e => e.tagName === "A" ? `${txt(e)}→${e.getAttribute("href")}` : txt(e)) };
+}
+const eqJ = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/* ---------- casos ---------- */
+const cases = [];
+const add = (group, name, fn) => cases.push({ group, name, fn });
+const prod = (id, qs) => `producto.html?id=${id}&${qs}`;
+
+/* Precios · ficha */
+const fichaCase = (name, url, exp) => add("Precios · ficha", name, async () => {
+  await open(url, exp.wait || 1000);
+  const o = ficha();
+  const okActs = exp.acts.every((a, i) => o.acts[i] && o.acts[i].startsWith(a)) && o.acts.length === exp.acts.length;
+  const ok = o.price === exp.price && okActs && o.sel === exp.sel && (exp.calls === undefined || (exp.calls ? o.calls > 0 : o.calls === 0))
+    && o.link === (exp.link ?? exp.sel) && o.errors.length === 0;
+  return { ok, got: o };
+});
+fichaCase("Sin sesión", prod("demo-pub", "rol=anon"), { wait: 2500, price: T.anon, acts: ["Ver planes→planes.html", "Ya tengo cuenta→acceso.html?next=producto.html%3Fid%3Ddemo-pub"], sel: false, calls: 0 });
+fichaCase("Gratis · servidor actual (devolvería importes): no los pide", prod("demo-pub", "pro=0"), { price: T.gratis, acts: ["Ver planes→planes.html"], sel: false, calls: 0 });
+fichaCase("Gratis · servidor con T4", prod("demo-pub", "pro=0&t4=1"), { price: T.gratis, acts: ["Ver planes→planes.html"], sel: false, calls: 0 });
+fichaCase("Individual · publicado", prod("demo-pub", "pro=1"), { price: T.pub, acts: [], sel: true, calls: 1 });
+fichaCase("Individual · bajo cotización", prod("demo-cot", "pro=1"), { price: "Precio bajo cotización", acts: [T.hint], sel: true });
+fichaCase("Individual · pendiente", prod("demo-pend", "pro=1"), { price: "Precio pendiente de confirmación", acts: [T.hint], sel: true });
+fichaCase("Individual · sin fila de precio", prod("demo-sin", "pro=1"), { price: "Precio por confirmar", acts: [T.hint], sel: true });
+fichaCase("Individual · precio no disponible", prod("demo-nodisp", "pro=1"), { price: "Precio no disponible", acts: [T.hint], sel: true });
+fichaCase("Individual · error técnico", prod("demo-pub", "pro=1&precios=err"), { price: T.err, acts: ["Reintentar"], sel: true });
+add("Precios · ficha", "Individual · Reintentar tras un fallo puntual", async () => {
+  await open(prod("demo-pub", "pro=1&precios=err1"));
+  const before = ficha().price;
+  D().getElementById("p-price-retry").click();
+  await settle(300);
+  const o = ficha();
+  return { ok: before === T.err && o.price === T.pub && o.acts.length === 0 && o.errors.length === 0, got: { before, ...o } };
+});
+fichaCase("Individual · el servidor (T4) responde plan_required", prod("demo-pub", "pro=1&t4=1&srv=deny"), { price: T.gratis, acts: ["Ver planes→planes.html"], sel: false, calls: 1 });
+fichaCase("Individual · servidor con T4 (concede)", prod("demo-pub", "pro=1&t4=1"), { price: T.pub, acts: [], sel: true, calls: 1 });
+fichaCase("Distribuidor verificado", prod("demo-pub", "rol=supplier&perfil=own"), { price: T.pub, acts: [], sel: false, calls: 1, link: false });
+fichaCase("Distribuidor verificado · T4", prod("demo-cot", "rol=supplier&perfil=own&t4=1"), { price: "Precio bajo cotización", acts: [], sel: false, calls: 1, link: false });
+fichaCase("Distribuidor sin verificar", prod("demo-pub", "rol=supplier&perfil=unverified"), { price: T.unver, acts: ["Ver mi empresa→perfil-distribuidor.html"], sel: false, calls: 0, link: false });
+fichaCase("Distribuidor sin perfil", prod("demo-pub", "rol=supplier&perfil=none"), { price: T.unver, acts: ["Ver mi empresa→perfil-distribuidor.html"], sel: false, calls: 0, link: false });
+fichaCase("Distribuidor · fallo al leer el perfil", prod("demo-pub", "rol=supplier&perfil=error"), { price: T.unk, acts: [], sel: false, calls: 0, link: false });
+fichaCase("Mobau sin aal2", prod("demo-pub", "rol=mobau&aal=1"), { price: T.pub, acts: [], sel: false, calls: 1, link: false });
+fichaCase("Mobau con aal2", prod("demo-cot", "rol=mobau&aal=2"), { price: "Precio bajo cotización", acts: [], sel: false, calls: 1, link: false });
+fichaCase("Fallo al leer el rol", prod("demo-pub", "rol=unknown"), { price: T.unk, acts: [], sel: false, calls: 0 });
+fichaCase("Fallo de my_professional_access", prod("demo-pub", "pro=err"), { price: T.unk, acts: [], sel: false, calls: 0 });
+
+/* Precios · tarjetas y filtro */
+const catCase = (name, qs, exp) => add("Catálogo", name, async () => {
+  await open(`catalogo.html?${qs}`, 1300);
+  const o = catalogo();
+  const ok = o.cards === 5 && o.pub === exp.pub && o.pubTax === !!exp.tax && (exp.sin === undefined || o.sin === exp.sin)
+    && o.add === exp.add && o.proj === exp.add && o.ro === (exp.add ? 0 : 5) && o.filter === exp.filter
+    && (exp.calls ? o.calls > 0 : o.calls === 0) && o.sort === "relevancia,nombre,marca" && o.errors.length === 0;
+  return { ok, got: o };
+});
+catCase("Sin sesión", "rol=anon", { pub: T.cardPlan, sin: T.cardPlan, add: 0, filter: false, calls: false });
+catCase("Gratis", "pro=0", { pub: T.cardPlan, add: 0, filter: false, calls: false });
+catCase("Individual", "pro=1", { pub: "US$ 120.00ITBIS incluido", tax: true, sin: "Precio por confirmar", add: 5, filter: true, calls: true });
+catCase("Individual · error técnico", "pro=1&precios=err", { pub: T.cardErr, add: 5, filter: true, calls: true });
+catCase("Individual · servidor responde plan_required", "pro=1&t4=1&srv=deny", { pub: T.cardPlan, add: 0, filter: false, calls: true });
+catCase("Distribuidor sin verificar", "rol=supplier&perfil=unverified", { pub: T.cardUnver, add: 0, filter: false, calls: false });
+catCase("Distribuidor verificado", "rol=supplier&perfil=own", { pub: "US$ 120.00ITBIS incluido", tax: true, add: 0, filter: true, calls: true });
+catCase("Mobau sin aal2", "rol=mobau&aal=1", { pub: "US$ 120.00ITBIS incluido", tax: true, add: 0, filter: true, calls: true });
+catCase("Fallo al leer el rol", "rol=unknown", { pub: T.cardUnk, add: 0, filter: false, calls: false });
+
+/* Selección */
+const headerCase = (name, qs, visible) => add("Selección · cabecera", name, async () => {
+  await open(`index.html?${qs}`, 900);
+  const l = D().getElementById("selection-count-link");
+  const o = { visible: vis(l), text: txt(l), errors: W().__mock.errors };
+  return { ok: o.visible === visible && o.errors.length === 0, got: o };
+});
+headerCase("Sin sesión: oculto", "rol=anon", false);
+headerCase("Gratis: oculto", "pro=0", false);
+headerCase("Distribuidor: oculto", "rol=supplier", false);
+headerCase("Mobau: oculto", "rol=mobau", false);
+headerCase("Fallo de acceso: oculto", "pro=err", false);
+headerCase("Individual: visible", "pro=1", true);
+add("Selección", "Gratis: addToSelection llamado a mano se rechaza y no escribe", async () => {
+  const w = await open("catalogo.html?pro=0", 1200);
+  const r = w.addToSelection("demo-pub", 1, "ud.");
+  const writes = w.__mock.storage.filter(s => s.op !== "getItem" && /^mobau_seleccion/.test(s.key || ""));
+  return { ok: r.success === false && r.error === "La selección está incluida en los planes Individual y Estudio." && writes.length === 0 && localStorage.getItem("mobau_seleccion:" + A) === null,
+           got: { r, writes } };
+});
+const selGate = (name, qs, exp) => add("Selección · entrada directa", name, async () => {
+  await open(`seleccion.html?${qs}`, 1200);
+  if (exp.redirect) return { ok: page() === exp.redirect, got: { page: page() } };
+  const g = gate("#selection-plan");
+  const ok = g.visible && g.title === exp.title && eqJ(g.buttons.map(b => b.split("?")[0]), exp.buttons) && !vis(D().getElementById("selection-content")) && W().__mock.errors.length === 0;
+  return { ok, got: g };
+});
+const SEL_T = "La selección está incluida en los planes Individual y Estudio.";
+selGate("Sin sesión", "rol=anon", { title: SEL_T, buttons: ["Ver planes→planes.html", "Ya tengo cuenta→acceso.html"] });
+selGate("Gratis", "pro=0", { title: SEL_T, buttons: ["Ver planes→planes.html"] });
+selGate("Fallo de acceso", "pro=err", { title: "No pudimos comprobar tu acceso.", buttons: ["Recargar"] });
+selGate("Distribuidor: redirige al panel", "rol=supplier", { redirect: "panel-distribuidor.html" });
+selGate("Mobau: redirige a moderación", "rol=mobau", { redirect: "moderacion.html" });
+selGate("Individual · el servidor responde plan_required", "pro=1&t4=1&srv=deny", { title: SEL_T, buttons: ["Ver planes→planes.html"] });
+add("Selección · cuentas", "A (Individual) añade desde la ficha", async () => {
+  await open(prod("demo-pub", "pro=1&uid=a"));
+  D().getElementById("add-project-btn").click();
+  await settle(400);
+  const stored = JSON.parse(localStorage.getItem(KEY_A) || "null");
+  const o = { stored, badge: txt(D().getElementById("selection-count-link")), btn: txt(D().getElementById("add-project-btn")), common: localStorage.getItem("mobau_seleccion") };
+  return { ok: eqJ(stored, [{ productId: "demo-pub", quantity: 1, unit: "ud." }]) && o.badge === "Mi selección (1)" && o.btn === "En mi selección" && o.common === COMMON, got: o };
+});
+add("Selección · cuentas", "B (Individual) no ve la selección de A", async () => {
+  await open("seleccion.html?pro=1&uid=b", 1200);
+  const o = { empty: vis(D().getElementById("selection-empty")), items: D().querySelectorAll("#selection-list [data-id], #selection-list .selection-item").length,
+              keyA: localStorage.getItem(KEY_A), keyB: localStorage.getItem(KEY_B), badge: txt(D().getElementById("selection-count-link")) };
+  return { ok: o.empty && o.items === 0 && o.keyB === null && JSON.parse(o.keyA).length === 1 && o.badge === "Mi selección", got: o };
+});
+add("Selección · cuentas", "A vuelve a ver su producto", async () => {
+  await open("seleccion.html?pro=1&uid=a", 1200);
+  const o = { content: vis(D().getElementById("selection-content")), html: D().getElementById("selection-list").textContent.includes("Publicado"), badge: txt(D().getElementById("selection-count-link")) };
+  return { ok: o.content && o.html && o.badge === "Mi selección (1)", got: o };
+});
+add("Selección · cuentas", "A pierde el plan: no se lee ni se muestra; la clave sigue intacta", async () => {
+  const before = localStorage.getItem(KEY_A);
+  const w = await open("seleccion.html?pro=0&uid=a", 1200);
+  const touched = w.__mock.storage.filter(s => s.key === KEY_A);
+  const o = { gate: gate("#selection-plan").visible, touched, same: localStorage.getItem(KEY_A) === before, getSel: w.getSelection().length };
+  return { ok: o.gate && touched.length === 0 && o.same && o.getSel === 0, got: o };
+});
+add("Selección · cuentas", "A recupera el plan: reaparece", async () => {
+  await open("seleccion.html?pro=1&uid=a", 1200);
+  return { ok: D().getElementById("selection-list").textContent.includes("Publicado"), got: { badge: txt(D().getElementById("selection-count-link")) } };
+});
+add("Selección · cuentas", "Sesión guardada de otra cuenta tras cargar: getSelection() vacío (falla cerrado)", async () => {
+  const w = await open("seleccion.html?pro=1&uid=a", 1200);
+  const n1 = w.getSelection().length;
+  localStorage.setItem(SB_KEY, JSON.stringify({ access_token: "z", user: { id: B } }));
+  const n2 = w.getSelection().length;
+  const r = w.addToSelection("demo-cot", 1, "ud.");
+  return { ok: n1 === 1 && n2 === 0 && r.success === false && JSON.parse(localStorage.getItem(KEY_A)).length === 1, got: { n1, n2, r } };
+});
+add("Selección · cuentas", "A cierra sesión: va a acceso.html y su selección se conserva sin mostrarse", async () => {
+  const w = await open("seleccion.html?pro=1&uid=a", 1200);
+  const before = localStorage.getItem(KEY_A);
+  G("MobauAuth").signOut();
+  await settle(600);
+  const o = { page: page(), loads, same: localStorage.getItem(KEY_A) === before };
+  return { ok: o.page === "acceso.html" && o.loads === 2 && o.same, got: o };
+});
+add("Selección · cuentas", "Sin sesión después: nada visible", async () => {
+  await open("seleccion.html?rol=anon", 1200);
+  const o = { gate: gate("#selection-plan").visible, link: vis(D().getElementById("selection-count-link")), keyA: !!localStorage.getItem(KEY_A) };
+  return { ok: o.gate && !o.link && o.keyA, got: o };
+});
+
+/* Proyectos */
+const cardBtns = () => [...D().querySelectorAll("#projects-grid .provider-card")].map(c => ({
+  name: txt(c.querySelector(".provider-mark")),
+  btns: [...c.querySelectorAll("a.btn, button")].map(b => b.classList.contains("delete-project-btn") ? "Eliminar" : txt(b))
+}));
+const detail = () => {
+  const d = D();
+  return { prices: d.querySelectorAll(".sp-price").length,
+           inputsEnabled: [...d.querySelectorAll(".dp-qty-input, .dp-qty-increment, .remove-product-btn")].filter(e => !e.disabled).length,
+           archive: vis(d.getElementById("archive-btn")), addNav: vis(d.getElementById("project-add-products")),
+           quote: vis(d.getElementById("request-quote-btn")), summary: vis(d.getElementById("summary-link")),
+           priceSummary: txt(d.getElementById("products-price-summary")), view: vis(d.getElementById("project-view")),
+           calls: priceCalls(W()), errors: W().__mock.errors };
+};
+/* CC1: Gratis sin proyectos — solo el aviso de planes, sin ninguna consulta de proyectos, líneas ni solicitudes. */
+const PGATE = "Los proyectos, los presupuestos y las solicitudes de cotización están incluidos en los planes Individual y Estudio.";
+const projectQueries = (w) => w.__mock.calls.filter(c => /^select:(projects|project_products|rfqs)$/.test(c));
+const gateCase = (name, url, extra) => add("Proyectos · Gratis (CC1)", name, async () => {
+  await open(url, 1300);
+  const g = gate("#projects-plan-gate, #plan-gate");
+  const o = { g, queries: projectQueries(W()), crumb: vis(D().querySelector(".breadcrumb")), errors: W().__mock.errors };
+  const more = extra ? extra(o) : true;
+  return { ok: g.visible && g.title === PGATE && eqJ(g.buttons, ["Ver planes→planes.html"]) && o.queries.length === 0 && !o.crumb && o.errors.length === 0 && more, got: o };
+});
+gateCase("Mis proyectos (con datos): solo el aviso", "proyectos.html?pro=0", (o) => {
+  o.filters = vis(D().getElementById("filter-active")); o.cards = D().querySelectorAll("#projects-grid .provider-card").length;
+  return !o.filters && o.cards === 0;
+});
+gateCase("Mis proyectos (sin datos): solo el aviso", "proyectos.html?pro=0&datos=sin", (o) => !vis(D().getElementById("filter-active")));
+gateCase("Detalle de un proyecto activo: solo el aviso", `proyectos-detalle.html?id=${P1}&pro=0`, (o) => { o.view = vis(D().getElementById("project-view")); return !o.view; });
+gateCase("Detalle de un proyecto archivado: solo el aviso", `proyectos-detalle.html?id=${P2}&pro=0`, (o) => !vis(D().getElementById("project-view")));
+gateCase("Presupuesto: solo el aviso", `proyectos-resumen.html?id=${P1}&pro=0`, (o) => !vis(D().getElementById("summary-content")) && !vis(D().getElementById("ps-print-btn")));
+gateCase("Crear proyecto: solo el aviso", "proyectos-cotizacion.html?mode=save&pro=0", (o) => !vis(D().getElementById("view-save")) && !vis(D().getElementById("view-send")));
+gateCase("Solicitar cotización de un proyecto: solo el aviso", `proyectos-cotizacion.html?id=${P1}&pro=0`, (o) => !vis(D().getElementById("view-send")));
+add("Proyectos · Gratis (CC1)", "Fallo de acceso: aviso de recarga, sin contenido ni consultas", async () => {
+  await open("proyectos.html?pro=err", 1300);
+  const g = gate("#projects-plan-gate");
+  const o = { g, queries: projectQueries(W()) };
+  return { ok: g.visible && g.title === "No pudimos comprobar tu acceso." && eqJ(g.buttons, ["Recargar"]) && o.queries.length === 0, got: o };
+});
+
+/* CC1: navegación y Mi cuenta */
+const menu = () => {
+  const d = D();
+  const item = (sel) => { const el = d.querySelector(sel); return el ? (el.hidden ? "oculto" : "visible") : "no existe"; };
+  return { proyectos: item('#account-menu-panel a[href="proyectos.html?status=active"]:not(#account-menu-active-project)'),
+           activo: item("#account-menu-active-project"), solicitudes: item('#account-menu-panel a[href="proyectos.html?status=requested"]'),
+           moodboard: item("#account-menu-moodboard"),
+           pie: [...d.querySelectorAll('.site-footer a[href="proyectos.html"]')].filter(a => !(a.closest("li") || a).hidden).length };
+};
+const menuCase = (name, qs, exp) => add("Navegación (CC1)", name, async () => {
+  await open(`catalogo.html?${qs}`, 1300);
+  const o = { ...menu(), queries: projectQueries(W()), errors: W().__mock.errors };
+  const ok = ["proyectos", "activo", "solicitudes", "moodboard", "pie"].every(k => o[k] === exp[k]) && (exp.noQueries ? o.queries.length === 0 : true) && o.errors.length === 0;
+  return { ok, got: o };
+});
+menuCase("Gratis: sin enlaces de proyectos (menú y pie), con «Mi moodboard», sin consultas", "pro=0",
+  { proyectos: "oculto", activo: "oculto", solicitudes: "oculto", moodboard: "visible", pie: 0, noQueries: true });
+menuCase("Individual: enlaces de proyectos y «Mi moodboard»", "pro=1",
+  { proyectos: "visible", activo: "visible", solicitudes: "visible", moodboard: "visible", pie: 1 });
+menuCase("Sin sesión: sin menú ni «Mis proyectos» en el pie", "rol=anon",
+  { proyectos: "no existe", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
+menuCase("Distribuidor: sin proyectos ni moodboard", "rol=supplier",
+  { proyectos: "no existe", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
+menuCase("Mobau: sin proyectos ni moodboard", "rol=mobau",
+  { proyectos: "no existe", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
+menuCase("Fallo de acceso: sin enlaces de proyectos ni moodboard", "pro=err",
+  { proyectos: "oculto", activo: "oculto", solicitudes: "oculto", moodboard: "oculto", pie: 0, noQueries: true });
+add("Mi cuenta (CC1)", "Gratis: solo el perfil, sin proyectos ni solicitudes", async () => {
+  await open("cuenta.html?pro=0", 1300);
+  const d = D();
+  const o = { secciones: d.querySelectorAll("main [data-pro-only]").length, intro: txt(d.getElementById("account-intro")), perfil: vis(d.getElementById("profile-box")),
+              queries: projectQueries(W()), errors: W().__mock.errors };
+  return { ok: o.secciones === 0 && o.intro === "Tu perfil profesional en Mobau." && o.perfil && o.queries.length === 0 && o.errors.length === 0, got: o };
+});
+add("Mi cuenta (CC1)", "Gratis sin perfil: completarlo es opcional", async () => {
+  await open("cuenta.html?pro=0&pp=none", 1300);
+  const o = { vacio: vis(D().getElementById("profile-empty")), texto: txt(D().getElementById("profile-empty-text")) };
+  return { ok: o.vacio && o.texto === "Complétalo cuando quieras para identificar tu cuenta profesional en Mobau.", got: o };
+});
+add("Mi cuenta (CC1)", "Individual: igual que antes", async () => {
+  await open("cuenta.html?pro=1", 1300);
+  const o = { secciones: D().querySelectorAll("main [data-pro-only]").length, queries: projectQueries(W()).length };
+  return { ok: o.secciones === 3 && o.queries > 0, got: o };
+});
+
+/* CC1: Mi moodboard (solo informativo) */
+const mbCase = (name, qs, exp) => add("Moodboard (CC1)", name, async () => {
+  await open(`moodboard.html?${qs}`, 1200);
+  if (exp.redirect) return { ok: page() === exp.redirect, got: { page: page() } };
+  const box = D().getElementById("moodboard-info");
+  const o = { visible: vis(box), texto: txt(box), controles: D().querySelectorAll("main input, main button, main select, main textarea, main form").length,
+              escrituras: W().__mock.writes.length, h1: txt(D().querySelector("h1")) };
+  return { ok: o.visible && o.h1 === "Mi moodboard" && o.texto.includes("Próximamente podrás reunir productos del catálogo en un moodboard.") && o.controles === 0 && o.escrituras === 0, got: o };
+});
+mbCase("Gratis: pantalla informativa, sin controles ni escrituras", "pro=0", {});
+mbCase("Individual: pantalla informativa", "pro=1", {});
+mbCase("Distribuidor: redirige a su panel", "rol=supplier", { redirect: "panel-distribuidor.html" });
+mbCase("Mobau: redirige a moderación", "rol=mobau", { redirect: "moderacion.html" });
+mbCase("Sin sesión: a iniciar sesión", "rol=anon", { redirect: "acceso.html" });
+
+
+/* CC1: «Mi selección» sin parpadeo — oculta desde el HTML y solo visible tras confirmar el acceso */
+const HEADER_PAGES = ["acceso.html", "activar-plan.html", "catalogo.html", "crear-cuenta.html", "cuenta.html", "distribuidor-producto.html", "distribuidores.html",
+  "ficha-distribuidor.html", "index.html", "inscripcion-profesional.html", "moodboard.html", "perfil-distribuidor.html", "planes.html", "producto.html",
+  "proyectos-cotizacion.html", "proyectos-detalle.html", "proyectos-resumen.html", "proyectos.html", "registro.html", "seleccion.html", "verificar-correo.html"];
+add("Mi selección sin parpadeo (CC1)", "Las 21 cabeceras traen el enlace oculto en el HTML (antes de cualquier script)", async () => {
+  const sinOcultar = [];
+  for (const f of HEADER_PAGES){
+    const html = await (await fetch(f, { cache: "no-store" })).text();
+    const m = html.match(/<a [^>]*id="selection-count-link"[^>]*>/);
+    if (!m || !/\shidden(\s|>)/.test(m[0])) sinOcultar.push(f);
+  }
+  return { ok: sinOcultar.length === 0, got: { paginas: HEADER_PAGES.length, sinOcultar } };
+});
+const linkState = () => { const l = D().getElementById("selection-count-link"); return l ? (l.hidden || getComputedStyle(l).display === "none" ? "oculto" : "visible") : "no existe"; };
+const flickerCase = (name, url, expBefore, expAfter) => add("Mi selección sin parpadeo (CC1)", name, async () => {
+  if (frame) frame.remove();
+  frame = document.createElement("iframe"); loads = 0;
+  document.body.appendChild(frame);
+  await new Promise(res => { frame.onload = () => { loads++; res(); }; frame.src = url; });
+  hook(); observe();
+  const before = linkState();                   // al terminar la carga, con el acceso aún pendiente (lentoacc)
+  await sleep(2800); await settle(300);
+  const after = linkState();
+  return { ok: [].concat(expBefore).includes(before) && after === expAfter && W().__mock.errors.length === 0, got: { before, after } };
+});
+for (const pg of ["index.html", "catalogo.html", "distribuidores.html", "index.html#contacto"]){
+  const [file, hash] = pg.split("#");
+  const h = hash ? "#" + hash : "";
+  flickerCase(`${pg} · Individual con acceso lento: oculto hasta confirmar y luego visible`, `${file}?pro=1&lentoacc=2000${h}`, "oculto", "visible");
+  flickerCase(`${pg} · Gratis con acceso lento: nunca visible`, `${file}?pro=0&lentoacc=2000${h}`, "oculto", "oculto");
+}
+flickerCase("index.html · sin sesión: nunca visible", "index.html?rol=anon", "oculto", "oculto");
+flickerCase("index.html · fallo de acceso: nunca visible", "index.html?pro=err&lentoacc=1000", "oculto", "oculto");
+flickerCase("catalogo.html · distribuidor: nunca visible", "catalogo.html?rol=supplier", ["oculto", "no existe"], "no existe");
+flickerCase("catalogo.html · Mobau: nunca visible", "catalogo.html?rol=mobau", ["oculto", "no existe"], "no existe");
+
+
+/* CC1: «Mis proyectos» del pie — oculto desde el HTML y solo visible con plan confirmado */
+add("Pie sin parpadeo (CC1)", "Los 21 pies traen «Mis proyectos» oculto en el HTML", async () => {
+  const sinOcultar = [];
+  for (const f of HEADER_PAGES){
+    const html = await (await fetch(f, { cache: "no-store" })).text();
+    if (!/<li hidden><a href="proyectos\.html">Mis proyectos<\/a><\/li>/.test(html)) sinOcultar.push(f);
+  }
+  return { ok: sinOcultar.length === 0, got: { paginas: HEADER_PAGES.length, sinOcultar } };
+});
+const footState = () => {
+  const a = D().querySelector('.site-footer a[href="proyectos.html"]');
+  if (!a) return "no existe";
+  const li = a.closest("li") || a;
+  return li.hidden || getComputedStyle(li).display === "none" ? "oculto" : "visible";
+};
+const footCase = (name, url, expBefore, expAfter) => add("Pie sin parpadeo (CC1)", name, async () => {
+  if (frame) frame.remove();
+  frame = document.createElement("iframe"); loads = 0;
+  document.body.appendChild(frame);
+  await new Promise(res => { frame.onload = () => { loads++; res(); }; frame.src = url; });
+  hook(); observe();
+  const before = footState();
+  await sleep(2800); await settle(300);
+  const after = footState();
+  return { ok: [].concat(expBefore).includes(before) && after === expAfter && W().__mock.errors.length === 0, got: { before, after } };
+});
+footCase("index.html · Individual con acceso lento: oculto hasta confirmar y luego visible", "index.html?pro=1&lentoacc=2000", "oculto", "visible");
+footCase("index.html · Gratis con acceso lento: nunca visible", "index.html?pro=0&lentoacc=2000", "oculto", "oculto");
+footCase("index.html · sin sesión: nunca visible", "index.html?rol=anon", "oculto", "oculto");
+footCase("index.html · fallo de acceso: nunca visible", "index.html?pro=err&lentoacc=1000", "oculto", "oculto");
+footCase("catalogo.html · distribuidor: nunca visible", "catalogo.html?rol=supplier", ["oculto", "no existe"], "no existe");
+footCase("catalogo.html · Mobau: nunca visible", "catalogo.html?rol=mobau", ["oculto", "no existe"], "no existe");
+
+/* CC1: subtítulo de Mis proyectos */
+add("Proyectos · Gratis (CC1)", "El subtítulo «Crea proyectos…» llega oculto y no aparece sobre el aviso", async () => {
+  const html = await (await fetch("proyectos.html", { cache: "no-store" })).text();
+  const enHtml = /<p id="projects-subtitle"[^>]*\shidden>/.test(html);
+  await open("proyectos.html?pro=0", 1200);
+  const o = { enHtml, subtitulo: vis(D().getElementById("projects-subtitle")), aviso: gate("#projects-plan-gate").visible };
+  return { ok: o.enHtml && !o.subtitulo && o.aviso, got: o };
+});
+add("Proyectos · Individual", "El subtítulo aparece al confirmar el plan", async () => {
+  await open("proyectos.html?pro=1", 1200);
+  const s = D().getElementById("projects-subtitle");
+  return { ok: vis(s) && txt(s).startsWith("Crea proyectos"), got: { visible: vis(s) } };
+});
+
+/* 43-C1: borradores de alta anteriores (nombre en un solo campo) */
+const LEGACY_DRAFT = (createdAt) => JSON.stringify({ plan: "gratis", createdAt,
+  profile: { professional_name: "Ana Demo Legado", professional_type: "arquitecto", city: "Santo Domingo", studio_name: null, phone: "809 555 0142" } });
+add("Identidad (43-C1)", "Borrador anterior válido: se acepta con el nombre tal cual", async () => {
+  localStorage.setItem("mobau_signup_draft", LEGACY_DRAFT(Date.now() - 60 * 60 * 1000));
+  await open("crear-cuenta.html?plan=gratis&rol=anon", 1000);
+  const d = G("MobauPerfil").readDraft();
+  const p = d && d.profile || {};
+  localStorage.removeItem("mobau_signup_draft");
+  return { ok: p.professional_name === "Ana Demo Legado" && !("first_name" in p) && !("last_name" in p), got: { profile: p } };
+});
+add("Identidad (43-C1)", "Borrador anterior válido: el perfil se crea con el nombre en un solo campo", async () => {
+  localStorage.setItem("mobau_signup_draft", LEGACY_DRAFT(Date.now() - 30 * 60 * 1000));
+  const w = await open("inscripcion-profesional.html?pro=0&pp=none&nombre=Ana%20Demo%20Legado", 1200);
+  const s = await G("MobauAuth").getSession();
+  const r = await G("MobauPerfil").completeSignup(s);
+  const ins = w.__mock.writes.find(x => x.table === "professional_profiles" && x.op === "insert");
+  const p = ins && ins.payload || {};
+  const left = localStorage.getItem("mobau_signup_draft");
+  localStorage.removeItem("mobau_signup_draft");
+  return { ok: r.status === "created" && p.professional_name === "Ana Demo Legado" && !("first_name" in p) && !("last_name" in p) && left === null, got: { status: r.status, payload: p } };
+});
+add("Identidad (43-C1)", "Borrador anterior caducado: se descarta", async () => {
+  localStorage.setItem("mobau_signup_draft", LEGACY_DRAFT(Date.now() - 3 * 60 * 60 * 1000));
+  await open("crear-cuenta.html?plan=gratis&rol=anon", 1000);
+  const d = G("MobauPerfil").readDraft();
+  const left = localStorage.getItem("mobau_signup_draft");
+  return { ok: d === null && left === null, got: { draft: d, left } };
+});
+add("Identidad (43-C1)", "Alta nueva: un nombre en un solo campo no vale; se piden nombre y apellidos", async () => {
+  await open("crear-cuenta.html?plan=gratis&rol=anon", 1000);
+  const r = G("MobauPerfil").validate({ professional_name: "Ana Demo", professional_type: "arquitecto", city: "Santo Domingo", phone: "809 555 0142" }, { requirePhone: true });
+  return { ok: r.ok === false && r.error === "Completa nombre, apellidos, tipo de perfil y ciudad para continuar.", got: r };
+});
+
+/* CC1: perfil de Gratis no bloqueante y caché de acceso */
+const nextCase = (name, qs, opts, expUrl) => add("Perfil y destino (CC1)", name, async () => {
+  await open(`index.html?${qs}`, 900);
+  const s = await G("MobauAuth").getSession();
+  const r = await G("MobauAccess").resolveNext(s, opts);
+  return { ok: r.url === expUrl, got: r };
+});
+nextCase("Gratis sin perfil: entra sin completarlo", "pro=0&pp=none", {}, "index.html");
+nextCase("Gratis sin perfil que pidió Individual: completa el perfil para la activación", "pro=0&pp=none", { explicitPlan: "individual" }, "inscripcion-profesional.html?paso=perfil&plan=individual");
+nextCase("Individual habilitado sin perfil: lo completa (lo necesitan las solicitudes)", "pro=1&pp=none", {}, "inscripcion-profesional.html?paso=perfil");
+nextCase("Gratis con perfil: destino normal", "pro=0", {}, "index.html");
+add("Perfil y destino (CC1)", "Sesión iniciada en otra pestaña: el acceso se vuelve a pedir", async () => {
+  const w = await open("catalogo.html?rol=anon", 1200);
+  const before = await G("MobauAccess").access();
+  w.__mock.login("a");
+  const after = await G("MobauAccess").access();
+  return { ok: before === "anon" && after === "pro", got: { before, after } };
+});
+
+/* 43-C1: nombre y apellidos */
+add("Identidad (43-C1)", "Alta del perfil: nombre y apellidos por separado", async () => {
+  const w = await open("inscripcion-profesional.html?pro=0&pp=none", 1300);
+  const d = D();
+  const set = (id, v) => { d.getElementById(id).value = v; };
+  set("pp-first-name", "  Ana "); set("pp-last-name", " Rosario   Pérez "); set("pp-type", "arquitecto"); set("pp-city", "Santo Domingo");
+  d.getElementById("pp-form").requestSubmit();
+  await settle(400);
+  const ins = w.__mock.writes.find(x => x.table === "professional_profiles" && x.op === "insert");
+  const p = ins && ins.payload || {};
+  return { ok: p.first_name === "Ana" && p.last_name === "Rosario Pérez" && p.professional_name === "Ana Rosario Pérez", got: { payload: p, sinNombre: !d.getElementById("pp-name") } };
+});
+add("Identidad (43-C1)", "Perfil anterior: cambiar el nombre exige nombre y apellidos", async () => {
+  const w = await open("inscripcion-profesional.html?pro=1&pp=legacy", 1300);
+  const d = D();
+  d.getElementById("personal-edit-btn").click();
+  await settle(200);
+  const o = { hint: txt(d.getElementById("personal-edit-name-hint")), hintVisible: !d.getElementById("personal-edit-name-hint").hidden,
+              nombre: d.getElementById("personal-edit-first-name").value, apellidos: d.getElementById("personal-edit-last-name").value,
+              vista: txt(d.getElementById("personal-view-name")) };
+  d.getElementById("personal-edit-first-name").value = "Ana";
+  d.getElementById("personal-edit-last-name").value = "Rosario";
+  d.getElementById("personal-save-btn").click();
+  await settle(400);
+  const upd = w.__mock.writes.find(x => x.table === "professional_profiles" && x.op === "update");
+  o.payload = upd && upd.payload;
+  return { ok: o.hintVisible && o.hint === "Tu nombre actual es «Ana Demo». Para cambiarlo, indica nombre y apellidos; si los dejas vacíos, se conserva tal cual." && o.nombre === "" && o.apellidos === "" && o.vista === "Ana Demo"
+    && o.payload && o.payload.first_name === "Ana" && o.payload.last_name === "Rosario" && o.payload.professional_name === "Ana Rosario", got: o };
+});
+add("Identidad (43-C1)", "Perfil anterior: cambiar solo el teléfono conserva el nombre intacto", async () => {
+  const w = await open("inscripcion-profesional.html?pro=1&pp=legacy", 1300);
+  const d = D();
+  d.getElementById("personal-edit-btn").click(); await settle(200);
+  d.getElementById("personal-edit-phone").value = "809 111 2222";
+  d.getElementById("personal-save-btn").click(); await settle(400);
+  const upd = w.__mock.writes.find(x => x.table === "professional_profiles" && x.op === "update");
+  const p = upd && upd.payload;
+  return { ok: !!p && eqJ(Object.keys(p), ["phone"]) && p.phone === "809 111 2222" && txt(d.getElementById("personal-view-name")) === "Ana Demo", got: { payload: p, vista: txt(d.getElementById("personal-view-name")) } };
+});
+add("Identidad (43-C1)", "Perfil anterior: solo el nombre, sin apellidos → aviso y nada se guarda", async () => {
+  const w = await open("inscripcion-profesional.html?pro=1&pp=legacy", 1300);
+  const d = D();
+  d.getElementById("personal-edit-btn").click(); await settle(200);
+  d.getElementById("personal-edit-first-name").value = "Ana";
+  d.getElementById("personal-save-btn").click(); await settle(300);
+  const o = { error: txt(d.getElementById("personal-edit-error")), writes: w.__mock.writes.length };
+  return { ok: o.error === "Indica tu nombre y tus apellidos, o deja los dos vacíos para conservar tu nombre actual." && o.writes === 0, got: o };
+});
+add("Identidad (43-C1)", "Perfil con nombre y apellidos: no pueden quedar vacíos", async () => {
+  const w = await open("inscripcion-profesional.html?pro=1&pp=split", 1300);
+  const d = D();
+  d.getElementById("personal-edit-btn").click(); await settle(200);
+  d.getElementById("personal-edit-first-name").value = ""; d.getElementById("personal-edit-last-name").value = "";
+  d.getElementById("personal-save-btn").click(); await settle(300);
+  const o = { error: txt(d.getElementById("personal-edit-error")), writes: w.__mock.writes.length };
+  return { ok: o.error === "El nombre y los apellidos no pueden quedar vacíos." && o.writes === 0, got: o };
+});
+add("Identidad (43-C1)", "Perfil con nombre y apellidos: se precargan", async () => {
+  await open("inscripcion-profesional.html?pro=1&pp=split", 1300);
+  const d = D();
+  d.getElementById("personal-edit-btn").click();
+  await settle(200);
+  const o = { nombre: d.getElementById("personal-edit-first-name").value, apellidos: d.getElementById("personal-edit-last-name").value, hintVisible: !d.getElementById("personal-edit-name-hint").hidden };
+  return { ok: o.nombre === "Ana" && o.apellidos === "Rosario" && !o.hintVisible, got: o };
+});
+add("Identidad (43-C1)", "Crear cuenta: el borrador guarda nombre y apellidos", async () => {
+  localStorage.removeItem("mobau_signup_draft");
+  await open("crear-cuenta.html?plan=gratis&rol=anon", 1200);
+  const d = D();
+  const set = (id, v) => { d.getElementById(id).value = v; };
+  set("cc-first-name", "Ana"); set("cc-last-name", "Rosario"); set("cc-type", "arquitecto"); set("cc-city", "Santo Domingo"); set("cc-phone", "809 555 0142");
+  d.getElementById("cc-form").requestSubmit();
+  await settle(500);
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem("mobau_signup_draft")); } catch (e) {}
+  const p = draft && draft.profile || {};
+  localStorage.removeItem("mobau_signup_draft");
+  return { ok: p.first_name === "Ana" && p.last_name === "Rosario" && p.professional_name === "Ana Rosario", got: { profile: p } };
+});
+add("Textos (O1)", "Catálogo: nota del asterisco visible arriba", async () => {
+  await open("catalogo.html?pro=0", 1200);
+  const n = D().getElementById("catalog-price-note");
+  return { ok: vis(n) && txt(n) === "*Los planes Individual y Estudio permiten consultar los precios publicados y solicitar cotizaciones. No todos los productos tienen precio publicado: algunos requieren cotización o están pendientes de confirmación.", got: { texto: txt(n) } };
+});
+
+add("Proyectos · Individual", "Lista igual que hoy", async () => {
+  await open("proyectos.html?pro=1", 1200);
+  const o = { gate: gate("#projects-plan-gate").visible, usage: txt(D().getElementById("plan-usage")), cards: cardBtns() };
+  return { ok: !o.gate && o.usage === "1 de 1 proyecto activo en tu plan." && eqJ(o.cards, [{ name: "Casa Norte", btns: ["Abrir", "Archivar"] }]), got: o };
+});
+add("Proyectos · Individual", "Detalle igual que hoy", async () => {
+  await open(`proyectos-detalle.html?id=${P1}&pro=1`, 1300);
+  const o = detail();
+  return { ok: o.view && o.prices === 2 && o.inputsEnabled > 0 && o.archive && o.addNav && o.quote && o.summary && o.calls > 0 && o.priceSummary.includes("Total preliminar: US$ 240.00") && o.errors.length === 0, got: o };
+});
+add("Proyectos · Individual", "Detalle: el servidor responde plan_required -> solo el aviso (CC1)", async () => {
+  await open(`proyectos-detalle.html?id=${P1}&pro=1&t4=1&srv=deny`, 1400);
+  const g = gate("#plan-gate");
+  const o = { g, view: vis(D().getElementById("project-view")) };
+  return { ok: g.visible && g.title === PGATE && !o.view, got: o };
+});
+add("Proyectos · Individual", "Resumen con tabla e Imprimir", async () => {
+  await open(`proyectos-resumen.html?id=${P1}&pro=1`, 1300);
+  const o = { gate: gate("#plan-gate").visible, summary: vis(D().getElementById("summary-content")), rows: D().querySelectorAll("#ps-table-body tr").length, print: vis(D().getElementById("ps-print-btn")) };
+  return { ok: !o.gate && o.summary && o.rows === 2 && o.print, got: o };
+});
+
+/* Sesión */
+const sessCase = (name, url, act, expLoads) => add("Sesión", name, async () => {
+  const w = await open(url, 1000);
+  act(w);
+  await settle(600);
+  return { ok: loads === expLoads, got: { loads, page: page() } };
+});
+sessCase("SIGNED_OUT recarga (catálogo, Individual)", "catalogo.html?pro=1", w => w.__mock.emit("SIGNED_OUT"), 2);
+sessCase("SIGNED_IN de otra cuenta recarga", "catalogo.html?pro=1", w => w.__mock.emit("SIGNED_IN", "b"), 2);
+sessCase("SIGNED_IN de la misma cuenta no recarga", "catalogo.html?pro=1", w => w.__mock.emit("SIGNED_IN", "a"), 1);
+sessCase("Sin sesión al cargar: SIGNED_IN no recarga", "catalogo.html?rol=anon", w => w.__mock.emit("SIGNED_IN", "a"), 1);
+sessCase("acceso.html no recarga con SIGNED_OUT", "acceso.html?pro=1", w => w.__mock.emit("SIGNED_OUT"), 1);
+sessCase("crear-cuenta.html no recarga con SIGNED_IN de otra cuenta", "crear-cuenta.html?pro=1", w => w.__mock.emit("SIGNED_IN", "b"), 1);
+add("Sesión", "Cerrar sesión desde el menú: solo navega a acceso.html", async () => {
+  await open("catalogo.html?pro=1", 1000);
+  D().getElementById("account-menu-logout").click();
+  await settle(600);
+  return { ok: page() === "acceso.html" && loads === 2, got: { page: page(), loads } };
+});
+
+/* Destino tras iniciar sesión */
+add("Destino", "Gratis con motivo -> planes.html", async () => {
+  const w = await open("index.html?pro=0", 900);
+  const r1 = G("MobauAccess").resolveDestination({ isSupplier: false, intent: { motivo: "guardar" }, urlNext: null, selectionCount: 0, professionalTools: false });
+  G("MobauAccess").saveIntent({ motivo: "cotizacion", next: null, plan: null });
+  const r2 = await G("MobauAccess").finalDestination();
+  return { ok: r1.url === "planes.html" && r2.url === "planes.html", got: { r1, r2 } };
+});
+add("Destino", "Individual con motivo y selección vacía -> seleccion.html (aviso)", async () => {
+  const w = await open("index.html?pro=1&uid=b", 900);
+  G("MobauAccess").saveIntent({ motivo: "guardar", next: null, plan: null });
+  const r = await G("MobauAccess").finalDestination();
+  return { ok: r.url === "seleccion.html" && r.emptySelection === true, got: r };
+});
+add("Destino", "Individual con selección y motivo proyecto -> crear proyecto", async () => {
+  const w = await open("index.html?pro=1&uid=a", 900);
+  G("MobauAccess").saveIntent({ motivo: "proyecto", next: null, plan: null });
+  const r = await G("MobauAccess").finalDestination();
+  return { ok: r.url === "proyectos-cotizacion.html?mode=save", got: r };
+});
+add("Destino", "Gratis sin motivo con next válido -> next", async () => {
+  const w = await open("index.html?pro=0", 900);
+  const r = await G("MobauAccess").finalDestination({ urlNext: "catalogo.html" });
+  return { ok: r.url === "catalogo.html", got: r };
+});
+
+/* Textos 43-B1 */
+add("Textos", "planes.html", async () => {
+  await open("planes.html?rol=anon", 800);
+  const t = D().body.textContent.replace(/\s+/g, " ");
+  const need = ["Todos los importes incluyen ITBIS", "Sin caducidad", "Hasta 2 proyectos activos", "Hasta 20 proyectos activos para tu estudio",
+                "Cada integrante con su propio acceso", "2 plazas adicionales disponibles · US$10/mes cada una, ITBIS incluido",
+                "1 moodboard independiente · Próximamente", "1 moodboard por proyecto · Próximamente", "Consulta de precios publicados y solicitudes de cotización*",
+                "*La disponibilidad de precios depende de cada producto. El plan permite consultar los importes publicados y solicitar cotizaciones, pero no garantiza que todos los productos tengan un precio publicado.",
+                "¿Todos los productos tienen precio publicado?"];
+  const banned = ["Guardar tu selección", "Hasta 3 solicitudes", "Cowork básico", "10 proyectos activos", "más ITBIS", "+ ITBIS", "Consultar tus proyectos y solicitudes anteriores", "Precios de los productos", "sin límite mensual", "Todo lo del plan Gratis"];
+  const missing = need.filter(s => !t.includes(s)), present = banned.filter(s => t.includes(s));
+  const mbProyecto = t.split("1 moodboard por proyecto · Próximamente").length - 1;
+  const ind = [...D().querySelectorAll(".pl-card")].find(c => txt(c.querySelector("h2")) === "Individual");
+  const indItems = [...ind.querySelectorAll(".pl-list:not(.pl-excluded) li")].map(li => txt(li));
+  const sinRedundante = !indItems.includes("Solicitudes de cotización") && indItems.includes("Consulta de precios publicados y solicitudes de cotización*");
+  return { ok: !missing.length && !present.length && mbProyecto === 2 && sinRedundante, got: { missing, present, mbProyecto, indItems } };
+});
+add("Textos", "acceso.html con motivo=guardar (sin sesión)", async () => {
+  await open("acceso.html?motivo=guardar&rol=anon", 900);
+  const o = { title: txt(D().getElementById("acc-title")), body: txt(D().getElementById("acc-body")) };
+  return { ok: o.title === "Accede a tu selección" && o.body.includes("incluida en los planes Individual y Estudio"), got: o };
+});
+
+/* Clave común y sessionStorage (sobre todo lo anterior) */
+add("Almacenamiento", "Clave común mobau_seleccion: intacta, sin lecturas, escrituras ni borrados", async () => {
+  harvest();
+  const touched = ALL_STORAGE.filter(s => s.area === "local" && s.key === "mobau_seleccion");
+  return { ok: touched.length === 0 && localStorage.getItem("mobau_seleccion") === COMMON, got: { touched: touched.slice(0, 5), value: localStorage.getItem("mobau_seleccion") } };
+});
+add("Almacenamiento", "sessionStorage: ninguna escritura de selección", async () => {
+  const writes = ALL_STORAGE.filter(s => s.area === "session" && s.op === "setItem" && /^mobau_seleccion/.test(s.key || ""));
+  return { ok: writes.length === 0, got: { writes } };
+});
+
+async function run(){
+  localStorage.clear(); sessionStorage.clear();
+  localStorage.setItem("mobau_seleccion", COMMON);
+  const t = document.getElementById("t"); let ok = 0;
+  for (const [i, c] of cases.entries()){
+    let r;
+    try { r = await c.fn(); } catch (e) { r = { ok: false, got: { exception: String(e && e.stack || e) } }; }
+    harvest();
+    if (r.ok) ok++;
+    t.insertAdjacentHTML("beforeend", `<tr><td>${i + 1}</td><td>${c.group}</td><td>${c.name}</td><td><small>${JSON.stringify(r.got).replace(/</g, "&lt;").slice(0, 900)}</small></td><td class="${r.ok ? "ok" : "ko"}">${r.ok ? "OK" : "FALLO"}</td></tr>`);
+  }
+  if (frame) frame.remove();
+  document.getElementById("sum").textContent = `${ok}/${cases.length} correctos`;
+  window.__result = { ok, total: cases.length, failed: cases.map((c, i) => c.name).filter((_, i) => !t.rows[i + 1].lastChild.classList.contains("ok")) };
+}
+run();
+</script>
