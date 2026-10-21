@@ -1,8 +1,27 @@
 # Punto 44 · Vibia 3225: archivos, MD5, criterios de éxito y plan de validación
 
-**Estado (2026-10-21):** todo está preparado en local. No se ha aplicado ni ensayado nada, no se ha subido ningún archivo y no hay commits, push ni publicación.
+## Estado real (2026-10-22)
 
-**Lectura de partida (solo SELECT):**
+- **44-01 aplicada y registrada** el 2026-10-21 (`20261021120000 · 44_01_archivos_producto`, MD5 `872f463c…`). Se aplicó sin el ensayo `P44_ensayo.sql`, por decisión de alcance: el ensayo se versiona, pero no se ha ejecutado. Interfaz publicada en `4bef176` y `4f9ef26`.
+- **Acabados simplificados** (`f5ec483`): cada acabado lleva solo código, nombre y predeterminado; en la ficha se eligen con botones de texto, sin foto.
+- **Vibia 3225 publicado** por Spectro y aprobado por Mobau (`spectro-d3016bf1`, 13 archivos, acabados 25 y 11, portada `_04`).
+- **44-02 aplicada y registrada** el 2026-10-22 (`20261022120000 · 44_02_ficha_iluminacion`, MD5 `44cfe8d7d56f88dc460bb060ffee3830`; recuperación `dbf31dfe3adfce033ee84598d3e0599e`, no ejecutada). Hay 39 migraciones.
+  - Columnas `environment` (interior, exterior o ambos), `light_source` y `electrical_connection`.
+  - Marca y medidas, obligatorias al enviar un producto nuevo.
+  - La moderación, la copia al enviar y el catálogo incluyen los campos nuevos.
+  - 3225 no cambió.
+- **Interfaz de 44-02:**
+  - en el formulario, primero la categoría, con la plantilla de Iluminación;
+  - «Interior o exterior» sustituye a Uso y Espacio en el formulario; los datos antiguos se conservan;
+  - en moderación, los archivos se abren con enlaces ya firmados, sin ventanas emergentes. Caducan a los 30 minutos y se renuevan recargando la página.
+- **Pendiente:**
+  - comprobar en Pages la ficha y la moderación con sesiones reales;
+  - campos opcionales de iluminación (control, temperatura de color, flujo, etc.): sin acordar;
+  - hallazgo aparte: `anon` y `authenticated` conservan REFERENCES y TRIGGER sobre `products`.
+
+Lo que sigue es la entrega original, previa a la aplicación.
+
+**Lectura de partida de la entrega original (solo SELECT):**
 - 37 migraciones; la última es `20261020180000`.
 - 44-01 no está aplicada.
 - Transición `19d26a92…`; vista `44a582cd…` con opciones y permisos de siempre.
