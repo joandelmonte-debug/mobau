@@ -451,7 +451,8 @@ function mapProductRow(row){
     ambiente: row.environment || null, fuenteLuz: row.light_source || null, conexionElectrica: row.electrical_connection || null,
     temperaturaColor: row.color_temperature || null,
     ficha: safeUrl(row.technical_sheet_url) || null,
-    cad: safeUrl(row.cad_bim_3d_url) || null, status: row.status, actualizado: row.updated_at
+    cad: safeUrl(row.cad_bim_3d_url) || null, status: row.status, actualizado: row.updated_at,
+    creado: row.created_at || null
   };
 }
 

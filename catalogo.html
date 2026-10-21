@@ -487,7 +487,7 @@
     <!-- Vacío hasta que render() pinta el recuento real (punto 41, D1): durante la carga o con error no se muestra ninguna cifra. -->
     <span class="result-count" id="result-count"></span>
     <select class="sort-select" id="sort-select">
-      <option value="relevancia">Ordenar por relevancia</option>
+      <option value="relevancia" id="sort-default-option">Más recientes</option>
       <option value="nombre">Nombre A–Z</option>
       <option value="marca">Marca A–Z</option>
     </select>
@@ -935,13 +935,18 @@ runWithCatalog(() => {
   }
 
   /* "Ordenar por relevancia" solo tiene sentido con una búsqueda
-     activa (usa el _score que añade searchProducts()) — sin búsqueda
-     se mantiene el orden original del catálogo, igual que antes. */
+     activa (usa el _score que añade searchProducts()). Sin búsqueda, el
+     orden predeterminado pone primero los productos publicados más
+     recientemente: created_at, que desde 40-01 es el momento en que Mobau
+     aprueba y publica el producto (no updated_at: editar un producto
+     antiguo no lo sube). A igual fecha se conserva el orden actual del
+     catálogo (sort estable). Se ordena la lista completa ya filtrada. */
   function sortList(list, hasActiveSearch){
     const sorted = [...list];
     if (state.sort === "nombre") sorted.sort((a,b) => a.nombre.localeCompare(b.nombre));
     else if (state.sort === "marca") sorted.sort((a,b) => LABELS.marca[a.marca].localeCompare(LABELS.marca[b.marca]));
     else if (hasActiveSearch) sorted.sort((a,b) => (b._score || 0) - (a._score || 0));
+    else sorted.sort((a,b) => String(b.creado || "").localeCompare(String(a.creado || "")));
     return sorted;
   }
 
@@ -949,6 +954,9 @@ runWithCatalog(() => {
     const { results: searched, fuzzyTerm } = searchProducts(PRODUCTS, state.search);
     const hasActiveSearch = normalizeSearchText(state.search).length >= 2;
     const filtered = sortList(searched.filter(matchesFilters), hasActiveSearch);
+    /* La opción predeterminada dice el orden que se aplica: relevancia con
+       búsqueda; más recientes sin ella. */
+    document.getElementById("sort-default-option").textContent = hasActiveSearch ? "Relevancia" : "Más recientes";
 
     const grid = document.getElementById("product-grid");
     grid.innerHTML = filtered.map(renderProductCard).join("");
