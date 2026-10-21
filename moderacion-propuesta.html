@@ -323,7 +323,26 @@
     return problems;
   }
 
-  function photoFigure(asset, caption, isCover){
+  /* Punto 44-05: acabado de una foto. Propuesto: el «finish» de la lista de
+     la propuesta (nombre según sus acabados). Actual: el aprobado de la foto
+     (solo en fotos ya aprobadas del producto). */
+  function finishName(code, finishes){
+    if (!code) return "sin asignar";
+    const f = (finishes || []).find(x => x.code === code);
+    return f ? f.name : `acabado ${code}`;
+  }
+  function photoFinishNode(entry, asset){
+    const m = ctx.proposal.proposed_media || {};
+    const proposed = entry.finish || null;
+    const isCurrent = asset.status === "aprobado" && asset.product_id && asset.product_id === ctx.proposal.product_id;
+    const current = isCurrent ? (asset.finish_code || null) : null;
+    if (isCurrent && current !== proposed){
+      return M.el("span", "mod-proposed", `Acabado: ${finishName(current, ctx.currentFinishes)} → ${finishName(proposed, m.finishes)}`);
+    }
+    return M.el("span", "", `Acabado: ${finishName(proposed, m.finishes)}`);
+  }
+
+  function photoFigure(asset, caption, isCover, entry){
     const figure = M.el("figure", `mod-photo${isCover ? " mod-photo--cover" : ""}`);
     const img = document.createElement("img");
     img.src = MobauArchivos.cardUrl(asset);
@@ -335,7 +354,13 @@
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.append(img);
-    figure.append(link, M.el("figcaption", "", caption));
+    const cap = M.el("figcaption", "", caption);
+    if (entry){
+      const line = photoFinishNode(entry, asset);
+      line.style.display = "block";
+      cap.append(line);
+    }
+    figure.append(link, cap);
     return figure;
   }
 
@@ -357,7 +382,7 @@
         const isCover = asset.id === m.cover_asset_id;
         const finish = (m.finishes || []).find(f => f.image_asset_id === asset.id);
         const caption = isCover ? "Portada" : (finish ? `Acabado ${finish.code}` : (entry.label || "Galería"));
-        grid.append(photoFigure(asset, caption, isCover));
+        grid.append(photoFigure(asset, caption, isCover, entry));
       });
       section.append(grid);
     }
@@ -834,6 +859,11 @@
       const media = p.proposed_media || {};
       const assetIds = [...(media.assets || []).map(a => a.id), media.cover_asset_id, ...(media.finishes || []).map(f => f.image_asset_id)];
       const assetRows = await MobauArchivos.listByIds(assetIds);
+      /* Punto 44-05: acabados actuales del producto (para «actual → propuesto»). */
+      const finishesRes = p.product_id
+        ? await supabaseClient.from("product_finishes").select("code, name").eq("product_id", p.product_id)
+        : { data: [], error: null };
+      if (finishesRes.error) throw finishesRes.error;
       /* Enlaces firmados (30 min) de los archivos privados; los vídeos son públicos. */
       const fileUrls = new Map(await Promise.all(assetRows.filter(a => a.kind !== "foto").map(async a => {
         try {
@@ -846,6 +876,7 @@
       ctx = {
         proposal: p,
         assets: new Map(assetRows.map(a => [a.id, a])),
+        currentFinishes: finishesRes.data || [],
         fileUrls,
         product: productRes.data,
         price: priceRes.data,

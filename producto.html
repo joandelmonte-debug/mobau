@@ -40,6 +40,8 @@
       <button type="button" class="gallery-nav gallery-nav--prev" id="gallery-prev" aria-label="Foto anterior" hidden><span class="gallery-nav__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg></span></button>
       <button type="button" class="gallery-nav gallery-nav--next" id="gallery-next" aria-label="Foto siguiente" hidden><span class="gallery-nav__icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg></span></button>
     </div>
+    <!-- Punto 44-05: acabado de la foto visible (no el elegido para añadir). -->
+    <p class="gallery-caption" id="gallery-caption" aria-live="polite" hidden></p>
     <div class="gallery-thumbs">
       <div></div><div></div><div></div><div></div>
     </div>
@@ -63,6 +65,7 @@
     <div class="product-finish-field" id="product-finish-field" hidden>
       <span class="product-finish-label" id="product-finish-label">Acabado</span>
       <div class="finish-options" id="product-finish" role="group" aria-labelledby="product-finish-label"></div>
+      <p class="product-finish-note" id="product-finish-note" hidden>No hay imagen disponible de este acabado</p>
     </div>
 
     <p class="section-note">Antes de sumarlo a tu proyecto, esto es lo que necesitas saber:</p>
@@ -332,11 +335,24 @@ function galleryImageHtml(url){
 /* Fotos de la galería en su orden (las mismas que las miniaturas) y la visible. */
 let galleryUrls = [];
 let galleryCurrent = null;
+/* Punto 44-05: acabado de cada foto (finish_code aprobado) para la etiqueta
+   bajo la foto principal. Solo si el producto tiene acabados; nunca se
+   deduce del archivo, del color ni del acabado elegido. */
+let galleryFinishes = [];
+let galleryPhotos = [];
+function galleryCaptionText(url){
+  const photo = galleryPhotos.find(a => MobauArchivos.publicUrl(a.path) === url);
+  const finish = photo && photo.finish_code ? galleryFinishes.find(f => f.codigo === photo.finish_code) : null;
+  return finish ? `Acabado de la foto: ${finish.nombre}` : "Imagen de referencia · acabado sin identificar";
+}
 function showGalleryImage(url){
   if (!url) return;
   galleryCurrent = url;
   document.getElementById("gallery-main").innerHTML = galleryImageHtml(url);
   document.querySelectorAll(".gallery-thumb").forEach(b => b.setAttribute("aria-current", String(b.dataset.full === url)));
+  const caption = document.getElementById("gallery-caption");
+  caption.hidden = !galleryFinishes.length || !galleryPhotos.length;
+  if (!caption.hidden) caption.textContent = galleryCaptionText(url);
 }
 /* Flechas: anterior/siguiente en bucle (de la última a la primera y al revés). */
 function stepGallery(delta){
@@ -358,6 +374,8 @@ function renderGallery(product){
   }).join("");
   thumbs.querySelectorAll(".gallery-thumb").forEach(b => b.addEventListener("click", () => showGalleryImage(b.dataset.full)));
   galleryUrls = photos.map(a => MobauArchivos.publicUrl(a.path));
+  galleryPhotos = photos;
+  galleryFinishes = product.acabadosOpciones || [];
   document.getElementById("gallery-prev").hidden = galleryUrls.length < 2;
   document.getElementById("gallery-next").hidden = galleryUrls.length < 2;
   showGalleryImage(product.portada || galleryUrls[0]);
@@ -506,6 +524,11 @@ runWithCatalog(async function renderProductPage(){
     chosenFinish = btn.dataset.finish;
     renderFinishButtons();
     finishGroup.querySelector(`[data-finish="${CSS.escape(chosenFinish)}"]`).focus();
+    /* Punto 44-05: la primera foto de ese acabado (orden de la galería) o un
+       aviso; la foto actual conserva su propia etiqueta. */
+    const own = galleryPhotos.find(a => a.finish_code === chosenFinish);
+    document.getElementById("product-finish-note").hidden = !!own;
+    if (own) showGalleryImage(MobauArchivos.publicUrl(own.path));
     refreshAddButton();
   });
 

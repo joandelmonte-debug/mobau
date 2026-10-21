@@ -29,6 +29,8 @@
   .pp-photo{ margin:0; font-size:12.5px; color: var(--ink-soft); overflow-wrap:anywhere; }
   .pp-photo img{ display:block; width:100%; aspect-ratio:4/5; object-fit:cover; background:#fff; border:1px solid var(--line); border-radius: var(--radius); margin-bottom:4px; }
   .pp-photo button{ margin-top:4px; }
+  .pp-photo label{ display:block; margin-top:6px; font-size:12px; color: var(--ink-soft); }
+  .pp-photo select{ width:100%; font-size:12.5px; margin-top:2px; }
   .pp-row{ display:grid; grid-template-columns: 110px 1fr auto auto; gap:8px; align-items:end; padding:10px 0; border-bottom:1px solid var(--line); }
   .pp-row label{ display:block; font-size:12.5px; color: var(--ink-soft); margin-bottom:4px; }
   .pp-row input[type=text]{ width:100%; }
@@ -461,9 +463,14 @@
   const emptyMedia = () => ({ reference_code: null, cover_asset_id: null, finishes: [], assets: [] });
   const PRO_FILE_KINDS = ["ficha_tecnica", "video", "cad_2d", "cad_3d", "bim", "calculo_iluminacion", "manual"];
 
-  /* Formato estable para guardar y comparar. */
+  /* Formato estable para guardar y comparar. Punto 44-05: cada foto puede
+     llevar «finish» (código de uno de los acabados de la propuesta). En el
+     editor la foto apunta al acabado por una clave interna (_fk → _k), así
+     que cambiar el código no rompe la asociación; se omite si no tiene. */
   function normalizedMedia(m){
     const text = (v, max) => { const s = (v ?? "").toString().trim(); return s ? s.slice(0, max) : null; };
+    const codeOf = (k) => { const f = m.finishes.find(x => x._k === k); return f ? text(f.code, 20) : null; };
+    const finishOf = (a) => ("_fk" in a) ? (a._fk ? codeOf(a._fk) : null) : text(a.finish, 20);
     return {
       reference_code: text(m.reference_code, 60),
       cover_asset_id: m.cover_asset_id || null,
@@ -471,8 +478,24 @@
         code: text(f.code, 20) || "", name: text(f.name, 60) || "", reference_code: text(f.reference_code, 60),
         image_asset_id: f.image_asset_id || null, is_default: !!f.is_default
       })),
-      assets: m.assets.map(a => ({ id: a.id, label: text(a.label, 80) }))
+      assets: m.assets.map(a => {
+        const entry = { id: a.id, label: text(a.label, 80) };
+        const finish = finishOf(a);
+        if (finish) entry.finish = finish;
+        return entry;
+      })
     };
+  }
+
+  /* Claves internas: cada acabado una _k; cada foto, la _k de su acabado. */
+  let finishSeq = 0;
+  function attachFinishKeys(m){
+    m.finishes.forEach(f => { f._k = ++finishSeq; });
+    m.assets.forEach(a => {
+      const f = a.finish ? m.finishes.find(x => x.code === a.finish) : null;
+      a._fk = f ? f._k : null;
+      delete a.finish;
+    });
   }
 
   /* Lo que el producto tiene hoy (cambio) o nada (producto nuevo). */
@@ -487,7 +510,7 @@
     assets.forEach(a => assetsById.set(a.id, a));
     return normalizedMedia({
       reference_code: product.reference_code, cover_asset_id: product.cover_asset_id,
-      finishes: finishesRes.data || [], assets: assets.map(a => ({ id: a.id, label: a.label }))
+      finishes: finishesRes.data || [], assets: assets.map(a => ({ id: a.id, label: a.label, finish: a.finish_code }))
     });
   }
 
@@ -497,6 +520,7 @@
     const saved = proposal && proposal.proposed_media;
     media = saved ? normalizedMedia({ ...emptyMedia(), ...saved, finishes: saved.finishes || [], assets: saved.assets || [] })
                   : JSON.parse(JSON.stringify(mediaBaseline));
+    attachFinishKeys(media);
     (await MobauArchivos.listByIds(media.assets.map(a => a.id))).forEach(a => assetsById.set(a.id, a));
     $("pf-reference").value = media.reference_code || "";
     renderMedia();
@@ -528,6 +552,21 @@
     const cap = document.createElement("figcaption");
     cap.textContent = caption;
     figure.append(img, cap);
+    /* Punto 44-05: acabado de esta foto (o sin asignar). */
+    const entry = media.assets.find(a => a.id === asset.id);
+    if (entry){
+      const id = `pf-photo-finish-${asset.id}`;
+      const label = document.createElement("label");
+      label.htmlFor = id;
+      label.textContent = "Acabado de la foto";
+      const select = document.createElement("select");
+      select.id = id;
+      select.append(new Option("Sin asignar / imagen de referencia", ""),
+        ...media.finishes.map(f => new Option(`${(f.code || "").trim() || "(sin código)"} · ${(f.name || "").trim() || "(sin nombre)"}`, String(f._k))));
+      select.value = entry._fk ? String(entry._fk) : "";
+      select.addEventListener("change", () => { entry._fk = select.value ? Number(select.value) : null; });
+      figure.append(label, select);
+    }
     if (onRemove){
       const remove = document.createElement("button");
       remove.type = "button";
@@ -568,6 +607,7 @@
       el.type = "text"; el.id = id; el.maxLength = max; el.value = f[key] || "";
       if (width) el.style.width = width;
       el.addEventListener("input", () => { f[key] = el.value; });
+      el.addEventListener("change", () => renderMedia()); // refresca los selectores de las fotos
       wrap.append(el);
       return wrap;
     };
@@ -576,6 +616,10 @@
     remove.textContent = "Quitar";
     remove.addEventListener("click", () => {
       const imageId = f.image_asset_id;
+      /* Las fotos de este acabado quedan sin asignar (nunca se reasignan). */
+      const orphaned = media.assets.filter(a => a._fk === f._k);
+      orphaned.forEach(a => { a._fk = null; });
+      if (orphaned.length) mediaStatus(`Se quitó el acabado «${(f.name || f.code || "").trim()}»: ${orphaned.length === 1 ? "1 foto queda" : `${orphaned.length} fotos quedan`} sin asignar.`);
       media.finishes.splice(media.finishes.indexOf(f), 1);
       if (imageId && !assetUsedAsImage(imageId)) media.assets = media.assets.filter(a => a.id !== imageId);
       if (f.is_default && media.finishes.length) media.finishes[0].is_default = true;
@@ -1110,7 +1154,7 @@
   pick("pf-gallery-input", files => onGalleryFiles(files));
   pick("pf-file-input", files => onProFile(files[0]));
   $("pf-finish-add").addEventListener("click", () => {
-    media.finishes.push({ code: "", name: "", reference_code: null, image_asset_id: null, is_default: media.finishes.length === 0 });
+    media.finishes.push({ code: "", name: "", reference_code: null, image_asset_id: null, is_default: media.finishes.length === 0, _k: ++finishSeq });
     renderMedia();
     const inputs = $("pf-finishes-list").querySelectorAll("input[type=text]");
     if (inputs.length >= 2) inputs[inputs.length - 2].focus();

@@ -23,7 +23,7 @@ const MobauArchivos = (() => {
   const FILES_BUCKET = "productos-archivos";
   const MAX_BYTES = 50 * 1024 * 1024;
   const SIGNED_SECONDS = 300;
-  const ASSET_COLUMNS = "id, distributor_id, product_id, kind, bucket, path, variants, original_name, format, label, bytes, width, height, sort_order, status";
+  const ASSET_COLUMNS = "id, distributor_id, product_id, kind, bucket, path, variants, original_name, format, label, bytes, width, height, sort_order, status, finish_code";
 
   /* Mismos tipos y formatos que product_assets_format_valid (44-01). */
   const KINDS = Object.freeze({
