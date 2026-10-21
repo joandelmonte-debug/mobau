@@ -14,10 +14,20 @@
   - en el formulario, primero la categoría, con la plantilla de Iluminación;
   - «Interior o exterior» sustituye a Uso y Espacio en el formulario; los datos antiguos se conservan;
   - en moderación, los archivos se abren con enlaces ya firmados, sin ventanas emergentes. Caducan a los 30 minutos y se renuevan recargando la página.
-- **Pendiente:**
-  - comprobar en Pages la ficha y la moderación con sesiones reales;
-  - campos opcionales de iluminación (control, temperatura de color, flujo, etc.): sin acordar;
-  - hallazgo aparte: `anon` y `authenticated` conservan REFERENCES y TRIGGER sobre `products`.
+- **Ajustes de la ficha cerrados** (`6f6f33c`, `40105a9`, verificados en Pages): acordeón de descargas, flechas de la galería y «Tiempo de entrega».
+- **Aplicado y registrado el 2026-10-22**, con 41 migraciones. Cada una con su COMMIT confirmado por lectura y su registro en una llamada aparte. 3225 no cambió.
+  - **44-03 · temperatura de color** (`20261023120000_44_03_temperatura_color`, MD5 `20000731ac02e93f818379b38856f95f`; recuperación `27f607858e095b98e8e9c49f1a0fce43`).
+    - Columna opcional `products.color_temperature`, en texto canónico: opciones fijas «2700» o «2700,3000», o intervalo regulable «2700-6500».
+    - Validación del servidor: 1000–20000 K, hasta 10 opciones, sin repetidos e intervalo de menor a mayor.
+    - El tono no se guarda: lo calcula la interfaz con los criterios adoptados por Mobau (cálida por debajo de 3300 K, neutra de 3300 a 5300 K y fría por encima de 5300 K).
+    - La ficha lo muestra como «Tono de luz».
+  - **44-04 · permisos de `products`** (`20261023120100_44_04_permisos_products`, MD5 `67591b8487e4a37faecbc772a79ca5fa`; recuperación `80277591961f6f5b881cc92354eebc8b`). Retira REFERENCES y TRIGGER a `anon` y `authenticated`. Son concesiones directas de `postgres`, sin PUBLIC ni herencia, y no hacen falta.
+    - Después: la tabla de permisos de `products` queda solo con `postgres` y `service_role`.
+    - No cambian los 56 permisos por columna, las políticas, RLS, las 6 claves ajenas ni los 4 triggers.
+    - `distributors` y `profiles` tienen el mismo patrón, pero no entran aquí.
+  - **Moderación:** aviso «Los enlaces caducan a los 30 minutos. Recarga la página para renovarlos.», sin botón ni renovación automática.
+  - **Ficha:** la elección de acabado pasa a estar debajo del precio y su nota, antes de «Antes de sumarlo a tu proyecto…».
+- **Sigue fuera del alcance:** los demás campos opcionales de iluminación (control, flujo, CRI, potencia, driver, IP y clase energética) y los filtros del catálogo por tono.
 
 Lo que sigue es la entrega original, previa a la aplicación.
 
