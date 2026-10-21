@@ -27,6 +27,11 @@
     - `distributors` y `profiles` tienen el mismo patrón, pero no entran aquí.
   - **Moderación:** aviso «Los enlaces caducan a los 30 minutos. Recarga la página para renovarlos.», sin botón ni renovación automática.
   - **Ficha:** la elección de acabado pasa a estar debajo del precio y su nota, antes de «Antes de sumarlo a tu proyecto…».
+- **Acabado de cada foto, aplicado y registrado el 2026-10-22** (42 migraciones; COMMIT confirmado por lectura; ninguna foto con acabado asignado; 3225 sin cambios): 44-05 (`20261024120000_44_05_acabado_de_cada_foto`, MD5 `dfcacf3551cb1d0350761a06a4264c10`; recuperación `8ec2b961f99fc185f109b1404af3e4bb`).
+  - Cada foto aprobada puede tener un acabado (`product_assets.finish_code`) o quedar como imagen de referencia sin asignar; un acabado puede tener varias fotos.
+  - La relación tiene una clave ajena a `product_finishes (product_id, code)`, con `ON UPDATE CASCADE` y `ON DELETE SET NULL (finish_code)`.
+  - En la propuesta, cada foto lleva `finish` (un código de sus acabados). Al aprobar se reescriben a la vez acabados y asociaciones.
+  - No exige recorte 4:5. 3225 queda sin asociaciones hasta que se propongan.
 - **Sigue fuera del alcance:** los demás campos opcionales de iluminación (control, flujo, CRI, potencia, driver, IP y clase energética) y los filtros del catálogo por tono.
 
 Lo que sigue es la entrega original, previa a la aplicación.
