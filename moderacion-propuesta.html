@@ -111,7 +111,7 @@
   const M = MobauModeracion;
   const $ = (id) => document.getElementById(id);
   const MAX_MESSAGE = 2000;
-  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status";
+  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, environment, light_source, electrical_connection";
   const PUBLICATION = { draft: "Borrador", in_review: "En revisión", changes_requested: "Cambios solicitados", published: "Publicado", archived: "Archivado" };
 
   const params = new URLSearchParams(window.location.search);
@@ -155,6 +155,7 @@
     if (isEmpty(value)) return "vacío";
     if (key === "category_id") return (ctx.categories.get(value) || {}).name || String(value);
     if (key === "availability") return M.AVAILABILITY[value] || String(value);
+    if (key === "environment") return ({ interior: "Interior", exterior: "Exterior", ambos: "Ambos" })[value] || String(value);
     return typeof value === "string" ? value : JSON.stringify(value);
   }
 
@@ -378,18 +379,18 @@
     if (files.length){
       const rows = files.map(({ entry, asset }) => {
         const tr = document.createElement("tr");
-        const open = M.el("button", "btn btn-outline btn-sm", asset.kind === "video" ? "Ver" : "Abrir");
-        open.type = "button";
-        open.addEventListener("click", async () => {
-          open.disabled = true;
-          try {
-            window.open(await MobauArchivos.downloadUrl(asset), "_blank", "noopener");
-          } catch (e) {
-            feedback(M.el("p", "", "No pudimos preparar el archivo. Vuelve a cargar la página."));
-          } finally {
-            open.disabled = false;
-          }
-        });
+        /* Enlace explícito ya firmado al cargar (sin ventanas emergentes):
+           los PDF se abren en una pestaña; el resto se descarga. */
+        const url = ctx.fileUrls.get(asset.id);
+        let open;
+        if (url){
+          const isPdf = asset.format === "pdf" || asset.kind === "video";
+          open = M.el("a", "btn btn-outline btn-sm", asset.kind === "video" ? "Ver" : (isPdf ? "Abrir" : "Descargar"));
+          open.href = url;
+          if (isPdf){ open.target = "_blank"; open.rel = "noopener noreferrer"; }
+        } else {
+          open = M.el("span", "card-meta", "No disponible: vuelve a cargar");
+        }
         tr.append(cell("Tipo", document.createTextNode(MobauArchivos.KINDS[asset.kind].label)),
                   cell("Archivo", document.createTextNode(`${entry.label ? `${entry.label} · ` : ""}${asset.original_name} · ${MobauArchivos.sizeText(asset.bytes)}`)),
                   cell("", open));
@@ -831,10 +832,19 @@
       const media = p.proposed_media || {};
       const assetIds = [...(media.assets || []).map(a => a.id), media.cover_asset_id, ...(media.finishes || []).map(f => f.image_asset_id)];
       const assetRows = await MobauArchivos.listByIds(assetIds);
+      /* Enlaces firmados (30 min) de los archivos privados; los vídeos son públicos. */
+      const fileUrls = new Map(await Promise.all(assetRows.filter(a => a.kind !== "foto").map(async a => {
+        try {
+          return [a.id, await MobauArchivos.downloadUrl(a, { inline: a.format === "pdf", seconds: 1800 })];
+        } catch (e) {
+          return [a.id, null];
+        }
+      })));
       if (id !== loadId) return;
       ctx = {
         proposal: p,
         assets: new Map(assetRows.map(a => [a.id, a])),
+        fileUrls,
         product: productRes.data,
         price: priceRes.data,
         categories: new Map((categoriesRes.data || []).map(c => [c.id, c])),

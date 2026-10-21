@@ -38,6 +38,12 @@
   .pp-file-add select, .pp-file-add input{ width:auto; flex:1 1 160px; }
   .pp-media-status{ margin:12px 0 0; font-size:13.5px; }
   .pp-media-status.is-error{ color: var(--danger); }
+  /* Punto 44: producto nuevo, primero la categoría; el resto aparece al elegirla. */
+  .pp-category-first{ margin:0 0 12px; font-size:13.5px; color: var(--ink-soft); }
+  #pp-form.pp-needs-category > fieldset:not(#pf-fields),
+  #pp-form.pp-needs-category #pf-fields .field-grid > :not(.pp-step-category),
+  #pp-form.pp-needs-category .pp-form-actions,
+  #pp-form.pp-needs-category #pf-warning{ display:none !important; }
   @media (max-width: 640px){
     .pp-row{ grid-template-columns: 90px 1fr; }
     .pp-file-row{ grid-template-columns: 1fr; }
@@ -101,8 +107,15 @@
 
       <fieldset id="pf-fields">
         <legend>Información</legend>
+        <p class="pp-category-first" id="pf-category-first" hidden>Elige primero la categoría: el formulario se adapta a ella.</p>
         <div class="field-grid">
+          <div class="field pp-step-category" id="pf-category-field"><label for="pf-category">Categoría</label><select id="pf-category"></select><span class="pp-current" data-current="category_id"></span></div>
+          <div class="field pp-step-category" id="pf-subcategory-field"><label for="pf-subcategory">Subcategoría</label><select id="pf-subcategory"></select>
+            <label class="pp-check"><input type="checkbox" id="pf-new-sub-toggle"> No encuentro una subcategoría adecuada</label>
+            <span class="pp-current" data-current="subcategory"></span></div>
+          <div class="field" id="pf-new-sub-field" hidden><label for="pf-new-sub">Nueva subcategoría propuesta</label><input id="pf-new-sub" type="text" maxlength="100"><span class="pp-current">Mobau decide si la añade al catálogo o usa una existente.</span></div>
           <div class="field full"><label for="pf-name">Nombre</label><input id="pf-name" type="text" maxlength="120"><span class="pp-current" data-current="name"></span></div>
+          <div class="field"><label for="pf-brand">Marca</label><input id="pf-brand" type="text" maxlength="80"><span class="pp-current" data-current="brand"></span></div>
           <div class="field"><label for="pf-reference">Referencia del producto</label><input id="pf-reference" type="text" maxlength="60" autocomplete="off"><span class="pp-current">La del fabricante, por ejemplo 3225. Obligatoria para enviar.</span></div>
           <div class="field full pp-media" id="pf-finishes-block">
             <label id="pf-finishes-label">Acabados <span class="hint">(opcional)</span></label>
@@ -110,23 +123,19 @@
             <div id="pf-finishes-list" role="group" aria-labelledby="pf-finishes-label"></div>
             <button type="button" class="btn btn-outline btn-sm" id="pf-finish-add" style="margin-top:10px;">Añadir acabado</button>
           </div>
-          <div class="field"><label for="pf-brand">Marca <span class="hint">(opcional)</span></label><input id="pf-brand" type="text" maxlength="80"><span class="pp-current" data-current="brand"></span></div>
           <div class="field"><label for="pf-availability">Disponibilidad</label>
             <select id="pf-availability">
               <option value="en-stock">En stock</option>
               <option value="bajo-pedido">Bajo pedido</option>
               <option value="por-confirmar">Por confirmar</option>
             </select><span class="pp-current" data-current="availability"></span></div>
-          <div class="field"><label for="pf-category">Categoría</label><select id="pf-category"></select><span class="pp-current" data-current="category_id"></span></div>
-          <div class="field"><label for="pf-subcategory">Subcategoría</label><select id="pf-subcategory"></select>
-            <label class="pp-check"><input type="checkbox" id="pf-new-sub-toggle"> No encuentro una subcategoría adecuada</label>
-            <span class="pp-current" data-current="subcategory"></span></div>
-          <div class="field" id="pf-new-sub-field" hidden><label for="pf-new-sub">Nueva subcategoría propuesta</label><input id="pf-new-sub" type="text" maxlength="100"><span class="pp-current">Mobau decide si la añade al catálogo o usa una existente.</span></div>
-          <div class="field"><label for="pf-use">Uso <span class="hint">(opcional)</span></label><select id="pf-use"></select><span class="pp-current" data-current="use_context"></span></div>
-          <div class="field"><label for="pf-space">Espacio <span class="hint">(opcional)</span></label><select id="pf-space"></select><span class="pp-current" data-current="space"></span></div>
+          <div class="field"><label for="pf-environment">Interior o exterior <span class="hint">(opcional)</span></label><select id="pf-environment"></select><span class="pp-current" data-current="environment"></span></div>
+          <!-- Plantilla de Iluminación: solo con la categoría Iluminación. -->
+          <div class="field" data-template="iluminacion" hidden><label for="pf-light-source">Fuente de luz <span class="hint">(opcional)</span></label><input id="pf-light-source" type="text" maxlength="200" placeholder="Por ejemplo: 1 × LED 16,7 W"><span class="pp-current" data-current="light_source"></span></div>
+          <div class="field" data-template="iluminacion" hidden><label for="pf-electrical-connection">Conexión eléctrica <span class="hint">(opcional)</span></label><input id="pf-electrical-connection" type="text" maxlength="200" placeholder="Por ejemplo: con enchufe"><span class="pp-current" data-current="electrical_connection"></span></div>
           <div class="field full"><label for="pf-lead">Plazo de entrega <span class="hint">(opcional)</span></label><input id="pf-lead" type="text" maxlength="160"><span class="pp-current" data-current="lead_time"></span></div>
           <div class="field full"><label for="pf-description">Descripción <span class="hint" id="pf-description-hint">(opcional)</span></label><textarea id="pf-description" maxlength="2000"></textarea><span class="pp-current" data-current="description"></span></div>
-          <div class="field full"><label for="pf-measurements">Medidas <span class="hint">(opcional)</span></label><input id="pf-measurements" type="text" maxlength="200"><span class="pp-current" data-current="measurements"></span></div>
+          <div class="field full"><label for="pf-measurements">Medidas <span class="hint">(con unidades, por ejemplo: Ø 45 × 61 cm)</span></label><input id="pf-measurements" type="text" maxlength="200" placeholder="Ø 45 × 61 cm"><span class="pp-current" data-current="measurements"></span></div>
           <div class="field"><label for="pf-materials">Materiales <span class="hint">(opcional)</span></label><input id="pf-materials" type="text" maxlength="200"><span class="pp-current" data-current="materials"></span></div>
         </div>
       </fieldset>
@@ -183,7 +192,7 @@
 
       <p id="pf-warning" class="card-meta" style="margin:0 0 12px;" hidden></p>
       <p id="pf-error" style="display:none; color:var(--danger); font-size:13px; margin:0 0 14px;"></p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px;">
+      <div class="pp-form-actions" style="display:flex; flex-wrap:wrap; gap:10px;">
         <button type="button" class="btn btn-outline" id="pf-save-btn">Guardar borrador</button>
         <button type="button" class="btn btn-primary" id="pf-submit-btn">Enviar a Mobau</button>
       </div>
@@ -291,17 +300,22 @@
      (la subcategoría se valida aparte: lista o nueva subcategoría). */
   const FIELDS = [
     { key: "name",                id: "pf-name",         label: "Nombre",        required: true, requiredOnCreate: true, max: 120 },
-    { key: "brand",               id: "pf-brand",        label: "Marca",         max: 80 },
+    { key: "brand",               id: "pf-brand",        label: "Marca",         required: true, requiredOnCreate: true, max: 80 },
     { key: "availability",        id: "pf-availability", label: "Disponibilidad", required: true, requiredOnCreate: true },
     { key: "category_id",         id: "pf-category",     label: "Categoría",     required: true, requiredOnCreate: true },
     { key: "subcategory",         id: "pf-subcategory",  label: "Subcategoría" },
-    { key: "use_context",         id: "pf-use",          label: "Uso" },
-    { key: "space",               id: "pf-space",        label: "Espacio" },
+    { key: "environment",         id: "pf-environment",  label: "Interior o exterior" },
     { key: "lead_time",           id: "pf-lead",         label: "Plazo de entrega", max: 160 },
     { key: "description",         id: "pf-description",  label: "Descripción",   requiredOnCreate: true, max: 2000 },
-    { key: "measurements",        id: "pf-measurements", label: "Medidas",       max: 200 },
-    { key: "materials",           id: "pf-materials",    label: "Materiales",    max: 200 }
+    { key: "measurements",        id: "pf-measurements", label: "Medidas",       required: true, requiredOnCreate: true, max: 200 },
+    { key: "materials",           id: "pf-materials",    label: "Materiales",    max: 200 },
+    /* Plantilla de Iluminación (punto 44): solo con esa categoría. */
+    { key: "light_source",        id: "pf-light-source", label: "Fuente de luz", max: 200, template: "iluminacion" },
+    { key: "electrical_connection", id: "pf-electrical-connection", label: "Conexión eléctrica", max: 200, template: "iluminacion" }
   ];
+  const ENVIRONMENT_OPTIONS = [["interior", "Interior"], ["exterior", "Exterior"], ["ambos", "Ambos"]];
+  /* Un campo de plantilla solo cuenta con su categoría elegida. */
+  const fieldActive = (f) => !f.template || f.template === $("pf-category").value;
   const AVAILABILITY_LABELS = { "en-stock": "En stock", "bajo-pedido": "Bajo pedido", "por-confirmar": "Por confirmar" };
   const USE_OPTIONS = [["residencial", "Residencial"], ["comercial", "Comercial"], ["hospitality", "Hospitality"], ["oficina", "Oficina"]];
   const SPACE_OPTIONS = [
@@ -359,6 +373,7 @@
     if (key === "category_id") return categoryName(value);
     if (key === "use_context") { const o = USE_OPTIONS.find(([v]) => v === value); return o ? o[1] : value; }
     if (key === "space") { const o = SPACE_OPTIONS.find(([v]) => v === value); return o ? o[1] : value; }
+    if (key === "environment") { const o = ENVIRONMENT_OPTIONS.find(([v]) => v === value); return o ? o[1] : value; }
     return String(value);
   }
 
@@ -738,6 +753,16 @@
     $("pf-note").value = (proposal && proposal.internal_note) || "";
   }
 
+  /* Punto 44: la categoría decide la plantilla (solo Iluminación por ahora).
+     Producto nuevo sin categoría: solo se muestra el paso de categoría. */
+  function applyTemplate(){
+    const category = $("pf-category").value;
+    document.querySelectorAll("[data-template]").forEach(el => { el.hidden = el.dataset.template !== category; });
+    const needsCategory = mode === "create" && !category;
+    $("pp-form").classList.toggle("pp-needs-category", needsCategory);
+    $("pf-category-first").hidden = !needsCategory;
+  }
+
   /* Abre el formulario con el tipo fijo: una propuesta existente (editable)
      o una nueva de producto nuevo o de cambio del producto indicado. */
   async function openForm({ proposal = null, kind, product = null }){
@@ -753,6 +778,7 @@
       loadProductIntoForm(productById(productId), proposal);
     }
     await loadMedia(proposal, mode === "update" ? productById(productId) : null);
+    applyTemplate();
     updateWarning();
     showOnly("pp-form-view");
     window.scrollTo(0, 0);
@@ -769,9 +795,14 @@
     const changes = {};
     FIELDS.forEach(f => {
       if (f.key === "subcategory" && $("pf-new-sub-toggle").checked) return;
+      if (!fieldActive(f)) return;
       const proposed = norm($(f.id).value);
       if (mode === "create"){ if (proposed !== null) changes[f.key] = proposed; }
       else if (proposed !== norm(product[f.key])) changes[f.key] = proposed;
+    });
+    const saved = (editing && editing.proposed_changes) || {};
+    Object.keys(saved).forEach(key => {
+      if (!FIELDS.some(f => f.key === key)) changes[key] = saved[key];
     });
     const priceStatus = $("pf-price-status").value || null;
     const rawAmount = $("pf-price-amount").value.trim();
@@ -799,6 +830,7 @@
     const changes = values.proposed_changes;
     if (mode === "create" && !changes.name) return "Nombre: indica el nombre del producto.";
     for (const f of FIELDS){
+      if (!fieldActive(f)) continue;
       const has = Object.prototype.hasOwnProperty.call(changes, f.key);
       const v = has ? changes[f.key] : null;
       if (mode === "update" && has && f.required && !v) return `${f.label}: no puede quedar vacío.`;
@@ -951,7 +983,7 @@
 
       const [productsRes, categoriesRes, proposalsRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id")
+          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id, environment, light_source, electrical_connection")
           .eq("distributor_id", distributorId).order("name"),
         supabaseClient.from("categories").select("id, name, subcategories").order("name"),
         supabaseClient.from("product_proposals").select("*").in("status", OPEN).order("updated_at", { ascending: false })
@@ -972,8 +1004,7 @@
       }
 
       fillSelect($("pf-category"), categories.map(c => [c.id, c.name]), "Selecciona una categoría");
-      fillSelect($("pf-use"), USE_OPTIONS, "—");
-      fillSelect($("pf-space"), SPACE_OPTIONS, "—");
+      fillSelect($("pf-environment"), ENVIRONMENT_OPTIONS, "—");
       fillSelect($("pf-file-kind"), PRO_FILE_KINDS.map(k => [k, MobauArchivos.KINDS[k].label]), null);
 
       if (presetProposalId){
@@ -1000,7 +1031,7 @@
     }
   }
 
-  $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); updateWarning(); });
+  $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); applyTemplate(); updateWarning(); });
   $("pf-new-sub-toggle").addEventListener("change", (e) => { setNewSub(e.target.checked, ""); if (e.target.checked) $("pf-new-sub").focus(); });
   ["pf-name", "pf-lead", "pf-measurements", "pf-description"].forEach(id => $(id).addEventListener("input", updateWarning));
   /* Punto 44: subidas. El valor del input se vacía para poder elegir el mismo archivo otra vez. */

@@ -60,7 +60,10 @@
       <div class="spec-row"><dt>Materiales</dt><dd id="p-materiales">—</dd></div>
       <div class="spec-row" id="p-acabados-row"><dt>Acabados</dt><dd id="p-acabados">—</dd></div>
       <div class="spec-row"><dt>Lead time</dt><dd id="p-leadtime">—</dd></div>
-      <div class="spec-row"><dt>Uso recomendado</dt><dd id="p-uso">—</dd></div>
+      <div class="spec-row" id="p-ambiente-row" hidden><dt>Interior o exterior</dt><dd id="p-ambiente">—</dd></div>
+      <div class="spec-row" id="p-fuente-luz-row" hidden><dt>Fuente de luz</dt><dd id="p-fuente-luz">—</dd></div>
+      <div class="spec-row" id="p-conexion-row" hidden><dt>Conexión eléctrica</dt><dd id="p-conexion">—</dd></div>
+      <div class="spec-row" id="p-uso-row"><dt>Uso recomendado</dt><dd id="p-uso">—</dd></div>
       <div class="spec-row"><dt>Distribuidor</dt><dd id="p-distribuidor">—</dd></div>
       <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
     </dl>
@@ -228,9 +231,12 @@ function assetRowsHtml(access){
     const label = a.label || MobauArchivos.KINDS[a.kind].label;
     const ext = `${MobauArchivos.KINDS[a.kind].label} · ${a.format.toUpperCase()}${a.bytes ? ` · ${MobauArchivos.sizeText(a.bytes)}` : ""}`;
     const verb = a.kind === "video" ? "Ver" : "Descargar";
-    const action = access === "allowed"
-      ? `<button type="button" class="btn btn-outline" data-asset-download="${escapeHtml(a.id)}">${verb}</button>`
-      : `<button type="button" class="btn btn-outline" disabled>${verb}</button>`;
+    /* Vídeo: enlace público directo (sin ventana emergente tras esperar). */
+    const action = access !== "allowed"
+      ? `<button type="button" class="btn btn-outline" disabled>${verb}</button>`
+      : a.kind === "video"
+        ? `<a class="btn btn-outline" href="${escapeHtml(MobauArchivos.publicUrl(a.path))}" target="_blank" rel="noopener">${verb}</a>`
+        : `<button type="button" class="btn btn-outline" data-asset-download="${escapeHtml(a.id)}">${verb}</button>`;
     return `
     <div class="resource-row">
       <span class="r-label">${escapeHtml(label)}</span>
@@ -271,9 +277,8 @@ function renderResources(product, access){
     if (!asset) return;
     btn.disabled = true;
     try {
-      const url = await MobauArchivos.downloadUrl(asset);
-      if (asset.kind === "video") window.open(url, "_blank", "noopener");
-      else window.location.assign(url);
+      /* Misma pestaña: el archivo se descarga sin salir de la ficha. */
+      window.location.assign(await MobauArchivos.downloadUrl(asset));
     } catch (e) {
       document.getElementById("resource-note").textContent = "No pudimos preparar la descarga. Recarga la página e inténtalo de nuevo.";
     } finally {
@@ -361,6 +366,13 @@ runWithCatalog(async function renderProductPage(){
   document.getElementById("p-referencia").textContent = product.referencia || "—";
   document.getElementById("p-leadtime").textContent = product.leadtime || "—";
   document.getElementById("p-uso").textContent = LABELS.uso[product.uso] || "—";
+  /* Punto 44: datos nuevos; sin valor no se muestran (productos anteriores). */
+  const AMBIENTE = { interior: "Interior", exterior: "Exterior", ambos: "Interior y exterior" };
+  [["p-ambiente", AMBIENTE[product.ambiente]], ["p-fuente-luz", product.fuenteLuz], ["p-conexion", product.conexionElectrica]].forEach(([id, value]) => {
+    document.getElementById(`${id}-row`).hidden = !value;
+    document.getElementById(id).textContent = value || "—";
+  });
+  document.getElementById("p-uso-row").hidden = !LABELS.uso[product.uso] && !!product.ambiente;
   document.getElementById("p-distribuidor").textContent = `${distribuidor.nombre} — ${distribuidor.ubicacion}`;
   document.getElementById("p-marca").textContent = marcaLabel;
 

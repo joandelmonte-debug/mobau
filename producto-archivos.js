@@ -101,11 +101,12 @@ const MobauArchivos = (() => {
   }
 
   /* Enlace de descarga: público para fotos y vídeos; firmado (con el nombre
-     original) para el resto. Sin permiso, Storage no firma: devuelve error. */
-  async function downloadUrl(asset){
+     original) para el resto. Sin permiso, Storage no firma: devuelve error.
+     inline: true lo abre en el navegador (PDF) en lugar de descargarlo. */
+  async function downloadUrl(asset, { inline = false, seconds = SIGNED_SECONDS } = {}){
     if (asset.bucket === IMAGES_BUCKET) return publicUrl(asset.path);
     const { data, error } = await supabaseClient.storage.from(FILES_BUCKET)
-      .createSignedUrl(asset.path, SIGNED_SECONDS, { download: asset.original_name || true });
+      .createSignedUrl(asset.path, seconds, inline ? {} : { download: asset.original_name || true });
     if (error || !data || !data.signedUrl) throw error || new Error("No pudimos preparar la descarga.");
     return data.signedUrl;
   }

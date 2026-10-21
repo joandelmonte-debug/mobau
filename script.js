@@ -373,11 +373,11 @@ const CATALOG_STATE = { source: "static", status: "ready", error: null };
    Solo en memoria; se vacía al renovar o invalidar el catálogo. Un error,
    un timeout o una respuesta no válida nunca añade nada. */
 const CATALOG_ABSENT = new Set();
-/* v3 (punto 44): las filas guardadas llevan referencia, portada y acabados;
-   ninguna versión lee la caché de otra. */
-const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v3", distributors: "mobau_distributors_v3", categories: "mobau_categories_v3" };
-/* Las 25 columnas de catalog_products, en su orden (21 de 41-02 y 4 de 44-01). */
-const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options";
+/* v4 (punto 44): las filas guardadas llevan referencia, portada, acabados,
+   interior/exterior y datos de iluminación; ninguna versión lee la caché de otra. */
+const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v4", distributors: "mobau_distributors_v4", categories: "mobau_categories_v4" };
+/* Las 28 columnas de catalog_products, en su orden (21 de 41-02, 4 de 44-01 y 3 de 44-02). */
+const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options, environment, light_source, electrical_connection";
 const STATIC_ORDER = Object.freeze({
   products: STATIC_PRODUCTS.map(p => p.id),
   distributors: Object.keys(DISTRIBUTORS),
@@ -447,6 +447,7 @@ function mapProductRow(row){
     imagen: productImageUrl(row.cover_card_path) || productImageUrl(row.cover_path) || safeUrl(row.image_url) || null,
     portada: productImageUrl(row.cover_path) || null,
     referencia: row.reference_code || null, acabadosOpciones: mapFinishOptions(row.finish_options),
+    ambiente: row.environment || null, fuenteLuz: row.light_source || null, conexionElectrica: row.electrical_connection || null,
     ficha: safeUrl(row.technical_sheet_url) || null,
     cad: safeUrl(row.cad_bim_3d_url) || null, status: row.status, actualizado: row.updated_at
   };
