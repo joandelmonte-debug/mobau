@@ -414,12 +414,12 @@ function defaultFinishCode(product){
   return chosen ? chosen.codigo : null;
 }
 
-/* Texto del acabado de una línea ("Beige D1 · 3225-25"), o "" sin acabado. */
+/* Texto del acabado de una línea ("25 · Beige D1"), o "" sin acabado. */
 function finishLabel(product, code){
   if (!code) return "";
   const option = ((product && product.acabadosOpciones) || []).find(f => f.codigo === code);
   if (!option) return `Acabado ${code}`;
-  return option.referencia ? `${option.nombre} · ${option.referencia}` : option.nombre;
+  return `${option.codigo} · ${option.nombre}`;
 }
 
 /* Producto con la foto de su acabado como imagen (para miniaturas de líneas). */
@@ -428,7 +428,7 @@ function productWithFinishImage(product, code){
   return option && option.imagen ? { ...product, imagen: option.imagen } : product;
 }
 
-/* "Ref. 3225 · Acabado: Beige D1 · 3225-25" de una línea (selección,
+/* "Ref. 3225 · Acabado: 25 · Beige D1" de una línea (selección,
    proyecto o cotización); "" si no hay referencia ni acabado. */
 function lineDetailText(product, code){
   return [product && product.referencia ? `Ref. ${product.referencia}` : "", code ? `Acabado: ${finishLabel(product, code)}` : ""]

@@ -58,18 +58,20 @@
       <div class="spec-row" id="p-referencia-row" hidden><dt>Referencia</dt><dd id="p-referencia">—</dd></div>
       <div class="spec-row"><dt>Medidas</dt><dd id="p-medidas">—</dd></div>
       <div class="spec-row"><dt>Materiales</dt><dd id="p-materiales">—</dd></div>
-      <div class="spec-row"><dt>Acabados</dt><dd id="p-acabados">—</dd></div>
+      <div class="spec-row" id="p-acabados-row"><dt>Acabados</dt><dd id="p-acabados">—</dd></div>
       <div class="spec-row"><dt>Lead time</dt><dd id="p-leadtime">—</dd></div>
       <div class="spec-row"><dt>Uso recomendado</dt><dd id="p-uso">—</dd></div>
       <div class="spec-row"><dt>Distribuidor</dt><dd id="p-distribuidor">—</dd></div>
       <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
     </dl>
 
+    <!-- Punto 44: acabado elegido (código y nombre). No cambia la foto. -->
+    <div class="product-finish-field" id="product-finish-field" hidden>
+      <span class="product-finish-label" id="product-finish-label">Acabado</span>
+      <div class="finish-options" id="product-finish" role="group" aria-labelledby="product-finish-label"></div>
+    </div>
+
     <div class="product-actions product-selection-actions" hidden>
-      <div class="product-qty-field" id="product-finish-field" hidden>
-        <label for="product-finish">Acabado</label>
-        <select id="product-finish"></select>
-      </div>
       <div class="product-qty-field">
         <label for="product-qty-input">Cantidad</label>
         <div class="quantity-control">
@@ -352,9 +354,9 @@ runWithCatalog(async function renderProductPage(){
   document.getElementById("p-medidas").textContent = product.medidas || "—";
   document.getElementById("p-materiales").textContent = product.materiales || "—";
   const finishes = product.acabadosOpciones || [];
-  document.getElementById("p-acabados").textContent = finishes.length
-    ? finishes.map(f => f.referencia ? `${f.nombre} (${f.referencia})` : f.nombre).join(", ")
-    : (product.acabados || "—");
+  /* Con acabados, se eligen con los botones (sin fila de texto repetida). */
+  document.getElementById("p-acabados-row").hidden = finishes.length > 0;
+  document.getElementById("p-acabados").textContent = product.acabados || "—";
   document.getElementById("p-referencia-row").hidden = !product.referencia;
   document.getElementById("p-referencia").textContent = product.referencia || "—";
   document.getElementById("p-leadtime").textContent = product.leadtime || "—";
@@ -384,14 +386,18 @@ runWithCatalog(async function renderProductPage(){
     renderResources(product, await accessReady);
   }).catch(e => console.error("Error leyendo los archivos del producto:", e));
 
-  /* Punto 44: acabado de la línea que se añade a la selección; al cambiarlo
-     se muestra su foto. Sin acabados, la línea va sin acabado. */
+  /* Punto 44: acabado de la línea que se añade a la selección, elegido con
+     botones de texto (código y nombre). No necesita foto ni cambia la
+     imagen principal. Sin acabados, la línea va sin acabado. */
   const finishField = document.getElementById("product-finish-field");
-  const finishSelect = document.getElementById("product-finish");
+  const finishGroup = document.getElementById("product-finish");
+  let chosenFinish = defaultFinishCode(product);
   finishField.hidden = finishes.length === 0;
-  finishSelect.replaceChildren(...finishes.map(f => new Option(f.referencia ? `${f.nombre} · ${f.referencia}` : f.nombre, f.codigo)));
-  finishSelect.value = defaultFinishCode(product) || "";
-  const selectedFinish = () => (finishes.length ? finishSelect.value || null : null);
+  function renderFinishButtons(){
+    finishGroup.innerHTML = finishes.map(f => `<button type="button" class="finish-option" data-finish="${escapeHtml(f.codigo)}" aria-pressed="${f.codigo === chosenFinish}">${escapeHtml(`${f.codigo} · ${f.nombre}`)}</button>`).join("");
+  }
+  renderFinishButtons();
+  const selectedFinish = () => (finishes.length ? chosenFinish : null);
 
   const qtyInput = document.getElementById("product-qty-input");
   const qtyDecrementBtn = document.getElementById("product-qty-decrement");
@@ -425,9 +431,12 @@ runWithCatalog(async function renderProductPage(){
     setSelectedQuantity(parsed !== null ? parsed : 1);
   });
 
-  finishSelect.addEventListener("change", () => {
-    const option = finishes.find(f => f.codigo === finishSelect.value);
-    if (option && option.imagenGrande) showGalleryImage(option.imagenGrande);
+  finishGroup.addEventListener("click", (e) => {
+    const btn = e.target.closest(".finish-option");
+    if (!btn) return;
+    chosenFinish = btn.dataset.finish;
+    renderFinishButtons();
+    finishGroup.querySelector(`[data-finish="${CSS.escape(chosenFinish)}"]`).focus();
     refreshAddButton();
   });
 
