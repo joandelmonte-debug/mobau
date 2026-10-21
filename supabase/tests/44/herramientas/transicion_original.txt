@@ -1,0 +1,86 @@
+
+begin
+  -- 39: decisión de Mobau en curso (moderate_product_proposal, 39-04, con
+  -- admin activo y aal2). Solo submitted → approved | changes_requested |
+  -- rejected, y solo campos de revisión: el contenido enviado por el
+  -- distribuidor no se puede modificar.
+  if (select public.mobau_moderating(new.id)) then
+    if old.status <> 'submitted' or new.status not in ('approved', 'changes_requested', 'rejected') then
+      raise exception 'Transición no permitida para Mobau: % → %.', old.status, new.status using errcode = '42501';
+    end if;
+    -- Defensa en profundidad: moderate_product_proposal ya lo impide antes.
+    if old.author_id = (select auth.uid())
+       or exists (select 1 from public.distributor_profiles dp
+                   where dp.user_id = (select auth.uid()) and dp.distributor_id = old.distributor_id) then
+      raise exception 'No puedes moderar propuestas de tu propia empresa.'
+        using errcode = '42501', hint = 'self_moderation_forbidden';
+    end if;
+    if new.id is distinct from old.id
+       or new.proposal_kind is distinct from old.proposal_kind
+       or new.product_id is distinct from old.product_id
+       or new.distributor_id is distinct from old.distributor_id
+       or new.author_id is distinct from old.author_id
+       or new.created_at is distinct from old.created_at
+       or new.version is distinct from old.version
+       or new.submitted_at is distinct from old.submitted_at
+       or new.product_snapshot is distinct from old.product_snapshot
+       or new.proposed_changes is distinct from old.proposed_changes
+       or new.proposed_new_subcategory is distinct from old.proposed_new_subcategory
+       or new.proposed_price_status is distinct from old.proposed_price_status
+       or new.proposed_price_amount is distinct from old.proposed_price_amount
+       or new.internal_note is distinct from old.internal_note then
+      raise exception 'Mobau no puede modificar el contenido de una propuesta.' using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  -- Sin sesión de cliente (Mobau desde el editor SQL): sin reglas de distribuidor.
+  if (select auth.uid()) is null then
+    return new;
+  end if;
+
+  if old.distributor_id is distinct from (select public.my_verified_distributor_id()) then
+    raise exception 'Esta propuesta no es de tu empresa verificada.' using errcode = '42501';
+  end if;
+  if new.id is distinct from old.id
+     or new.proposal_kind is distinct from old.proposal_kind
+     or new.product_id is distinct from old.product_id
+     or new.distributor_id is distinct from old.distributor_id
+     or new.author_id is distinct from old.author_id
+     or new.created_at is distinct from old.created_at then
+    raise exception 'No se puede cambiar el tipo, el producto, la empresa ni el autor de una propuesta.' using errcode = '42501';
+  end if;
+  if new.rejection_reason is distinct from old.rejection_reason
+     or new.reviewed_at is distinct from old.reviewed_at
+     or new.reviewed_by is distinct from old.reviewed_by
+     or new.product_snapshot is distinct from old.product_snapshot
+     or new.submitted_at is distinct from old.submitted_at
+     or new.version is distinct from old.version
+     or new.created_product_id is distinct from old.created_product_id then
+    raise exception 'Esos campos los gestiona Mobau o el sistema.' using errcode = '42501';
+  end if;
+
+  -- Sin cambio de estado: edición del contenido, solo en borrador o con cambios solicitados.
+  if new.status = old.status then
+    if old.status not in ('draft', 'changes_requested') then
+      raise exception 'Una propuesta en estado % ya no se puede editar.', old.status using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if not ((old.status = 'draft' and new.status in ('submitted', 'withdrawn'))
+          or (old.status = 'submitted' and new.status = 'withdrawn')
+          or (old.status = 'changes_requested' and new.status in ('submitted', 'withdrawn'))) then
+    raise exception 'Transición no permitida: % → %.', old.status, new.status using errcode = '42501';
+  end if;
+
+  -- update: al menos un cambio de información (incluida una subcategoría
+  -- nueva) o de precio. create: los obligatorios los exige el trigger 30.
+  if new.status = 'submitted' and new.proposal_kind = 'update'
+     and new.proposed_changes = '{}'::jsonb and new.proposed_new_subcategory is null
+     and new.proposed_price_status is null then
+    raise exception 'La propuesta no contiene ningún cambio.' using errcode = '23514';
+  end if;
+
+  return new;
+end;

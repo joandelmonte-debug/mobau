@@ -1,0 +1,187 @@
+# Punto 44 · Vibia 3225: archivos, MD5, criterios de éxito y plan de validación
+
+**Estado (2026-10-21):** todo está preparado en local. No se ha aplicado ni ensayado nada, no se ha subido ningún archivo y no hay commits, push ni publicación.
+
+**Lectura de partida (solo SELECT):**
+- 37 migraciones; la última es `20261020180000`.
+- 44-01 no está aplicada.
+- Transición `19d26a92…`; vista `44a582cd…` con opciones y permisos de siempre.
+- Sin buckets ni políticas de Storage del 44.
+- 34 líneas de proyecto; 20 productos publicados.
+
+## 1. Archivos y MD5
+
+### Servidor (scratchpad `44/servidor/`, se generan con `44/herramientas/generar_44.py`)
+
+| Archivo | MD5 | Qué es |
+|---|---|---|
+| `20261021120000_44_01_archivos_producto.sql` | `872f463c2aee16659b76dee96d15573d` | Migración única (38,9 KB) |
+| `20261021120000_44_01_archivos_producto.rollback.sql` | `4e0b2ef941a70e20c6f2efe00a08ecc7` | Recuperación |
+| `44_01_lectura.sql` | `886721990a7fdf76eda0e230b2f658da` | Lectura, solo SELECT; ya ejecutada una vez como partida |
+| `P44_ensayo.sql` | `96522685b14c5cbc878e02af5710de76` | Ensayo revertido (96 KB; lleva dentro la migración y la recuperación) |
+
+Herramientas:
+
+| Archivo | MD5 |
+|---|---|
+| `generar_44.py` | `2439af0d30d378fd07142e7b8b717295` |
+| `plantilla_migracion.sql` | `aa0e52acfa5f75af2a0a775325a0730f` |
+| `plantilla_recuperacion.sql` | `56c2771e993ec8bc046bb33bd263843e` |
+| `plantilla_ensayo.sql` | `b1b3e46efd61e2451a13e8263a5aee19` |
+| `plantilla_lectura.sql` | `a39e28756204cbc7591cd1b06eb7b5e6` |
+| `transicion_original.txt` | `19d26a925b9d97c89715254f219fbe7e` (= cuerpo vigente) |
+| `balance.py` | `64850a12af9737914ea5aaef2d36d5b8` |
+
+Cuerpo nuevo de `transition_proposal_status`: `3eef0e1ad9a754c54fcc1ac536301b53`. Lleva dos cambios exactos:
+- Mobau no puede modificar `proposed_media`.
+- Una propuesta de cambio que solo trae archivos ya no es «sin cambios».
+
+**Qué hace 44-01:**
+- **`products`:** nuevas columnas `reference_code` (única por empresa) y `cover_asset_id`.
+- **`product_assets`:**
+  - 8 tipos con formatos cerrados;
+  - el distribuidor solo inserta filas «pendiente» en su carpeta y solo borra las pendientes;
+  - nunca puede actualizarlas.
+- **`product_finishes`:** solo lectura desde la web.
+- **`product_proposals.proposed_media`:**
+  - el trigger 35 la valida;
+  - el trigger 60 la aplica al aprobar;
+  - sin referencia o sin portada da 55000 y no se aprueba.
+- **`project_products.finish_code`:**
+  - índice único por producto y acabado;
+  - sin UPDATE para la web.
+- **`catalog_products`:** 4 columnas nuevas al final; mismas opciones y permisos.
+- **Buckets:**
+  - `productos-imagenes`, público, solo JPEG, MP4 y WebM;
+  - `productos-archivos`, privado; descarga con `can_download_product_file`, mismas reglas del punto 42.
+- **Permisos:** EXECUTE explícitos, por SEG-01.
+
+### Repositorio (sin commit)
+
+| Archivo | MD5 | Cambio |
+|---|---|---|
+| `producto-archivos.js` (nuevo) | `10794919ade526b7e3fd60bb3388ab43` | Tipos, subida (fila y luego archivo; si falla, borra la fila), recorte 4:5 (1600×2000 y 800×1000, fondo blanco), galería a 2400 px, descarga firmada |
+| `distribuidor-propuestas.html` | `477f06b9b4b60640a346800792022b7d` | Fuera los 3 campos de enlace. Nuevos: referencia, portada (recorte), acabados con foto y uno por defecto, galería, ficha, vídeos y archivos profesionales |
+| `moderacion-propuesta.html` | `562df89cdf54b22786a54ad19b0c96e4` | Sección «Referencia, fotos y archivos»: miniaturas, acabados, archivos con enlace firmado. «Aprobar» bloqueado si falta referencia o portada |
+| `producto.html` | `6fe2a5c3f31a738ce9c4162f709e88d7` | Referencia, galería 4:5 con miniaturas, selector de acabado (cambia la foto), descargas por tipo, añadir con acabado |
+| `script.js` | `78bbb4e0b341380f7fe8921cf93dd1c4` | 25 columnas, caché v3, portada 4:5 en tarjetas, referencia en la tarjeta, acabado por defecto, ayudas de texto de línea |
+| `seleccion-data.js` | `ccc19f019b8c416a312adcbbcad6a8af` | Líneas `{productId, finish?, quantity, unit}`: clave producto y acabado |
+| `proyectos-data.js` | `de63e0c5e1838b0f3055dd50bf8e9279` | Guardar, listar y transferir con `finish_code` |
+| `seleccion.html` | `48c5ca46c9af7f79a30fedda4dc1e58e` | Acabado y referencia por línea; botones por línea |
+| `proyectos-detalle.html` | `4d63b692ae24bad000c9f0b9527ea242` | Muestra referencia y acabado |
+| `proyectos-resumen.html` | `219b3c69fd995acf57e43f2425499071` | Muestra referencia y acabado |
+| `proyectos-cotizacion.html` | `0525f3a95a1268b1f14d482dfa5b3410` | Muestra referencia y acabado; conserva el acabado al pasar de la selección |
+| `catalogo.html` | `67346077abc9b2ca8b09e1e4df3b6dd0` | «Añadir a mi proyecto activo» con el acabado por defecto |
+| `product-lifecycle.js` | `2d3c2b142b1e8488bd4a6e7066bf49ad` | Claves de caché v3 |
+| `styles.css` | `b661c24d253fc41ed57c01028e4701b6` | Tarjeta y galería 4:5; miniaturas |
+| `scripts/pages-manifest.txt` | `fc0b281e184604676683883e6555d573` | Añade `producto-archivos.js` (51 rutas) |
+| `CLAUDE.md` | `40867a475aa09768c7f4f166eba06cd3` | Regla: una línea por producto y acabado |
+| `.gitignore` | `7e06f60050cd717ba9bbf61a3e584c30` | `/materiales/` |
+| `supabase/tests/44/interfaz/pruebas-44.html` (nuevo) | `e144d6afcd5544d017a9b612292c4d25` | Pruebas con simulaciones: **39/39 pasadas** |
+
+`.claude/launch.json` es solo el servidor local de las pruebas y no entra en git.
+
+### Preparación local de 3225 (`materiales/preparado/vibia/3225/`, fuera de git)
+
+Contiene 15 copias exactas en 7 carpetas numeradas y un `LEEME.md`. El LEEME indica qué subir en cada sección del formulario y lista los MD5 de cada copia. Por ejemplo, la portada `01-portada/Vibia_Dama_3225-25_04.jpg` tiene `0d7e95f4f3c7e178a5d7531085a45223`.
+
+## 2. Criterios de éxito
+
+### Ensayo P44 (revertido)
+
+El ensayo debe terminar exactamente en MB990 con `cambia=true identico=true sondas=true fallos=0`. En la lista no puede aparecer ningún `!` ni ningún `ABORTO`.
+
+| Grupo | Casos | Qué comprueba |
+|---|---|---|
+| Archivos | S01–S08 | Alta de 9 archivos como Spectro. Rechazos: otra empresa 42501, estado aprobado 42501, PNG 23514, ruta con `..` 23514, versión de tarjeta en un PDF 23514, CAD en el bucket de imágenes 23514, anónimo 42501 |
+| Storage | S09–S11 | Subida a la carpeta propia (9 objetos); carpeta ajena 42501; anónimo 42501 |
+| Propuesta | S12–S19 | Archivo ajeno 23514. Borrador. Portada sin recorte, dos acabados por defecto y un archivo repetido: 23514. Envío sin referencia 23514. Envío correcto. Edición en revisión 42501 |
+| Moderación | S20–S24 | Aprobar sin portada da 55000 y no crea producto. Se solicitan cambios, se elige la portada, se reenvía y se aprueba |
+| Resultado | S25–S27 | `3225\|true\|published\|active\|Beige D1, Black`. Archivos: 8 aprobados y 1 pendiente. Acabados `25` y `11` con su foto |
+| Público | S28–S31 | El catálogo anónimo trae referencia, portada, tarjeta y acabados. El anónimo ve 8 archivos y ningún pendiente ni ajeno; no lista archivos privados (0); `can_download` le da 42501 |
+| Descargas | S32–S35 | Gratis 4, Individual 4, Spectro 5 (los suyos), Mobau 5 |
+| Proyecto | S36–S41 | Individual guarda las líneas 25 y 11. Repetir 25 da 23505. Cambiar la cantidad funciona; cambiar el acabado da 42501. Acabado con espacios 23514. Sin acabado entra una vez; la segunda da 23505 |
+| Cambio | S42–S45 | Un cambio solo con archivos (añade el LDT) se envía y se aprueba: 9 archivos. Un cambio vacío sigue dando 23514 |
+| Recuperación con datos | S46–S47 | Con líneas por acabado se detiene (MB441). Tras dejar una línea, copia `10\|2\|1\|2\|1\|9`, conserva los 2 buckets con archivos y deja transición y vista originales |
+
+Al terminar, la recuperación sin datos debe dejar la huella final idéntica a la de partida.
+
+### Aplicación de 44-01
+
+**Tras confirmar el COMMIT, `44_01_lectura.sql` debe dar:**
+- `aplicada=true` y `registrada=false`;
+- `md5_transicion=3eef0e1a…`;
+- vista con `{security_invoker=true,security_barrier=true}` y los mismos permisos;
+- buckets `productos-archivos:false:52428800,productos-imagenes:true:52428800`;
+- 5 políticas de Storage, 8 de tablas y 0 objetos;
+- 34 líneas de proyecto y 20 productos publicados, sin cambios.
+
+**El registro va después, en otra llamada:** `20261021120000 · 44_01_archivos_producto`, con 38 migraciones en total.
+
+### Interfaz
+
+- Pruebas con simulaciones 39/39: ya pasadas.
+- **Orden obligatorio: la migración, antes que la interfaz.** La interfaz nueva pide las 4 columnas nuevas; la antigua sigue funcionando con la vista nueva.
+- La compilación de Pages debe publicar 51 archivos.
+
+## 3. Plan de validación con 3225
+
+Cada paso necesita su propia autorización. Si algo falla, se para, no se reintenta y se lee el estado.
+
+1. **V0 · Ensayo `P44_ensayo.sql`.**
+   - Se ejecuta con el control MD5 del archivo y debe cumplir los criterios del apartado 2.
+2. **V1 · Aplicar 44-01**, con su control MD5.
+3. **V2 · Lectura.**
+4. **V3 · Registrar**, en otra llamada y solo tras confirmar el COMMIT.
+5. **V4 · Commits, push y despliegue.**
+   - Un commit con la interfaz y la regla.
+   - Otro con el SQL, las pruebas y el documento del 44 en `supabase/`.
+   - Después, la compilación (51 archivos) y el despliegue en Pages.
+6. **V5 · Tú, como Spectro**, creas el producto siguiendo el `LEEME.md`:
+   - nombre «Dama sobremesa», marca Vibia, Iluminación · Decorativa;
+   - referencia 3225;
+   - portada `_04` recortada en 4:5;
+   - acabados 25 Beige D1 (3225-25, por defecto) y 11 Black (3225-11), cada uno con su silueta;
+   - galería `_03` y `_02`, y `_01` si quieres;
+   - ficha PDF, DWG, 3DS, MAX, OBJ, IES, LDT, OXL e informe fotométrico.
+   - Guardas un borrador, lo vuelves a abrir (todo debe seguir ahí) y lo envías.
+7. **V6 · Lectura:** 14 o 15 archivos pendientes y la propuesta enviada.
+8. **V7 · Mobau (con aal2)** revisa la sección de archivos: miniaturas, abrir 2 o 3 archivos y portada marcada. Aprueba.
+9. **V8 · Lectura y comprobaciones por rol.**
+   - La lectura debe dar `producto_3225 = <id>|3225|published|portada=true|acabados=2|archivos=14 o 15`.
+   - En la web:
+     - **Catálogo:** tarjeta 4:5 con la portada y «Ref. 3225».
+     - **Ficha:** referencia, miniaturas, selector de acabado (cambia la foto) y descargas.
+   - **Descargas por rol:**
+
+     | Rol | Resultado esperado |
+     |---|---|
+     | Anónimo | Botones desactivados |
+     | Gratis 46ea4397 | Descarga el DWG |
+     | Individual e2a655c1 | Descarga la ficha y el IES |
+     | Spectro | Descarga |
+10. **V9 · Individual e2a655c1** añade 3225 en Beige D1 y en Black.
+   - En Mi selección aparecen 2 líneas.
+   - Al pasarlas al proyecto activo quedan 2 filas con `finish_code` 25 y 11.
+   - Resumen y cotización muestran el acabado.
+   - **No se envía solicitud.**
+11. **V10 · Limpieza autorizada** de esas 2 líneas de prueba. El producto 3225 queda publicado como primera subida real.
+
+## 4. Notas y límites
+
+- **Hofflights:** las fotos de 850 px se aceptan como excepción del piloto. Conviene pedir a Spectro los originales en mayor resolución más adelante.
+- **Archivos huérfanos en Storage.** La web no borra objetos de Storage. Quedan huérfanos en tres casos:
+  - lo que se quita de una propuesta;
+  - lo que se sustituye;
+  - lo de los productos purgados (la fila se borra en cascada).
+
+  No son públicos salvo las fotos, que tienen ruta con uuid. Su limpieza queda para un punto posterior, con la API de Storage.
+- **Acabados en el texto del producto:** al aprobar con acabados, `products.finishes` pasa a ser la lista de nombres.
+- **Cambios con archivos:** un cambio que toca los archivos envía la lista completa. Lo que no esté en la lista pasa a «retirado».
+- **Recuperación con archivos:** si los buckets tienen archivos, la recuperación los conserva (y siguen servidos). Si hay líneas por acabado duplicadas, se detiene (MB441).
+- **Verificación sin servidor:** el SQL tiene los paréntesis y las comillas comprobados en local. El servidor no ha validado la sintaxis: eso lo hará el ensayo.
+- **Material de Spectro ya señalado:**
+  - duplicados: 3225-25_01 = 3230-25; 5500-07 tiene una copia « 2»;
+  - referencias que no cuadran;
+  - Athens sin PDF;
+  - 5520 con `.mtl` sin `.obj`.

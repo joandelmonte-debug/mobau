@@ -1,0 +1,214 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 44 (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}</style>
+<h1>Punto 44 · pruebas de interfaz con mocks</h1>
+<p>Sin red ni Supabase: cliente simulado. Usa el material local de <code>materiales/preparado/vibia/3225</code> (servir la raíz del repositorio).</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<script>
+/* ---------- entorno simulado (antes de cargar los scripts reales) ---------- */
+const SUPABASE_URL = "https://skcoxtdppdcietgojdal.supabase.co";
+const MOCK = { calls: [], uploads: [], existing: null, failUpload: false, n: 0 };
+function mockRespond(q){
+  MOCK.calls.push(q);
+  const op = (name) => q.ops.find(o => o[0] === name);
+  if (q.table === "product_assets" && op("insert")){
+    const row = op("insert")[1];
+    return { data: { id: `00000000-0000-4044-8000-${String(++MOCK.n).padStart(12, "0")}`, status: "pendiente", product_id: null, label: null, sort_order: 0, ...row }, error: null };
+  }
+  if (q.table === "product_assets" && op("delete")) return { data: null, error: null };
+  if (q.table === "project_products" && op("maybeSingle")) return { data: MOCK.existing, error: null };
+  if (q.table === "project_products" && op("insert")) return { data: { id: "fila-nueva", ...op("insert")[1] }, error: null };
+  if (q.table === "project_products" && op("update")) return { data: { id: "fila-existente", ...op("update")[1] }, error: null };
+  if (q.table === "projects") return { data: { id: "proyecto" }, error: null };
+  return { data: [], error: null };
+}
+function mockBuilder(table){
+  const q = { table, ops: [] };
+  const api = {};
+  ["select", "eq", "is", "in", "order", "limit", "insert", "update", "delete", "maybeSingle", "single", "abortSignal"]
+    .forEach(m => { api[m] = (...a) => { q.ops.push([m, ...a]); return api; }; });
+  api.then = (res, rej) => Promise.resolve(mockRespond(q)).then(res, rej);
+  return api;
+}
+const supabaseClient = {
+  from: mockBuilder,
+  rpc: async () => ({ data: null, error: null }),
+  storage: { from: (bucket) => ({
+    upload: async (path, body, opts) => { MOCK.uploads.push({ bucket, path, body, opts }); return { error: MOCK.failUpload ? { message: "fallo simulado" } : null }; },
+    createSignedUrl: async (path, s, opts) => ({ data: { signedUrl: `https://firmado.test/${path}?d=${encodeURIComponent(opts.download)}` }, error: null })
+  }) },
+  auth: { getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe(){} } } }) }
+};
+const MobauAccess = { accessUserId: "u1", confirmedKind: "client", hasProfessionalTools: () => true, accountKind: async () => "client" };
+const MobauAuth = { storedUserId: () => "u1" };
+</script>
+<script src="../../../../seleccion-data.js"></script>
+<script src="../../../../script.js"></script>
+<script src="../../../../proyectos-data.js"></script>
+<script src="../../../../producto-archivos.js"></script>
+<script>
+const BASE = "../../../../materiales/preparado/vibia/3225/";
+const rows = [];
+let ok = 0, ko = 0;
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${rows.length + 1}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : `FALLO · esperado ${JSON.stringify(expected)}`}</td>`;
+  tr.children[1].textContent = name;
+  tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").append(tr);
+  rows.push({ name, pass, got });
+}
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+async function fileFrom(path, name, type){
+  const blob = await (await fetch(BASE + path)).blob();
+  return new File([blob], name, { type });
+}
+async function confirmCrop(){
+  for (let i = 0; i < 200 && !document.querySelector(".mobau-crop [data-crop-ok]"); i++) await sleep(50);
+  document.querySelector(".mobau-crop [data-crop-ok]").click();
+}
+async function dims(blob){ const b = await createImageBitmap(blob); return [b.width, b.height]; }
+async function corner(blob){
+  const b = await createImageBitmap(blob);
+  const c = document.createElement("canvas"); c.width = b.width; c.height = b.height;
+  const ctx = c.getContext("2d"); ctx.drawImage(b, 0, 0);
+  return Array.from(ctx.getImageData(2, 2, 1, 1).data.slice(0, 3)).every(v => v >= 250);
+}
+
+const DAMA = {
+  id: "spectro-dama", name: "Dama sobremesa", brand: "Vibia", distributor_id: "spectro", category_id: "iluminacion",
+  subcategory: "Decorativa", availability: "bajo-pedido", status: "active", finishes: "Beige D1, Black", image_url: null,
+  reference_code: "3225", cover_path: "spectro/f1/Vibia_Dama_3225-25_04.jpg", cover_card_path: "spectro/f1/Vibia Dama-card.jpg",
+  finish_options: [
+    { code: "25", name: "Beige D1", reference_code: "3225-25", is_default: true, image_path: "spectro/f2/a.jpg", image_card_path: "spectro/f2/a-card.jpg" },
+    { code: "11", name: "Black", reference_code: "3225-11", is_default: false, image_path: "spectro/f3/b.jpg", image_card_path: null }
+  ]
+};
+
+(async () => {
+  /* ---------- catálogo ---------- */
+  const p = mapProductRow(DAMA);
+  check("C01 imagen de tarjeta = versión 4:5 de la portada (ruta codificada)", p.imagen, `${SUPABASE_URL}/storage/v1/object/public/productos-imagenes/spectro/f1/Vibia%20Dama-card.jpg`);
+  check("C02 portada grande, referencia", [p.portada, p.referencia], [`${SUPABASE_URL}/storage/v1/object/public/productos-imagenes/spectro/f1/Vibia_Dama_3225-25_04.jpg`, "3225"]);
+  check("C03 acabados mapeados (foto de tarjeta o, si falta, la grande)", p.acabadosOpciones.map(f => [f.codigo, f.nombre, f.porDefecto, f.imagen.split("/").pop()]), [["25", "Beige D1", true, "a-card.jpg"], ["11", "Black", false, "b.jpg"]]);
+  check("C04 sin portada: enlace antiguo image_url", mapProductRow({ ...DAMA, cover_path: null, cover_card_path: null, image_url: "https://ejemplo.test/x.jpg" }).imagen, "https://ejemplo.test/x.jpg");
+  check("C05 acabado por defecto / primero / ninguno", [defaultFinishCode(p), defaultFinishCode(mapProductRow({ ...DAMA, finish_options: [{ code: "9", name: "Gris" }] })), defaultFinishCode(mapProductRow({ ...DAMA, finish_options: [] }))], ["25", "9", null]);
+  check("C06 texto de línea", [finishLabel(p, "25"), lineDetailText(p, "11"), lineDetailText(p, null), finishLabel(null, "7")], ["Beige D1 · 3225-25", "Ref. 3225 · Acabado: Black · 3225-11", "Ref. 3225", "Acabado 7"]);
+  check("C07 columnas del catálogo (25, las 4 nuevas al final)", PRODUCT_COLUMNS.split(", ").slice(-4).concat(PRODUCT_COLUMNS.split(", ").length), ["reference_code", "cover_path", "cover_card_path", "finish_options", 25]);
+  PRODUCTS.push(p, { id: "pared-1", nombre: "Pared", categoria: "revestimientos", distribuidor: "spectro", marca: "x", disponibilidad: "en-stock", status: "active", acabadosOpciones: [] });
+  const card = document.createElement("div");
+  card.innerHTML = renderProductCard(p);
+  check("C08 tarjeta: añade el acabado por defecto y muestra la referencia", [card.querySelector(".btn-add-selection").dataset.finish, card.querySelector(".card-meta").textContent.includes("Ref. 3225")], ["25", true]);
+
+  /* ---------- selección: una línea por producto y acabado ---------- */
+  const KEY = "mobau_seleccion:u1";
+  localStorage.removeItem(KEY);
+  check("S01 añadir 25", addToSelection("spectro-dama", 2, "ud.", "25"), { success: true, alreadyExists: false });
+  check("S02 añadir 11 (otra línea)", [addToSelection("spectro-dama", 1, "ud.", "11").alreadyExists, getSelection().length], [false, 2]);
+  check("S03 repetir 25 no duplica ni toca la cantidad", [addToSelection("spectro-dama", 9, "ud.", "25").alreadyExists, getSelection().find(i => i.finish === "25").quantity], [true, 2]);
+  check("S04 inSelection por acabado", [inSelection("spectro-dama", "25"), inSelection("spectro-dama", "11"), inSelection("spectro-dama")], [true, true, false]);
+  check("S05 sin acabado es otra línea", [addToSelection("spectro-dama", 1, "ud.").alreadyExists, getSelection().length], [false, 3]);
+  updateSelectionQuantity("spectro-dama", 4, "11");
+  check("S06 cantidad solo de la línea 11", getSelection().map(i => [i.finish || null, i.quantity]), [["25", 2], ["11", 4], [null, 1]]);
+  removeFromSelection("spectro-dama", "25");
+  check("S07 quitar solo la línea 25", getSelection().map(i => i.finish || null), ["11", null]);
+  check("S08 guardado: finish solo cuando hay acabado", JSON.parse(localStorage.getItem(KEY)), [{ productId: "spectro-dama", quantity: 4, unit: "ud.", finish: "11" }, { productId: "spectro-dama", quantity: 1, unit: "ud." }]);
+  localStorage.setItem(KEY, JSON.stringify(["spectro-dama", { productId: "spectro-dama", quantity: 3, unit: "ud.", finish: " 25 " }, { productId: "spectro-dama", quantity: 5, unit: "ud.", finish: "25" }, { productId: "pared-1", quantity: 12.5, unit: "m²" }]));
+  check("S09 formato antiguo y duplicados: se normaliza sin perder líneas", getSelection().map(i => [i.productId, i.finish || null, i.quantity, i.unit]), [["spectro-dama", null, 1, "ud."], ["spectro-dama", "25", 3, "ud."], ["pared-1", null, 12.5, "m²"]]);
+  check("S10 acabado vacío = sin acabado", [addToSelection("pared-1", 1, "m²", "  ").alreadyExists, inSelection("pared-1", "")], [true, true]);
+  localStorage.removeItem(KEY);
+
+  /* ---------- proyecto: misma regla en project_products ---------- */
+  MOCK.calls.length = 0; MOCK.existing = null;
+  await MobauProjects.saveProductToProject("proy", "spectro-dama", 2, "ud.", "sum", "25");
+  const [look1, ins1] = MOCK.calls;
+  check("P01 busca la línea por producto y acabado", look1.ops.filter(o => ["eq", "is"].includes(o[0])), [["eq", "project_id", "proy"], ["eq", "product_id", "spectro-dama"], ["eq", "finish_code", "25"]]);
+  check("P02 inserta con finish_code", ins1.ops.find(o => o[0] === "insert")[1], { project_id: "proy", product_id: "spectro-dama", finish_code: "25", quantity: 2, unit: "ud." });
+  MOCK.calls.length = 0;
+  await MobauProjects.saveProductToProject("proy", "pared-1", 3, "m²", "sum");
+  check("P03 sin acabado: finish_code is null y sin finish_code al insertar", [MOCK.calls[0].ops.find(o => o[0] === "is"), "finish_code" in MOCK.calls[1].ops.find(o => o[0] === "insert")[1]], [["is", "finish_code", null], false]);
+  MOCK.calls.length = 0; MOCK.existing = { id: "fila-existente", quantity: 2, unit: "ud." };
+  await MobauProjects.saveProductToProject("proy", "spectro-dama", 3, "ud.", "sum", "25");
+  check("P04 ya existe: suma la cantidad (update), sin insertar", [MOCK.calls[1].ops.find(o => o[0] === "update")[1], MOCK.calls.some(c => c.ops.some(o => o[0] === "insert"))], [{ quantity: 5, unit: "ud." }, false]);
+  MOCK.calls.length = 0; MOCK.existing = null;
+  await MobauProjects.transferSelectionToProject("proy", [{ productId: "spectro-dama", quantity: 1, unit: "ud.", finish: "11" }, { productId: "pared-1", quantity: 2, unit: "m²" }], "sum");
+  check("P05 transferir conserva el acabado de cada línea", MOCK.calls.filter(c => c.table === "project_products" && c.ops.some(o => o[0] === "insert")).map(c => c.ops.find(o => o[0] === "insert")[1].finish_code || null), ["11", null]);
+  MOCK.calls.length = 0;
+  await MobauProjects.listProductsInProject("proy");
+  check("P06 listar trae finish_code", MOCK.calls[0].ops.find(o => o[0] === "select")[1], "id, product_id, finish_code, quantity, unit");
+
+  /* ---------- archivos ---------- */
+  const A = MobauArchivos;
+  check("A01 formatos por tipo", [A.formatFor("cad_3d", "3225.max"), A.formatFor("foto", "x.JPEG"), A.formatFor("ficha_tecnica", "x.dwg"), A.formatFor("calculo_iluminacion", "3225-2700K.IES"), A.formatFor("calculo_iluminacion", "3225-2700K.OXL"), A.formatFor("cad_3d", "3225.3ds")], ["max", "jpg", null, "ies", "oxl", "3ds"]);
+  check("A02 bucket por tipo", ["foto", "video", "ficha_tecnica", "cad_2d"].map(A.bucketFor), ["productos-imagenes", "productos-imagenes", "productos-archivos", "productos-archivos"]);
+  MOCK.calls.length = 0; MOCK.uploads.length = 0;
+  const dwg = await fileFrom("05-cad-2d/3225_Dama.dwg", "3225_Dama.dwg", "");
+  const rowDwg = await A.uploadFile({ distributorId: "spectro", kind: "cad_2d", file: dwg });
+  const insDwg = MOCK.calls[0].ops.find(o => o[0] === "insert")[1];
+  check("A03 DWG: fila pendiente en la carpeta de la empresa y subida al bucket privado",
+    [insDwg.bucket, insDwg.format, insDwg.original_name, /^spectro\/[0-9a-f-]{36}\/3225_Dama\.dwg$/.test(insDwg.path), insDwg.bytes, MOCK.uploads[0].bucket, MOCK.uploads[0].path === insDwg.path, MOCK.uploads[0].opts.upsert, rowDwg.status],
+    ["productos-archivos", "dwg", "3225_Dama.dwg", true, 1761332, "productos-archivos", true, false, "pendiente"]);
+  let err = null;
+  try { await A.uploadFile({ distributorId: "spectro", kind: "ficha_tecnica", file: dwg }); } catch (e) { err = e.message; }
+  check("A04 formato no admitido: no registra nada", [!!err && err.includes("no es un formato admitido"), MOCK.calls.length], [true, 1]);
+  err = null;
+  try { await A.uploadFile({ distributorId: "spectro", kind: "cad_3d", file: { name: "enorme.obj", size: 60 * 1024 * 1024 } }); } catch (e) { err = e.message; }
+  check("A05 más de 50 MB: rechazado antes de subir", [!!err && err.includes("50 MB"), MOCK.calls.length], [true, 1]);
+  MOCK.calls.length = 0; MOCK.failUpload = true; err = null;
+  try { await A.uploadFile({ distributorId: "spectro", kind: "cad_2d", file: dwg }); } catch (e) { err = e.message; }
+  check("A06 si falla la subida se borra la fila", [err, MOCK.calls.map(c => c.ops[0][0])], ["fallo simulado", ["insert", "delete"]]);
+  MOCK.failUpload = false;
+  const pdf = await fileFrom("04-ficha-tecnica/specSheet3225_es.pdf", "specSheet3225_es.pdf", "application/pdf");
+  MOCK.uploads.length = 0;
+  const rowPdf = await A.uploadFile({ distributorId: "spectro", kind: "ficha_tecnica", file: pdf });
+  check("A07 ficha técnica PDF", [rowPdf.format, MOCK.uploads[0].opts.contentType], ["pdf", "application/pdf"]);
+  check("A08 descarga firmada con el nombre original", await A.downloadUrl({ bucket: "productos-archivos", path: "spectro/x/3225.obj", original_name: "3225.obj" }), "https://firmado.test/spectro/x/3225.obj?d=3225.obj");
+
+  /* Portada real 6288×7257: recorte 4:5. */
+  MOCK.calls.length = 0; MOCK.uploads.length = 0;
+  const cover = await fileFrom("01-portada/Vibia_Dama_3225-25_04.jpg", "Vibia_Dama_3225-25_04.jpg", "image/jpeg");
+  const t0 = performance.now();
+  const pending = A.uploadPhoto({ distributorId: "spectro", file: cover, crop: true });
+  await confirmCrop();
+  const rowCover = await pending;
+  const secs = Math.round((performance.now() - t0) / 100) / 10;
+  const [main, cardUp] = MOCK.uploads;
+  check("A09 portada: 1600×2000 y tarjeta 800×1000, JPEG", [await dims(main.body), await dims(cardUp.body), main.opts.contentType, cardUp.opts.contentType], [[1600, 2000], [800, 1000], "image/jpeg", "image/jpeg"]);
+  check("A10 portada: fila foto jpg con variante card en la misma carpeta", [rowCover.kind, rowCover.format, rowCover.width, rowCover.height, rowCover.variants.card === cardUp.path, cardUp.path.split("/").slice(0, 2).join("/") === main.path.split("/").slice(0, 2).join("/"), main.path.endsWith("/Vibia_Dama_3225-25_04.jpg"), rowCover.original_name], ["foto", "jpg", 1600, 2000, true, true, true, "Vibia_Dama_3225-25_04.jpg"]);
+  check(`A11 portada: tamaño razonable (${Math.round(main.body.size / 1024)} KB, ${secs} s)`, main.body.size < 2 * 1024 * 1024 && main.body.size > 50 * 1024, true);
+
+  /* Silueta PNG con transparencia: fondo blanco. */
+  MOCK.uploads.length = 0;
+  const sil = await fileFrom("02-acabados/Vibia_Dama_3225-25_sob_Silueta.png", "Vibia_Dama_3225-25_sob_Silueta.png", "image/png");
+  const pendingSil = A.uploadPhoto({ distributorId: "spectro", file: sil, crop: true });
+  await confirmCrop();
+  const rowSil = await pendingSil;
+  check("A12 silueta PNG → JPEG 4:5 con fondo blanco", [rowSil.format, MOCK.uploads[0].path.endsWith(".jpg"), await dims(MOCK.uploads[0].body), await corner(MOCK.uploads[0].body)], ["jpg", true, [1600, 2000], true]);
+
+  /* Galería: sin recorte, 2400 px en el lado largo. */
+  MOCK.uploads.length = 0;
+  const gal = await fileFrom("03-galeria/Vibia_Dama_3225-25_03.jpg", "Vibia_Dama_3225-25_03.jpg", "image/jpeg");
+  const rowGal = await A.uploadPhoto({ distributorId: "spectro", file: gal, crop: false });
+  const gd = await dims(MOCK.uploads[0].body);
+  check("A13 galería: lado largo 2400, proporción original, sin variante", [Math.max(...gd), Math.abs(gd[0] / gd[1] - 5434 / 6085) < 0.01, MOCK.uploads.length, rowGal.variants], [2400, true, 1, {}]);
+
+  /* Cancelar el recorte no registra nada. */
+  MOCK.calls.length = 0;
+  const pendingCancel = A.uploadPhoto({ distributorId: "spectro", file: cover, crop: true });
+  for (let i = 0; i < 200 && !document.querySelector(".mobau-crop [data-crop-cancel]"); i++) await sleep(50);
+  document.querySelector(".mobau-crop [data-crop-cancel]").click();
+  check("A14 cancelar el recorte: null y sin filas", [await pendingCancel, MOCK.calls.length, !!document.querySelector(".mobau-crop")], [null, 0, false]);
+  err = null;
+  try { await A.uploadPhoto({ distributorId: "spectro", file: dwg, crop: true }); } catch (e) { err = e.message; }
+  check("A15 foto que no es imagen: rechazada", !!err && err.includes("no es una foto"), true);
+
+  document.getElementById("sum").textContent = `total=${ok + ko} ok=${ok} fallos=${ko}`;
+  document.title = `44 · ${ok}/${ok + ko}`;
+})().catch(e => {
+  document.getElementById("sum").textContent = `ABORTO: ${e && e.stack || e}`;
+});
+</script>
