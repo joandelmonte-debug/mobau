@@ -118,25 +118,13 @@
   <div id="pl-content" style="display:none;">
     <p id="pl-alert" class="pl-alert" role="alert" hidden></p>
 
-    <!-- Intervenciones de Mobau de los últimos 30 días (41-07): retirar,
-         papelera, restaurar o eliminar definitivamente, con su motivo. -->
-    <section class="pl-decisions" id="pl-notices" aria-labelledby="pl-notices-title" hidden>
-      <h2 class="pl-section-title" id="pl-notices-title">Avisos de Mobau</h2>
-      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Intervenciones de Mobau sobre tus productos en los últimos 30 días. El motivo sigue disponible después en el historial de cada producto y en «Productos eliminados» de la papelera.</p>
-      <div id="pl-notices-list"></div>
-    </section>
-
-    <!-- Decisiones de Mobau de los últimos 30 días (39). Solo lectura. -->
-    <section class="pl-decisions" id="pl-decisions" aria-labelledby="pl-decisions-title" hidden>
-      <h2 class="pl-section-title" id="pl-decisions-title">Decisiones recientes de Mobau</h2>
-      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Propuestas aprobadas o rechazadas en los últimos 30 días. Las que tienen cambios solicitados siguen en la tarjeta de su producto.</p>
-      <div id="pl-decisions-list"></div>
-    </section>
-    <!-- Productos / Papelera (41-07). Sin datos de ciclo de vida no se sabe
-         qué está en la papelera: no hay pestañas y se ve la lista completa. -->
+    <!-- Productos / Papelera (41-07) / Notificaciones. Sin datos de ciclo de
+         vida no se sabe qué está en la papelera: sin esa pestaña, y en
+         Productos se ve la lista completa. -->
     <div class="pl-tabs" id="pl-tabs" role="tablist" aria-label="Tus productos" hidden>
       <button type="button" role="tab" id="pl-tab-products" aria-controls="pl-view-products" aria-selected="true">Productos<span class="pl-tab-count" id="pl-tab-products-count"></span></button>
       <button type="button" role="tab" id="pl-tab-trash" aria-controls="pl-view-trash" aria-selected="false" tabindex="-1">Papelera<span class="pl-tab-count" id="pl-tab-trash-count"></span></button>
+      <button type="button" role="tab" id="pl-tab-notifications" aria-controls="pl-view-notifications" aria-selected="false" tabindex="-1">Notificaciones<span class="pl-tab-count" id="pl-tab-notifications-count"></span></button>
     </div>
 
     <div id="pl-view-products" role="tabpanel" aria-labelledby="pl-tab-products">
@@ -214,6 +202,27 @@
         <ul class="pl-deleted-list" id="pl-deleted-list"></ul>
       </details>
     </section>
+
+    <!-- Notificaciones: avisos y decisiones de Mobau (antes, arriba de la página). -->
+    <div id="pl-view-notifications" role="tabpanel" aria-labelledby="pl-tab-notifications" hidden>
+    <!-- Intervenciones de Mobau de los últimos 30 días (41-07): retirar,
+         papelera, restaurar o eliminar definitivamente, con su motivo. -->
+    <section class="pl-decisions" id="pl-notices" aria-labelledby="pl-notices-title" hidden>
+      <h2 class="pl-section-title" id="pl-notices-title">Avisos de Mobau</h2>
+      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Intervenciones de Mobau sobre tus productos en los últimos 30 días. El motivo sigue disponible después en el historial de cada producto y en «Productos eliminados» de la papelera.</p>
+      <div id="pl-notices-list"></div>
+    </section>
+
+    <!-- Decisiones de Mobau de los últimos 30 días (39). Solo lectura. -->
+    <section class="pl-decisions" id="pl-decisions" aria-labelledby="pl-decisions-title" hidden>
+      <h2 class="pl-section-title" id="pl-decisions-title">Decisiones recientes de Mobau</h2>
+      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Propuestas aprobadas o rechazadas en los últimos 30 días. Las que tienen cambios solicitados siguen en la tarjeta de su producto.</p>
+      <div id="pl-decisions-list"></div>
+    </section>
+      <div id="pl-notifications-empty" class="cart-empty pl-empty" hidden>
+        <p style="margin:0; color:var(--ink); font-weight:600;">No tienes notificaciones</p>
+      </div>
+    </div>
 
   </div>
 </main>
@@ -356,7 +365,12 @@
   let lcEvents = [];             // my_product_lifecycle_events() de la empresa (avisos y motivos de Mobau)
   const OWN = LC.OWN;
   const NOTICE_DAYS = 30;
-  let view = window.location.hash === "#papelera" ? "trash" : "products";
+  let view = window.location.hash === "#papelera" ? "trash" : (window.location.hash === "#notificaciones" ? "notifications" : "products");
+  /* Notificaciones: las decisiones se cargan aparte; hasta entonces no se
+     muestra el estado vacío. newDecisions: decisiones con «Nueva» (criterio
+     existente, por dispositivo) para el indicador de la pestaña. */
+  let decisionsLoaded = false;
+  let newDecisions = 0;
 
   const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, reviewed_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason";
   const DECISION_DAYS = 30;
@@ -1001,6 +1015,7 @@
     const since = Date.now() - NOTICE_DAYS * 24 * 3600 * 1000;
     const notices = lcEvents.filter(ev => ev.actor_kind === "mobau" && NOTICE[ev.action] && new Date(ev.created_at).getTime() >= since);
     $("pl-notices").hidden = notices.length === 0;
+    renderNotificationsState();
     if (!notices.length) return;
     $("pl-notices-list").replaceChildren(...notices.map(ev => {
       const row = document.createElement("div");
@@ -1163,6 +1178,8 @@
       if (error) throw error;
       if (!decided.length){
         $("pl-decisions").hidden = true;
+        decisionsLoaded = true;
+        renderNotificationsState();
         return;
       }
       const { data: events, error: eventsError } = await supabaseClient.from("proposal_events")
@@ -1183,10 +1200,13 @@
         return buildDecisionRow(d, ev && ev.to_status === d.status ? ev : null, !!seen && !seenSet.has(d.id));
       }));
       $("pl-decisions").hidden = false;
+      newDecisions = seen ? decided.filter(d => !seenSet.has(d.id)).length : 0;
       rememberSeen(seen, decided.map(d => d.id));
     } catch (error){
       $("pl-decisions").hidden = true;
     }
+    decisionsLoaded = true;
+    renderNotificationsState();
   }
 
   function matchesProposal(open, filter){
@@ -1195,10 +1215,20 @@
     return !!open && open.status === filter;
   }
 
+  const VIEW_HASH = { products: "", trash: "#papelera", notifications: "#notificaciones" };
+  const VIEW_TAB = { products: "pl-tab-products", trash: "pl-tab-trash", notifications: "pl-tab-notifications" };
   function setView(target){
     view = target;
-    history.replaceState(null, "", window.location.pathname + (target === "trash" ? "#papelera" : ""));
+    history.replaceState(null, "", window.location.pathname + VIEW_HASH[target]);
     render();
+  }
+
+  /* Notificaciones: estado vacío cuando no hay avisos ni decisiones (solo
+     cuando las decisiones ya se han cargado) e indicador «N nuevas» con el
+     criterio existente de «Nueva». Abrir la pestaña no marca nada. */
+  function renderNotificationsState(){
+    $("pl-notifications-empty").hidden = !decisionsLoaded || !$("pl-notices").hidden || !$("pl-decisions").hidden;
+    $("pl-tab-notifications-count").textContent = newDecisions ? ` · ${newDecisions} ${newDecisions === 1 ? "nueva" : "nuevas"}` : "";
   }
 
   function render(){
@@ -1216,12 +1246,16 @@
     /* Distribuidor sin productos ni productos propuestos: un solo estado vacío. */
     const nothingYet = products.length === 0 && openCreates.length === 0;
     $("pl-first").hidden = !nothingYet;
-    $("pl-tabs").hidden = nothingYet || !trashKnown;
-    if (!trashKnown) view = "products";
-    $("pl-tab-products").setAttribute("aria-selected", String(view === "products"));
-    $("pl-tab-trash").setAttribute("aria-selected", String(view === "trash"));
-    $("pl-tab-products").tabIndex = view === "products" ? 0 : -1;
-    $("pl-tab-trash").tabIndex = view === "trash" ? 0 : -1;
+    /* Notificaciones siempre; Papelera solo con datos de ciclo de vida. */
+    $("pl-tabs").hidden = false;
+    $("pl-tab-trash").hidden = nothingYet || !trashKnown;
+    if (view === "trash" && $("pl-tab-trash").hidden) view = "products";
+    Object.entries(VIEW_TAB).forEach(([name, id]) => {
+      $(id).setAttribute("aria-selected", String(view === name));
+      $(id).tabIndex = view === name ? 0 : -1;
+    });
+    $("pl-view-notifications").hidden = view !== "notifications";
+    renderNotificationsState();
     $("pl-tab-products-count").textContent = ` · ${active.length}`;
     $("pl-tab-trash-count").textContent = ` · ${trashed.length}`;
     $("pl-view-products").hidden = view !== "products";
@@ -1350,14 +1384,16 @@
   $("pl-retry-btn").addEventListener("click", load);
   $("pl-tab-products").addEventListener("click", () => setView("products"));
   $("pl-tab-trash").addEventListener("click", () => setView("trash"));
+  $("pl-tab-notifications").addEventListener("click", () => setView("notifications"));
   $("pl-trash-back").addEventListener("click", () => { setView("products"); $("pl-tab-products").focus(); });
   /* Flechas izquierda/derecha entre pestañas (patrón ARIA de pestañas). */
   $("pl-tabs").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    const target = view === "products" ? "trash" : "products";
+    const order = Object.keys(VIEW_TAB).filter(name => !$(VIEW_TAB[name]).hidden);
+    const target = order[(order.indexOf(view) + (e.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
     setView(target);
-    $(target === "trash" ? "pl-tab-trash" : "pl-tab-products").focus();
+    $(VIEW_TAB[target]).focus();
   });
 
   (async () => {
