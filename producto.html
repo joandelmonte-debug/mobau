@@ -34,7 +34,12 @@
 <main class="wrap product-layout" id="product-root">
 
   <div>
-    <div class="gallery-main" id="gallery-main"></div>
+    <!-- Punto 44: flechas sobre la foto principal (solo con más de una foto). -->
+    <div class="gallery-stage">
+      <div class="gallery-main" id="gallery-main"></div>
+      <button type="button" class="gallery-nav gallery-nav--prev" id="gallery-prev" aria-label="Foto anterior" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+      <button type="button" class="gallery-nav gallery-nav--next" id="gallery-next" aria-label="Foto siguiente" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+    </div>
     <div class="gallery-thumbs">
       <div></div><div></div><div></div><div></div>
     </div>
@@ -59,7 +64,7 @@
       <div class="spec-row"><dt>Medidas</dt><dd id="p-medidas">—</dd></div>
       <div class="spec-row"><dt>Materiales</dt><dd id="p-materiales">—</dd></div>
       <div class="spec-row" id="p-acabados-row"><dt>Acabados</dt><dd id="p-acabados">—</dd></div>
-      <div class="spec-row"><dt>Lead time</dt><dd id="p-leadtime">—</dd></div>
+      <div class="spec-row"><dt>Tiempo de entrega</dt><dd id="p-leadtime">—</dd></div>
       <div class="spec-row" id="p-ambiente-row" hidden><dt>Interior o exterior</dt><dd id="p-ambiente">—</dd></div>
       <div class="spec-row" id="p-fuente-luz-row" hidden><dt>Fuente de luz</dt><dd id="p-fuente-luz">—</dd></div>
       <div class="spec-row" id="p-conexion-row" hidden><dt>Conexión eléctrica</dt><dd id="p-conexion">—</dd></div>
@@ -223,27 +228,43 @@ async function resourceAccess(product){
 
 let productAssets = [];
 
-function assetRowsHtml(access){
+/* Punto 44: archivos agrupados por tipo de documento en un acordeón (todos
+   cerrados al principio; se pueden abrir varios). Una fila por archivo:
+   formato · tamaño y «Descargar»; el nombre solo si en el grupo se repite
+   el formato. Los grupos abiertos se conservan al repintar. */
+const openAssetGroups = new Set();
+
+function assetGroupsHtml(access){
   const files = productAssets.filter(a => a.kind !== "foto");
-  const ordered = ["video", ...MobauArchivos.DOWNLOAD_KINDS]
-    .flatMap(kind => files.filter(a => a.kind === kind));
-  return ordered.map(a => {
-    const label = a.label || MobauArchivos.KINDS[a.kind].label;
-    const ext = `${MobauArchivos.KINDS[a.kind].label} · ${a.format.toUpperCase()}${a.bytes ? ` · ${MobauArchivos.sizeText(a.bytes)}` : ""}`;
-    const verb = a.kind === "video" ? "Ver" : "Descargar";
-    /* Vídeo: enlace público directo (sin ventana emergente tras esperar). */
-    const action = access !== "allowed"
-      ? `<button type="button" class="btn btn-outline" disabled>${verb}</button>`
-      : a.kind === "video"
-        ? `<a class="btn btn-outline" href="${escapeHtml(MobauArchivos.publicUrl(a.path))}" target="_blank" rel="noopener">${verb}</a>`
-        : `<button type="button" class="btn btn-outline" data-asset-download="${escapeHtml(a.id)}">${verb}</button>`;
-    return `
-    <div class="resource-row">
-      <span class="r-label">${escapeHtml(label)}</span>
-      <span class="r-ext">${escapeHtml(ext)}</span>
-      ${action}
+  const groups = [...MobauArchivos.DOWNLOAD_KINDS, "video"]
+    .map(kind => ({ kind, items: files.filter(a => a.kind === kind) }))
+    .filter(g => g.items.length);
+  if (!groups.length) return "";
+  return `<div class="dl-groups">${groups.map(({ kind, items }) => {
+    const open = openAssetGroups.has(kind);
+    const formats = items.map(a => a.format);
+    const rows = items.map(a => {
+      const repeated = formats.filter(f => f === a.format).length > 1;
+      const name = repeated ? `${a.label || a.original_name} · ` : "";
+      const text = `${name}${a.format.toUpperCase()}${a.bytes ? ` · ${MobauArchivos.sizeText(a.bytes)}` : ""}`;
+      const verb = kind === "video" ? "Ver" : "Descargar";
+      /* Vídeo: enlace público directo (sin ventana emergente tras esperar). */
+      const action = access !== "allowed"
+        ? `<button type="button" class="dl-link" disabled>${verb}</button>`
+        : kind === "video"
+          ? `<a class="dl-link" href="${escapeHtml(MobauArchivos.publicUrl(a.path))}" target="_blank" rel="noopener">${verb}</a>`
+          : `<button type="button" class="dl-link" data-asset-download="${escapeHtml(a.id)}" aria-label="${verb} ${escapeHtml(a.original_name)}">${verb}</button>`;
+      return `<div class="dl-row"><span class="dl-file">${escapeHtml(text)}</span>${action}</div>`;
+    }).join("");
+    const count = `${items.length} ${items.length === 1 ? "archivo" : "archivos"}`;
+    return `<div class="dl-group">
+      <button type="button" class="dl-head" id="dl-head-${kind}" data-dl-group="${kind}" aria-expanded="${open}" aria-controls="dl-panel-${kind}">
+        <span class="dl-name">${escapeHtml(MobauArchivos.KINDS[kind].label)}</span>
+        <span class="dl-meta"><span>${count}</span><span class="dl-sign" aria-hidden="true">${open ? "−" : "+"}</span></span>
+      </button>
+      <div class="dl-panel" id="dl-panel-${kind}" role="region" aria-labelledby="dl-head-${kind}"${open ? "" : " hidden"}>${rows}</div>
     </div>`;
-  }).join("");
+  }).join("")}</div>`;
 }
 
 function renderResources(product, access){
@@ -251,7 +272,7 @@ function renderResources(product, access){
   const legacy = PRODUCT_RESOURCES
     .filter(r => !(r.key === "ficha" ? uploadedKinds.has("ficha_tecnica") : ["cad_2d", "cad_3d", "bim"].some(k => uploadedKinds.has(k))));
   const items = legacy.map(r => ({ label: r.label, url: safeUrl(product[r.key]) }));
-  const assetsHtml = assetRowsHtml(access);
+  const assetsHtml = assetGroupsHtml(access);
   const hasAssets = productAssets.some(a => a.kind !== "foto");
   document.getElementById("resource-list").innerHTML = assetsHtml + items.filter(i => i.url || !hasAssets).map(({ label, url }) => {
     if (!url) return `
@@ -272,6 +293,20 @@ function renderResources(product, access){
   const any = hasAssets || items.some(i => i.url);
   document.getElementById("resource-note").textContent = !any ? RESOURCE_NOTES.empty
     : (access === "allowed" && hasAssets && !items.some(i => i.url) ? "Los archivos se descargan desde Mobau." : RESOURCE_NOTES[access]);
+  const list = document.getElementById("resource-list");
+  if (!list.dataset.groupsBound){
+    list.dataset.groupsBound = "1";
+    list.addEventListener("click", (e) => {
+      const head = e.target.closest(".dl-head");
+      if (!head) return;
+      const kind = head.dataset.dlGroup;
+      const open = head.getAttribute("aria-expanded") !== "true";
+      if (open) openAssetGroups.add(kind); else openAssetGroups.delete(kind);
+      head.setAttribute("aria-expanded", String(open));
+      head.querySelector(".dl-sign").textContent = open ? "−" : "+";
+      document.getElementById(`dl-panel-${kind}`).hidden = !open;
+    });
+  }
   document.querySelectorAll("[data-asset-download]").forEach(btn => btn.addEventListener("click", async () => {
     const asset = productAssets.find(a => a.id === btn.dataset.assetDownload);
     if (!asset) return;
@@ -292,11 +327,23 @@ function renderResources(product, access){
 function galleryImageHtml(url){
   return `<img src="${escapeHtml(url)}" alt="" referrerpolicy="no-referrer" style="width:100%; height:100%; object-fit:contain; background:#fff;">`;
 }
+/* Fotos de la galería en su orden (las mismas que las miniaturas) y la visible. */
+let galleryUrls = [];
+let galleryCurrent = null;
 function showGalleryImage(url){
   if (!url) return;
+  galleryCurrent = url;
   document.getElementById("gallery-main").innerHTML = galleryImageHtml(url);
   document.querySelectorAll(".gallery-thumb").forEach(b => b.setAttribute("aria-current", String(b.dataset.full === url)));
 }
+/* Flechas: anterior/siguiente en bucle (de la última a la primera y al revés). */
+function stepGallery(delta){
+  if (galleryUrls.length < 2) return;
+  const index = Math.max(0, galleryUrls.indexOf(galleryCurrent));
+  showGalleryImage(galleryUrls[(index + delta + galleryUrls.length) % galleryUrls.length]);
+}
+document.getElementById("gallery-prev").addEventListener("click", () => stepGallery(-1));
+document.getElementById("gallery-next").addEventListener("click", () => stepGallery(1));
 function renderGallery(product){
   const photos = productAssets.filter(a => a.kind === "foto");
   const thumbs = document.querySelector(".gallery-thumbs");
@@ -308,7 +355,10 @@ function renderGallery(product){
       <img src="${escapeHtml(MobauArchivos.cardUrl(a))}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`;
   }).join("");
   thumbs.querySelectorAll(".gallery-thumb").forEach(b => b.addEventListener("click", () => showGalleryImage(b.dataset.full)));
-  showGalleryImage(product.portada || MobauArchivos.publicUrl(photos[0].path));
+  galleryUrls = photos.map(a => MobauArchivos.publicUrl(a.path));
+  document.getElementById("gallery-prev").hidden = galleryUrls.length < 2;
+  document.getElementById("gallery-next").hidden = galleryUrls.length < 2;
+  showGalleryImage(product.portada || galleryUrls[0]);
 }
 
 /* Punto 41 (D1): la ficha consulta catalog_products directamente, sin caché;

@@ -133,7 +133,7 @@
           <!-- Plantilla de Iluminación: solo con la categoría Iluminación. -->
           <div class="field" data-template="iluminacion" hidden><label for="pf-light-source">Fuente de luz <span class="hint">(opcional)</span></label><input id="pf-light-source" type="text" maxlength="200" placeholder="Por ejemplo: 1 × LED 16,7 W"><span class="pp-current" data-current="light_source"></span></div>
           <div class="field" data-template="iluminacion" hidden><label for="pf-electrical-connection">Conexión eléctrica <span class="hint">(opcional)</span></label><input id="pf-electrical-connection" type="text" maxlength="200" placeholder="Por ejemplo: con enchufe"><span class="pp-current" data-current="electrical_connection"></span></div>
-          <div class="field full"><label for="pf-lead">Plazo de entrega <span class="hint">(opcional)</span></label><input id="pf-lead" type="text" maxlength="160"><span class="pp-current" data-current="lead_time"></span></div>
+          <div class="field full"><label for="pf-lead">Tiempo de entrega <span class="hint">(opcional)</span></label><input id="pf-lead" type="text" maxlength="160"><span class="pp-current" data-current="lead_time"></span></div>
           <div class="field full"><label for="pf-description">Descripción <span class="hint" id="pf-description-hint">(opcional)</span></label><textarea id="pf-description" maxlength="2000"></textarea><span class="pp-current" data-current="description"></span></div>
           <div class="field full"><label for="pf-measurements">Medidas <span class="hint">(con unidades, por ejemplo: Ø 45 × 61 cm)</span></label><input id="pf-measurements" type="text" maxlength="200" placeholder="Ø 45 × 61 cm"><span class="pp-current" data-current="measurements"></span></div>
           <div class="field"><label for="pf-materials">Materiales <span class="hint">(opcional)</span></label><input id="pf-materials" type="text" maxlength="200"><span class="pp-current" data-current="materials"></span></div>
@@ -305,7 +305,7 @@
     { key: "category_id",         id: "pf-category",     label: "Categoría",     required: true, requiredOnCreate: true },
     { key: "subcategory",         id: "pf-subcategory",  label: "Subcategoría" },
     { key: "environment",         id: "pf-environment",  label: "Interior o exterior" },
-    { key: "lead_time",           id: "pf-lead",         label: "Plazo de entrega", max: 160 },
+    { key: "lead_time",           id: "pf-lead",         label: "Tiempo de entrega", max: 160 },
     { key: "description",         id: "pf-description",  label: "Descripción",   requiredOnCreate: true, max: 2000 },
     { key: "measurements",        id: "pf-measurements", label: "Medidas",       required: true, requiredOnCreate: true, max: 200 },
     { key: "materials",           id: "pf-materials",    label: "Materiales",    max: 200 },
@@ -887,7 +887,7 @@
       if (!(media && media.finishes.length) && !(mode === "update" && norm((productById(productId) || {}).finishes))) missing.push("acabados");
       if (!["ficha_tecnica", "cad_2d", "cad_3d", "bim"].some(k => kinds.has(k))) missing.push("ficha técnica o archivos CAD/BIM");
     }
-    if (mode === "create" && !norm($("pf-lead").value)) missing.push("plazo de entrega");
+    if (mode === "create" && !norm($("pf-lead").value)) missing.push("tiempo de entrega");
     const desc = norm($("pf-description").value);
     if (desc && desc.length < 20) missing.push("una descripción más completa");
     if (missing.length) notes.push(`Recomendado completar: ${missing.join(", ")}. Puedes enviar igualmente; Mobau lo revisará.`);
