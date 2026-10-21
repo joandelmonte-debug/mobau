@@ -373,10 +373,11 @@ const CATALOG_STATE = { source: "static", status: "ready", error: null };
    Solo en memoria; se vacía al renovar o invalidar el catálogo. Un error,
    un timeout o una respuesta no válida nunca añade nada. */
 const CATALOG_ABSENT = new Set();
-/* v2: claves nuevas con sello; la interfaz anterior lee las v1 y ninguna lee la caché de la otra. */
-const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v2", distributors: "mobau_distributors_v2", categories: "mobau_categories_v2" };
-/* Las 21 columnas de catalog_products, en su orden. */
-const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at";
+/* v3 (punto 44): las filas guardadas llevan referencia, portada y acabados;
+   ninguna versión lee la caché de otra. */
+const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v3", distributors: "mobau_distributors_v3", categories: "mobau_categories_v3" };
+/* Las 25 columnas de catalog_products, en su orden (21 de 41-02 y 4 de 44-01). */
+const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options";
 const STATIC_ORDER = Object.freeze({
   products: STATIC_PRODUCTS.map(p => p.id),
   distributors: Object.keys(DISTRIBUTORS),
@@ -390,14 +391,63 @@ function slugify(text){
 function brandKey(brand){ return slugify(brand) || "sin-marca"; }
 function brandLabel(brand){ return (brand && brand.trim()) || "Sin marca"; }
 
-/* Fila de la base de datos -> forma que ya consume todo el front. */
+/* Punto 44: URL pública de una foto del bucket productos-imagenes (ruta
+   <empresa>/<carpeta>/<archivo>, sin "..": la valida la base de datos). */
+function productImageUrl(path){
+  if (typeof path !== "string" || !path || typeof SUPABASE_URL === "undefined") return null;
+  return `${SUPABASE_URL}/storage/v1/object/public/productos-imagenes/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+/* Acabados de catalog_products.finish_options -> forma del front. */
+function mapFinishOptions(options){
+  if (!Array.isArray(options)) return [];
+  return options.filter(f => f && typeof f.code === "string" && f.code).map(f => ({
+    codigo: f.code, nombre: f.name || f.code, referencia: f.reference_code || null, porDefecto: !!f.is_default,
+    imagen: productImageUrl(f.image_card_path) || productImageUrl(f.image_path), imagenGrande: productImageUrl(f.image_path)
+  }));
+}
+
+/* Acabado que se añade por defecto (null si el producto no tiene acabados). */
+function defaultFinishCode(product){
+  const options = (product && product.acabadosOpciones) || [];
+  const chosen = options.find(f => f.porDefecto) || options[0];
+  return chosen ? chosen.codigo : null;
+}
+
+/* Texto del acabado de una línea ("Beige D1 · 3225-25"), o "" sin acabado. */
+function finishLabel(product, code){
+  if (!code) return "";
+  const option = ((product && product.acabadosOpciones) || []).find(f => f.codigo === code);
+  if (!option) return `Acabado ${code}`;
+  return option.referencia ? `${option.nombre} · ${option.referencia}` : option.nombre;
+}
+
+/* Producto con la foto de su acabado como imagen (para miniaturas de líneas). */
+function productWithFinishImage(product, code){
+  const option = code && product ? (product.acabadosOpciones || []).find(f => f.codigo === code) : null;
+  return option && option.imagen ? { ...product, imagen: option.imagen } : product;
+}
+
+/* "Ref. 3225 · Acabado: Beige D1 · 3225-25" de una línea (selección,
+   proyecto o cotización); "" si no hay referencia ni acabado. */
+function lineDetailText(product, code){
+  return [product && product.referencia ? `Ref. ${product.referencia}` : "", code ? `Acabado: ${finishLabel(product, code)}` : ""]
+    .filter(Boolean).join(" · ");
+}
+
+/* Fila de la base de datos -> forma que ya consume todo el front. La
+   imagen de las tarjetas es la versión 4:5 de la portada; sin portada, el
+   enlace antiguo image_url. */
 function mapProductRow(row){
   return {
     id: row.id, nombre: row.name, distribuidor: row.distributor_id, marca: brandKey(row.brand),
     categoria: row.category_id, subcategoria: row.subcategory, uso: row.use_context, espacio: row.space,
     disponibilidad: row.availability, icon: row.icon, descripcion: row.description,
     medidas: row.measurements, materiales: row.materials, acabados: row.finishes, leadtime: row.lead_time,
-    imagen: safeUrl(row.image_url) || null, ficha: safeUrl(row.technical_sheet_url) || null,
+    imagen: productImageUrl(row.cover_card_path) || productImageUrl(row.cover_path) || safeUrl(row.image_url) || null,
+    portada: productImageUrl(row.cover_path) || null,
+    referencia: row.reference_code || null, acabadosOpciones: mapFinishOptions(row.finish_options),
+    ficha: safeUrl(row.technical_sheet_url) || null,
     cad: safeUrl(row.cad_bim_3d_url) || null, status: row.status, actualizado: row.updated_at
   };
 }
@@ -1291,14 +1341,15 @@ document.addEventListener("mobau:access", (e) => {
 function renderProductCard(p){
   const dist = DISTRIBUTORS[p.distribuidor];
   const marcaLabel = escapeHtml(LABELS.marca[p.marca]);
-  const inSel = inSelection(p.id);
+  const finish = defaultFinishCode(p);
+  const inSel = inSelection(p.id, finish);
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
   const actionsHtml = cardActionsReadOnly() ? readOnlyCardActionsHtml(fichaUrl) : null;
   const selectButton = p.status === "archived"
     ? `<button type="button" class="btn btn-added" disabled>No disponible actualmente</button>`
     : `
-    <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${idAttr}" ${inSel ? "disabled" : ""}>
+    <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${idAttr}" data-finish="${escapeHtml(finish || "")}" ${inSel ? "disabled" : ""}>
       ${inSel ? "En mi selección" : "Añadir a la selección"}
     </button>`;
   return `
@@ -1310,7 +1361,7 @@ function renderProductCard(p){
       <div class="card-body">
         <span class="card-brand">${marcaLabel}</span>
         <span class="card-name">${escapeHtml(p.nombre)}</span>
-        <span class="card-meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.categoria[p.categoria])}</span>
+        <span class="card-meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.categoria[p.categoria])}${p.referencia ? ` · Ref. ${escapeHtml(p.referencia)}` : ""}</span>
         ${cardPriceLineHtml(p.id, "card-price")}
         ${actionsHtml || `<div class="card-actions">
           <a class="btn btn-outline" href="${fichaUrl}">Ver ficha</a>
@@ -1376,7 +1427,7 @@ function bindAddButtons(container, onChange){
       const unit = getProductUnit(product);
       const initialQuantity = unit === "ud." ? 1 : 0;
 
-      const addResult = addToSelection(productId, initialQuantity, unit);
+      const addResult = addToSelection(productId, initialQuantity, unit, btn.dataset.finish || null);
       if (!addResult.success){
         btn.textContent = originalLabel;
         btn.disabled = false;

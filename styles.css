@@ -525,7 +525,7 @@ button{ font-family: inherit; }
 }
 .product-card:hover{ border-color: var(--ink-faint); }
 .card-media{
-  aspect-ratio: 4/3;
+  aspect-ratio: 4/5; /* punto 44: portadas verticales 4:5 */
   background: var(--surface);
   display:flex; align-items:center; justify-content:center;
   position:relative;
@@ -602,13 +602,14 @@ button{ font-family: inherit; }
   align-items:start;
 }
 .gallery-main{
-  aspect-ratio: 4/3;
+  aspect-ratio: 4/5; /* punto 44: portada vertical 4:5 */
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   display:flex; align-items:center; justify-content:center;
   color: var(--ink-faint);
   margin-bottom: 12px;
+  overflow:hidden;
 }
 .gallery-main svg{ width:38%; height:38%; }
 .gallery-thumbs{ display:grid; grid-template-columns: repeat(4,1fr); gap:10px; }
@@ -618,6 +619,15 @@ button{ font-family: inherit; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
+/* Punto 44: miniaturas reales (portada, acabados y galería). */
+.gallery-thumbs .gallery-thumb{
+  aspect-ratio: 4/5; padding:0; margin:0;
+  background:#fff; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow:hidden; cursor:pointer;
+}
+.gallery-thumbs .gallery-thumb[aria-current="true"]{ border-color: var(--ink); }
+.gallery-thumbs .gallery-thumb:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.gallery-thumbs .gallery-thumb img{ display:block; width:100%; height:100%; object-fit:cover; }
 
 .product-info .card-brand{ margin-bottom: 6px; }
 .product-info h1{ font-size: 28px; margin-bottom: 10px; }

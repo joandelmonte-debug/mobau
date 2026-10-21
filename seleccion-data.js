@@ -17,6 +17,9 @@
 
    Cada elemento tiene la forma:
      { productId: "p1", quantity: 1, unit: "ud." }
+   y, si el producto tiene acabados (punto 44), además finish: "25".
+   Una línea por producto y acabado; sin finish es el acabado por defecto
+   de un producto sin acabados (finish_code nulo en el proyecto).
 
    Formato antiguo (solo IDs, ["p1","p3"]) se normaliza de forma
    transparente la primera vez que se lee — sin perder productos,
@@ -49,6 +52,18 @@ function selectionAccountKey(){
    está cargado. */
 const PENDING_RAW = Symbol("selectionPendingRaw");
 
+/* Acabado de una línea: código de 1–20 caracteres o null (sin acabado). */
+function normalizeFinish(finish){
+  if (typeof finish !== "string") return null;
+  const code = finish.trim();
+  return code && code.length <= 20 ? code : null;
+}
+
+/* Clave de una línea: producto + acabado. */
+function selectionLineKey(productId, finish){
+  return productId + "\u0000" + (normalizeFinish(finish) || "");
+}
+
 /* Normaliza un único elemento, sea del formato antiguo (string) o
    ya del formato nuevo (objeto). Nunca descarta un productId válido;
    conserva quantity/unit existentes en vez de recalcularlos. */
@@ -67,6 +82,8 @@ function normalizeSelectionItem(item){
       ? item.quantity
       : (unit === "ud." ? 1 : 0);
     const normalized = { productId: item.productId, quantity, unit };
+    const finish = normalizeFinish(item.finish);
+    if (finish) normalized.finish = finish;
     if (!item.unit && !product) normalized[PENDING_RAW] = item;
     return normalized;
   }
@@ -78,8 +95,8 @@ function serializeSelection(items){
   return JSON.stringify(items.map(item => (item && item[PENDING_RAW] !== undefined) ? item[PENDING_RAW] : item));
 }
 
-/* Normaliza el arreglo completo. Conserva TODOS los productId, sin
-   duplicar ninguno: nunca se descarta un producto por no estar en
+/* Normaliza el arreglo completo. Conserva TODAS las líneas (producto +
+   acabado), sin duplicar ninguna: nunca se descarta un producto por no estar en
    PRODUCTS (el catálogo puede no haber cargado todavía, o el producto
    estar archivado) — la selección solo se limpia tras completar una
    operación. Los renderers muestran "no disponible" si no lo encuentran. */
@@ -90,8 +107,9 @@ function normalizeSelection(raw){
   raw.forEach(rawItem => {
     const item = normalizeSelectionItem(rawItem);
     if (!item) return;
-    if (seen.has(item.productId)) return;
-    seen.add(item.productId);
+    const key = selectionLineKey(item.productId, item.finish);
+    if (seen.has(key)) return;
+    seen.add(key);
     normalized.push(item);
   });
   return normalized;
@@ -133,9 +151,10 @@ function saveSelection(items){
 }
 
 /* Añade un producto real del catálogo a la selección, con su
-   cantidad y unidad iniciales. No duplica: si ya estaba, devuelve
-   alreadyExists: true sin tocar la cantidad que ya tuviera. */
-function addToSelection(productId, initialQuantity, initialUnit){
+   cantidad, unidad y acabado iniciales. No duplica: si ese producto con
+   ese acabado ya estaba, devuelve alreadyExists: true sin tocar la
+   cantidad que ya tuviera. */
+function addToSelection(productId, initialQuantity, initialUnit, finish){
   /* Punto 38-A: una cuenta de distribuidor (rol confirmado, nunca la pista
      estética) no usa la selección. No borra nada de lo que ya hubiera. */
   if (typeof MobauAccess !== "undefined" && MobauAccess.confirmedKind === "supplier") {
@@ -149,7 +168,8 @@ function addToSelection(productId, initialQuantity, initialUnit){
     return { success: false, error: "Este producto ya no está disponible." };
   }
   const items = getSelection();
-  if (items.some(item => item.productId === productId)) {
+  const key = selectionLineKey(productId, finish);
+  if (items.some(item => selectionLineKey(item.productId, item.finish) === key)) {
     return { success: true, alreadyExists: true };
   }
   const product = (typeof PRODUCTS !== "undefined") ? PRODUCTS.find(p => p.id === productId) : null;
@@ -157,27 +177,32 @@ function addToSelection(productId, initialQuantity, initialUnit){
   const quantity = (typeof initialQuantity === "number" && Number.isFinite(initialQuantity))
     ? initialQuantity
     : (unit === "ud." ? 1 : 0);
-  items.push({ productId, quantity, unit });
+  const line = { productId, quantity, unit };
+  if (normalizeFinish(finish)) line.finish = normalizeFinish(finish);
+  items.push(line);
   const result = saveSelection(items);
   return { ...result, alreadyExists: false };
 }
 
-function removeFromSelection(productId){
-  const items = getSelection().filter(item => item.productId !== productId);
+function removeFromSelection(productId, finish){
+  const key = selectionLineKey(productId, finish);
+  const items = getSelection().filter(item => selectionLineKey(item.productId, item.finish) !== key);
   return saveSelection(items);
 }
 
-function inSelection(productId){
-  return getSelection().some(item => item.productId === productId);
+function inSelection(productId, finish){
+  const key = selectionLineKey(productId, finish);
+  return getSelection().some(item => selectionLineKey(item.productId, item.finish) === key);
 }
 
-/* Actualiza la cantidad de un producto ya presente en la selección.
+/* Actualiza la cantidad de una línea (producto + acabado) de la selección.
    Redondea a 2 decimales (misma precisión que numeric(10,2) en la
    base de datos), nunca permite negativos, y nunca permite bajar de
    1 en productos medidos en "ud." mientras sigan seleccionados. */
-function updateSelectionQuantity(productId, quantity){
+function updateSelectionQuantity(productId, quantity, finish){
   const items = getSelection();
-  const item = items.find(i => i.productId === productId);
+  const key = selectionLineKey(productId, finish);
+  const item = items.find(i => selectionLineKey(i.productId, i.finish) === key);
   if (!item) {
     return { success: false, error: "Este producto ya no está en tu selección." };
   }

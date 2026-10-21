@@ -22,5 +22,6 @@ Mobau es una plataforma de diseño multicategoría para arquitectos e interioris
 - Revestimientos usan m²; el resto de categorías actuales usa ud., salvo excepciones futuras explícitas.
 - Los productos nuevos deben añadirse primero a `mobau_seleccion`.
 - Mi selección permite revisar cantidades antes de transferir productos al proyecto activo.
-- Al transferir al proyecto activo debe hacerse insert si el producto no existe y update de quantity/unit si ya existe.
-- No duplicar `project_products`.
+- Una línea por producto y acabado en selección, proyecto y cotización (`project_products.finish_code`; sin acabados, un único acabado por defecto con `finish_code` nulo).
+- Al transferir al proyecto activo debe hacerse insert si el producto con ese acabado no existe y update de quantity/unit si ya existe.
+- No duplicar `project_products`: nunca dos líneas del mismo producto y acabado en un proyecto.

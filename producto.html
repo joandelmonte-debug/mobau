@@ -55,6 +55,7 @@
 
     <p class="section-note">Antes de sumarlo a tu proyecto, esto es lo que necesitas saber:</p>
     <dl class="spec-table">
+      <div class="spec-row" id="p-referencia-row" hidden><dt>Referencia</dt><dd id="p-referencia">—</dd></div>
       <div class="spec-row"><dt>Medidas</dt><dd id="p-medidas">—</dd></div>
       <div class="spec-row"><dt>Materiales</dt><dd id="p-materiales">—</dd></div>
       <div class="spec-row"><dt>Acabados</dt><dd id="p-acabados">—</dd></div>
@@ -65,6 +66,10 @@
     </dl>
 
     <div class="product-actions product-selection-actions" hidden>
+      <div class="product-qty-field" id="product-finish-field" hidden>
+        <label for="product-finish">Acabado</label>
+        <select id="product-finish"></select>
+      </div>
       <div class="product-qty-field">
         <label for="product-qty-input">Cantidad</label>
         <div class="quantity-control">
@@ -138,6 +143,7 @@
 <script src="proyectos-data.js"></script>
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
+<script src="producto-archivos.js"></script>
 <script>
 /* Punto 38-A: una cuenta de distribuidor ve la ficha en solo lectura —
    sin cantidad ni "Añadir a la selección" (addToSelection() también lo
@@ -171,7 +177,11 @@ function priceActionsHtml(info, product){
    abrirlos; un distribuidor, solo en productos de su empresa verificada.
    Mientras no se confirme la cuenta, o si la comprobación falla, ningún
    botón tiene enlace. Controla las herramientas de la ficha: no hace
-   privados los enlaces, que siguen siendo consultables en el catálogo. */
+   privados los enlaces, que siguen siendo consultables en el catálogo.
+   Punto 44: si el producto tiene archivos subidos a Mobau, se listan por
+   tipo y se descargan con un enlace firmado (bucket privado: el servidor
+   aplica las mismas reglas); los enlaces antiguos siguen apareciendo solo
+   en los productos sin archivos de ese tipo. */
 const PRODUCT_RESOURCES = [
   { label: "Ficha técnica", key: "ficha" },
   { label: "CAD / BIM / 3D", key: "cad" }
@@ -206,9 +216,36 @@ async function resourceAccess(product){
   }
 }
 
+let productAssets = [];
+
+function assetRowsHtml(access){
+  const files = productAssets.filter(a => a.kind !== "foto");
+  const ordered = ["video", ...MobauArchivos.DOWNLOAD_KINDS]
+    .flatMap(kind => files.filter(a => a.kind === kind));
+  return ordered.map(a => {
+    const label = a.label || MobauArchivos.KINDS[a.kind].label;
+    const ext = `${MobauArchivos.KINDS[a.kind].label} · ${a.format.toUpperCase()}${a.bytes ? ` · ${MobauArchivos.sizeText(a.bytes)}` : ""}`;
+    const verb = a.kind === "video" ? "Ver" : "Descargar";
+    const action = access === "allowed"
+      ? `<button type="button" class="btn btn-outline" data-asset-download="${escapeHtml(a.id)}">${verb}</button>`
+      : `<button type="button" class="btn btn-outline" disabled>${verb}</button>`;
+    return `
+    <div class="resource-row">
+      <span class="r-label">${escapeHtml(label)}</span>
+      <span class="r-ext">${escapeHtml(ext)}</span>
+      ${action}
+    </div>`;
+  }).join("");
+}
+
 function renderResources(product, access){
-  const items = PRODUCT_RESOURCES.map(r => ({ label: r.label, url: safeUrl(product[r.key]) }));
-  document.getElementById("resource-list").innerHTML = items.map(({ label, url }) => {
+  const uploadedKinds = new Set(productAssets.map(a => a.kind));
+  const legacy = PRODUCT_RESOURCES
+    .filter(r => !(r.key === "ficha" ? uploadedKinds.has("ficha_tecnica") : ["cad_2d", "cad_3d", "bim"].some(k => uploadedKinds.has(k))));
+  const items = legacy.map(r => ({ label: r.label, url: safeUrl(product[r.key]) }));
+  const assetsHtml = assetRowsHtml(access);
+  const hasAssets = productAssets.some(a => a.kind !== "foto");
+  document.getElementById("resource-list").innerHTML = assetsHtml + items.filter(i => i.url || !hasAssets).map(({ label, url }) => {
     if (!url) return `
     <div class="resource-row">
       <span class="r-label">${label}</span>
@@ -224,7 +261,47 @@ function renderResources(product, access){
       ${action}
     </div>`;
   }).join("");
-  document.getElementById("resource-note").textContent = items.some(i => i.url) ? RESOURCE_NOTES[access] : RESOURCE_NOTES.empty;
+  const any = hasAssets || items.some(i => i.url);
+  document.getElementById("resource-note").textContent = !any ? RESOURCE_NOTES.empty
+    : (access === "allowed" && hasAssets && !items.some(i => i.url) ? "Los archivos se descargan desde Mobau." : RESOURCE_NOTES[access]);
+  document.querySelectorAll("[data-asset-download]").forEach(btn => btn.addEventListener("click", async () => {
+    const asset = productAssets.find(a => a.id === btn.dataset.assetDownload);
+    if (!asset) return;
+    btn.disabled = true;
+    try {
+      const url = await MobauArchivos.downloadUrl(asset);
+      if (asset.kind === "video") window.open(url, "_blank", "noopener");
+      else window.location.assign(url);
+    } catch (e) {
+      document.getElementById("resource-note").textContent = "No pudimos preparar la descarga. Recarga la página e inténtalo de nuevo.";
+    } finally {
+      btn.disabled = false;
+    }
+  }));
+}
+
+/* Punto 44: galería real — portada, fotos de acabados y galería, en el
+   orden aprobado. La foto grande se muestra entera (sin recortar). */
+function galleryImageHtml(url){
+  return `<img src="${escapeHtml(url)}" alt="" referrerpolicy="no-referrer" style="width:100%; height:100%; object-fit:contain; background:#fff;">`;
+}
+function showGalleryImage(url){
+  if (!url) return;
+  document.getElementById("gallery-main").innerHTML = galleryImageHtml(url);
+  document.querySelectorAll(".gallery-thumb").forEach(b => b.setAttribute("aria-current", String(b.dataset.full === url)));
+}
+function renderGallery(product){
+  const photos = productAssets.filter(a => a.kind === "foto");
+  const thumbs = document.querySelector(".gallery-thumbs");
+  if (!photos.length) return;
+  thumbs.style.display = "";
+  thumbs.innerHTML = photos.map((a, i) => {
+    const full = MobauArchivos.publicUrl(a.path);
+    return `<button type="button" class="gallery-thumb" data-full="${escapeHtml(full)}" aria-label="Ver foto ${i + 1}">
+      <img src="${escapeHtml(MobauArchivos.cardUrl(a))}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`;
+  }).join("");
+  thumbs.querySelectorAll(".gallery-thumb").forEach(b => b.addEventListener("click", () => showGalleryImage(b.dataset.full)));
+  showGalleryImage(product.portada || MobauArchivos.publicUrl(photos[0].path));
 }
 
 /* Punto 41 (D1): la ficha consulta catalog_products directamente, sin caché;
@@ -274,7 +351,12 @@ runWithCatalog(async function renderProductPage(){
   }
   document.getElementById("p-medidas").textContent = product.medidas || "—";
   document.getElementById("p-materiales").textContent = product.materiales || "—";
-  document.getElementById("p-acabados").textContent = product.acabados || "—";
+  const finishes = product.acabadosOpciones || [];
+  document.getElementById("p-acabados").textContent = finishes.length
+    ? finishes.map(f => f.referencia ? `${f.nombre} (${f.referencia})` : f.nombre).join(", ")
+    : (product.acabados || "—");
+  document.getElementById("p-referencia-row").hidden = !product.referencia;
+  document.getElementById("p-referencia").textContent = product.referencia || "—";
   document.getElementById("p-leadtime").textContent = product.leadtime || "—";
   document.getElementById("p-uso").textContent = LABELS.uso[product.uso] || "—";
   document.getElementById("p-distribuidor").textContent = `${distribuidor.nombre} — ${distribuidor.ubicacion}`;
@@ -284,16 +366,32 @@ runWithCatalog(async function renderProductPage(){
   badge.textContent = LABELS.disponibilidad[product.disponibilidad];
   badge.classList.add(badgeClass(product.disponibilidad));
 
-  document.getElementById("gallery-main").innerHTML = productMediaMarkup(product, 120);
+  document.getElementById("gallery-main").innerHTML = product.portada ? galleryImageHtml(product.portada) : productMediaMarkup(product, 120);
   if (safeUrl(product.imagen)) document.querySelector(".gallery-thumbs").style.display = "none";
 
   document.getElementById("s-name").textContent = distribuidor.nombre;
   document.getElementById("s-loc").textContent = distribuidor.ubicacion;
   document.getElementById("s-more-link").href = `catalogo.html?distribuidor=${encodeURIComponent(product.distribuidor)}`;
 
-  /* Punto 42: sin enlace hasta confirmar la cuenta. */
+  /* Punto 42: sin enlace hasta confirmar la cuenta. Punto 44: archivos
+     aprobados del producto (fotos de la galería y descargas). */
   renderResources(product, "pending");
-  resourceAccess(product).then(access => renderResources(product, access));
+  const accessReady = resourceAccess(product);
+  accessReady.then(access => renderResources(product, access));
+  MobauArchivos.listApproved(product.id).then(async rows => {
+    productAssets = rows;
+    renderGallery(product);
+    renderResources(product, await accessReady);
+  }).catch(e => console.error("Error leyendo los archivos del producto:", e));
+
+  /* Punto 44: acabado de la línea que se añade a la selección; al cambiarlo
+     se muestra su foto. Sin acabados, la línea va sin acabado. */
+  const finishField = document.getElementById("product-finish-field");
+  const finishSelect = document.getElementById("product-finish");
+  finishField.hidden = finishes.length === 0;
+  finishSelect.replaceChildren(...finishes.map(f => new Option(f.referencia ? `${f.nombre} · ${f.referencia}` : f.nombre, f.codigo)));
+  finishSelect.value = defaultFinishCode(product) || "";
+  const selectedFinish = () => (finishes.length ? finishSelect.value || null : null);
 
   const qtyInput = document.getElementById("product-qty-input");
   const qtyDecrementBtn = document.getElementById("product-qty-decrement");
@@ -327,6 +425,12 @@ runWithCatalog(async function renderProductPage(){
     setSelectedQuantity(parsed !== null ? parsed : 1);
   });
 
+  finishSelect.addEventListener("change", () => {
+    const option = finishes.find(f => f.codigo === finishSelect.value);
+    if (option && option.imagenGrande) showGalleryImage(option.imagenGrande);
+    refreshAddButton();
+  });
+
   function refreshAddButton(){
     const btn = document.getElementById("add-project-btn");
     if (product.status === "archived"){
@@ -339,7 +443,7 @@ runWithCatalog(async function renderProductPage(){
       btn.disabled = true;
       return;
     }
-    const already = inSelection(product.id);
+    const already = inSelection(product.id, selectedFinish());
     qtyInput.disabled = already;
     qtyIncrementBtn.disabled = already;
     qtyDecrementBtn.disabled = already || selectedQuantity <= 1;
@@ -380,7 +484,7 @@ runWithCatalog(async function renderProductPage(){
 
     const unit = getProductUnit(product);
 
-    const addResult = addToSelection(product.id, selectedQuantity, unit);
+    const addResult = addToSelection(product.id, selectedQuantity, unit, selectedFinish());
     if (!addResult.success){
       btn.textContent = originalLabel;
       btn.disabled = false;

@@ -1060,7 +1060,8 @@ runWithCatalog(() => {
           }
           const unit = getProductUnit(product);
           const initialQuantity = unit === "ud." ? 1 : 0;
-          const { error } = await MobauProjects.saveProductToProject(status.project.id, productId, initialQuantity, unit, "sum");
+          /* Punto 44: la línea lleva el acabado por defecto (sin acabados, ninguno). */
+          const { error } = await MobauProjects.saveProductToProject(status.project.id, productId, initialQuantity, unit, "sum", defaultFinishCode(product));
           if (error){
             showToast("No se pudo añadir el producto. Intenta de nuevo.");
             return;

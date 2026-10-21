@@ -31,7 +31,7 @@ const MobauLifecycle = (() => {
     "mobau_lifecycle_history"
   ]);
   const REASON_MAX = 500;
-  const CATALOG_CACHE_KEYS = ["mobau_catalog_v2", "mobau_distributors_v2", "mobau_categories_v2"]; // las de script.js (D1)
+  const CATALOG_CACHE_KEYS = ["mobau_catalog_v3", "mobau_distributors_v3", "mobau_categories_v3"]; // las de script.js (D1, v3 desde 44)
 
   function enabled(){
     return typeof MobauAccess !== "undefined" && MobauAccess.LIFECYCLE_UI_ENABLED === true;

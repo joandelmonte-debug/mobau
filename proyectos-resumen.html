@@ -355,7 +355,7 @@
     if (!p){
       return `
         <tr class="ps-unavailable-row">
-          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td>
+          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)}${row.finish_code ? ` · acabado ${escapeHtml(row.finish_code)}` : ""})</td>
         </tr>`;
     }
     const dist = DISTRIBUTORS[p.distribuidor];
@@ -375,10 +375,10 @@
       <tr>
         <td>
           <div class="ps-product-cell">
-            <div class="ps-product-thumb">${productMediaMarkup(p, 26)}</div>
+            <div class="ps-product-thumb">${productMediaMarkup(productWithFinishImage(p, row.finish_code), 26)}</div>
             <div>
               <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
-              <div class="ps-product-sub">${escapeHtml(LABELS.categoria[p.categoria])}</div>
+              <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
             </div>
           </div>
         </td>
@@ -514,7 +514,7 @@
       document.getElementById("ps-table-body").innerHTML = rows.map(row => {
         const p = PRODUCTS.find(pp => pp.id === row.product_id);
         if (!p){
-          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td></tr>`;
+          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)}${row.finish_code ? ` · acabado ${escapeHtml(row.finish_code)}` : ""})</td></tr>`;
         }
         const dist = DISTRIBUTORS[p.distribuidor];
         const unit = row.unit || getProductUnit(p);
@@ -524,10 +524,10 @@
           <tr>
             <td>
               <div class="ps-product-cell">
-                <div class="ps-product-thumb">${productMediaMarkup(p, 26)}</div>
+                <div class="ps-product-thumb">${productMediaMarkup(productWithFinishImage(p, row.finish_code), 26)}</div>
                 <div>
                   <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
-                  <div class="ps-product-sub">${escapeHtml(LABELS.categoria[p.categoria])}</div>
+                  <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
                 </div>
               </div>
             </td>

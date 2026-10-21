@@ -7,3 +7,5 @@ node_modules/
 /images/acceso/alta-2.jpg
 /images/acceso/alta-3.jpg
 /dist/
+# Material original de distribuidores (fotos, CAD, fichas): nunca en git.
+/materiales/

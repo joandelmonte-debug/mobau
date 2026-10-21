@@ -129,17 +129,20 @@ const MobauProjects = {
 
   /* ---------- Bloque B: productos guardados dentro de un proyecto ---------- */
 
-  /* Guarda un producto real del catálogo dentro de un proyecto.
-     Si ya estaba guardado, nunca duplica la fila:
+  /* Guarda un producto real del catálogo dentro de un proyecto, con su
+     acabado (punto 44: una línea por producto y acabado; finish null =
+     sin acabado). Si esa línea ya estaba guardada, nunca la duplica:
      - mode "replace" (por defecto): reemplaza quantity/unit con el valor recibido.
      - mode "sum": newQuantity = existingQuantity + quantity, y actualiza unit. */
-  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace") {
-    const { data: existing } = await supabaseClient
+  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace", finish = null) {
+    const finishCode = (typeof finish === "string" && finish.trim()) ? finish.trim() : null;
+    let lookup = supabaseClient
       .from("project_products")
       .select("id, quantity, unit")
       .eq("project_id", projectId)
-      .eq("product_id", productId)
-      .maybeSingle();
+      .eq("product_id", productId);
+    lookup = finishCode ? lookup.eq("finish_code", finishCode) : lookup.is("finish_code", null);
+    const { data: existing } = await lookup.maybeSingle();
 
     if (existing) {
       const updateRow = {};
@@ -168,6 +171,7 @@ const MobauProjects = {
     }
 
     const insertRow = { project_id: projectId, product_id: productId };
+    if (finishCode) insertRow.finish_code = finishCode;
     if (typeof quantity === "number" && Number.isFinite(quantity)) insertRow.quantity = quantity;
     if (typeof unit === "string" && unit) insertRow.unit = unit;
 
@@ -210,14 +214,14 @@ const MobauProjects = {
      esta consulta solo trae qué productos están guardados y con
      qué id de fila, para poder quitarlos. */
   async listProductsInProject(projectId) {
-    /* id, product_id, quantity, unit son los únicos campos que lee
+    /* id, product_id, finish_code, quantity, unit son los únicos campos que lee
        cualquier página (proyectos.html, proyectos-detalle.html,
        cuenta.html, proyectos-cotizacion.html) del resultado de esta
        función — order_position y created_at solo se usan para
        ordenar, no hace falta traerlos de vuelta. */
     const { data, error } = await supabaseClient
       .from("project_products")
-      .select("id, product_id, quantity, unit")
+      .select("id, product_id, finish_code, quantity, unit")
       .eq("project_id", projectId)
       .order("order_position", { ascending: true })
       .order("created_at", { ascending: true });
@@ -240,7 +244,7 @@ const MobauProjects = {
     if (!projectIds.length) return new Map();
     const { data, error } = await supabaseClient
       .from("project_products")
-      .select("id, project_id, product_id, quantity, unit")
+      .select("id, project_id, product_id, finish_code, quantity, unit")
       .in("project_id", projectIds);
     if (error) {
       console.error("Error listando productos de varios proyectos:", error);
@@ -320,8 +324,8 @@ const MobauProjects = {
     return { data, error };
   },
 
-  /* Asocia cada producto de la selección local al proyecto, con su
-     quantity y unit. Reutiliza saveProductToProject (ya evita
+  /* Asocia cada línea de la selección local (producto + acabado) al
+     proyecto, con su quantity y unit. Reutiliza saveProductToProject (ya evita
      duplicados) — solo cuenta cuántos fallaron, sin detenerse en el
      primero, para poder informar un resultado parcial con precisión.
      Al ser una transferencia múltiple, touchProject() se llama una
@@ -330,7 +334,7 @@ const MobauProjects = {
   async transferSelectionToProject(projectId, selectionItems, mode = "replace") {
     let failedCount = 0;
     for (const item of selectionItems) {
-      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode);
+      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode, item.finish || null);
       if (error) failedCount++;
     }
     if (selectionItems.length - failedCount > 0) {

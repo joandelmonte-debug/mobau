@@ -399,7 +399,8 @@
       const dist = DISTRIBUTORS[p.distribuidor];
       const unit = row.unit || getProductUnit(p);
       const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
-      return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>`;
+      const detail = lineDetailText(p, row.finish_code);
+      return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)}${detail ? ` — ${escapeHtml(detail)}` : ""} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>`;
     }).join("");
     const pieceCount = getCommercialPieceCount(availableProductRows());
     document.getElementById(countId).textContent =
@@ -858,7 +859,7 @@
         if (activeProjects.length) project = activeProjects[0];
       }
 
-      const selectionRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, quantity: item.quantity, unit: item.unit })));
+      const selectionRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, finish_code: item.finish || null, quantity: item.quantity, unit: item.unit })));
       if (!selectionRows) return;
       productRows = selectionRows;
 

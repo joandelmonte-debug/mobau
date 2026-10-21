@@ -255,10 +255,10 @@
           <div class="selection-item__thumb">${p ? productMediaMarkup(p, 26) : ""}</div>
           <div class="selection-item__content">
             <div class="sp-name">${p ? escapeHtml(p.nombre) : "Producto no disponible"}</div>
-            <div class="selection-item__meta">No disponible actualmente${p ? "" : ` · ID: ${escapeHtml(item.productId)}`}</div>
+            <div class="selection-item__meta">No disponible actualmente${p ? "" : ` · ID: ${escapeHtml(item.productId)}`}${item.finish ? ` · ${escapeHtml(finishLabel(p, item.finish))}` : ""}</div>
           </div>
           <div class="selection-item__actions">
-            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(item.productId)}" aria-label="Quitar de la selección" title="Quitar de la selección">
+            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(item.productId)}" data-finish="${escapeHtml(item.finish || "")}" aria-label="Quitar de la selección" title="Quitar de la selección">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             </button>
           </div>
@@ -300,13 +300,18 @@
       const decrementDisabled = item.quantity <= min ? "disabled" : "";
       const displayValue = formatQuantityDisplay(item.unit, item.quantity);
       const productIdAttr = escapeHtml(item.productId);
-      const inputId = `quantity-${productIdAttr}`;
+      /* Punto 44: una línea por producto y acabado. */
+      const finishAttr = escapeHtml(item.finish || "");
+      const inputId = `quantity-${productIdAttr}${item.finish ? `-${escapeHtml(item.finish.replace(/[^A-Za-z0-9_-]/g, "_"))}` : ""}`;
+      const finishOption = item.finish ? (p.acabadosOpciones || []).find(f => f.codigo === item.finish) : null;
+      const finishText = item.finish ? finishLabel(p, item.finish) : "";
       return `
         <div class="selection-item">
-          <div class="selection-item__thumb">${productMediaMarkup(p, 26)}</div>
+          <div class="selection-item__thumb">${productMediaMarkup(finishOption && finishOption.imagen ? { ...p, imagen: finishOption.imagen } : p, 26)}</div>
 
           <div class="selection-item__content">
-            <div class="sp-name">${escapeHtml(p.nombre)}</div>
+            <div class="sp-name">${escapeHtml(p.nombre)}${p.referencia ? ` <span class="selection-item__meta">· Ref. ${escapeHtml(p.referencia)}</span>` : ""}</div>
+            ${finishText ? `<div class="selection-item__meta">Acabado: ${escapeHtml(finishText)}</div>` : ""}
             <div class="selection-item__meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
             <div class="selection-item__price">${cardPriceLineHtml(p.id)}</div>
           </div>
@@ -314,9 +319,9 @@
           <div class="selection-item__quantity">
             <label for="${inputId}" class="selection-item__qty-label">Cantidad</label>
             <div class="quantity-control">
-              <button type="button" class="quantity-control__button qty-decrement" data-id="${productIdAttr}" aria-label="Disminuir cantidad" ${decrementDisabled}>−</button>
-              <button type="button" class="quantity-control__button qty-increment" data-id="${productIdAttr}" aria-label="Aumentar cantidad">+</button>
-              <input id="${inputId}" class="quantity-control__input qty-input" type="number" data-id="${productIdAttr}" value="${displayValue}" min="${min}" step="0.01" inputmode="decimal" aria-label="Cantidad de ${escapeHtml(p.nombre)}">
+              <button type="button" class="quantity-control__button qty-decrement" data-id="${productIdAttr}" data-finish="${finishAttr}" aria-label="Disminuir cantidad" ${decrementDisabled}>−</button>
+              <button type="button" class="quantity-control__button qty-increment" data-id="${productIdAttr}" data-finish="${finishAttr}" aria-label="Aumentar cantidad">+</button>
+              <input id="${inputId}" class="quantity-control__input qty-input" type="number" data-id="${productIdAttr}" data-finish="${finishAttr}" value="${displayValue}" min="${min}" step="0.01" inputmode="decimal" aria-label="Cantidad de ${escapeHtml(p.nombre)}">
               <span class="quantity-control__unit">${escapeHtml(item.unit)}</span>
             </div>
           </div>
@@ -325,7 +330,7 @@
             <a href="producto.html?id=${escapeHtml(encodeURIComponent(p.id))}" class="selection-item__icon-button" aria-label="Ver ficha" title="Ver ficha">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </a>
-            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(p.id)}" aria-label="Quitar de la selección" title="Quitar de la selección">
+            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(p.id)}" data-finish="${finishAttr}" aria-label="Quitar de la selección" title="Quitar de la selección">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             </button>
           </div>
@@ -344,7 +349,7 @@
 
     listEl.querySelectorAll(".remove-selection-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        removeFromSelection(btn.dataset.id);
+        removeFromSelection(btn.dataset.id, btn.dataset.finish || null);
         updateSelectionBadge();
         showToast("Producto quitado de la selección.");
         renderSelection();
@@ -353,7 +358,7 @@
 
     listEl.querySelectorAll(".qty-input").forEach(input => {
       input.addEventListener("change", () => {
-        const result = updateSelectionQuantity(input.dataset.id, input.value);
+        const result = updateSelectionQuantity(input.dataset.id, input.value, input.dataset.finish || null);
         if (!result.success) alert(result.error);
         renderSelection();
       });
@@ -361,20 +366,20 @@
 
     listEl.querySelectorAll(".qty-decrement").forEach(btn => {
       btn.addEventListener("click", () => {
-        const current = getSelection().find(i => i.productId === btn.dataset.id);
+        const current = getSelection().find(i => i.productId === btn.dataset.id && (i.finish || "") === btn.dataset.finish);
         if (!current) return;
         const min = current.unit === "ud." ? 1 : 0;
         const next = Math.max(min, current.quantity - 1);
-        updateSelectionQuantity(btn.dataset.id, next);
+        updateSelectionQuantity(btn.dataset.id, next, btn.dataset.finish || null);
         renderSelection();
       });
     });
 
     listEl.querySelectorAll(".qty-increment").forEach(btn => {
       btn.addEventListener("click", () => {
-        const current = getSelection().find(i => i.productId === btn.dataset.id);
+        const current = getSelection().find(i => i.productId === btn.dataset.id && (i.finish || "") === btn.dataset.finish);
         if (!current) return;
-        updateSelectionQuantity(btn.dataset.id, current.quantity + 1);
+        updateSelectionQuantity(btn.dataset.id, current.quantity + 1, btn.dataset.finish || null);
         renderSelection();
       });
     });

@@ -22,6 +22,27 @@
   .pp-withdraw-btn:disabled{ opacity:.6; cursor:default; text-decoration:none; background:transparent; }
   .field .pp-check{ display:flex; gap:8px; align-items:center; font-size:13.5px; font-weight:400; margin:10px 0 0; cursor:pointer; }
   .field .pp-check input{ width:auto; margin:0; accent-color: var(--accent); }
+  /* Punto 44: referencia, fotos y archivos. */
+  .pp-media h3{ font-size:15px; margin:22px 0 4px; }
+  .pp-media-help{ margin:0 0 10px; font-size:13.5px; color: var(--ink-soft); }
+  .pp-photos{ display:grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin:0 0 10px; }
+  .pp-photo{ margin:0; font-size:12.5px; color: var(--ink-soft); overflow-wrap:anywhere; }
+  .pp-photo img{ display:block; width:100%; aspect-ratio:4/5; object-fit:cover; background:#fff; border:1px solid var(--line); border-radius: var(--radius); margin-bottom:4px; }
+  .pp-photo button{ margin-top:4px; }
+  .pp-row{ display:grid; grid-template-columns: 70px 1fr 1fr 56px auto auto; gap:8px; align-items:end; padding:10px 0; border-bottom:1px solid var(--line); }
+  .pp-row label{ display:block; font-size:12.5px; color: var(--ink-soft); margin-bottom:4px; }
+  .pp-row input[type=text]{ width:100%; }
+  .pp-row img{ display:block; width:56px; aspect-ratio:4/5; object-fit:cover; background:#fff; border:1px solid var(--line); border-radius: var(--radius); }
+  .pp-row .pp-default{ display:flex; gap:6px; align-items:center; font-size:13px; white-space:nowrap; }
+  .pp-file-row{ display:grid; grid-template-columns: 1fr 180px auto; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; overflow-wrap:anywhere; }
+  .pp-file-add{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .pp-file-add select, .pp-file-add input{ width:auto; flex:1 1 160px; }
+  .pp-media-status{ margin:12px 0 0; font-size:13.5px; }
+  .pp-media-status.is-error{ color: var(--danger); }
+  @media (max-width: 640px){
+    .pp-row{ grid-template-columns: 1fr 1fr; }
+    .pp-file-row{ grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -101,11 +122,46 @@
           <div class="field full"><label for="pf-description">Descripción <span class="hint" id="pf-description-hint">(opcional)</span></label><textarea id="pf-description" maxlength="2000"></textarea><span class="pp-current" data-current="description"></span></div>
           <div class="field full"><label for="pf-measurements">Medidas <span class="hint">(opcional)</span></label><input id="pf-measurements" type="text" maxlength="200"><span class="pp-current" data-current="measurements"></span></div>
           <div class="field"><label for="pf-materials">Materiales <span class="hint">(opcional)</span></label><input id="pf-materials" type="text" maxlength="200"><span class="pp-current" data-current="materials"></span></div>
-          <div class="field"><label for="pf-finishes">Acabados <span class="hint">(opcional)</span></label><input id="pf-finishes" type="text" maxlength="200"><span class="pp-current" data-current="finishes"></span></div>
-          <div class="field full"><label for="pf-image-url">Imagen <span class="hint">(enlace https://)</span></label><input id="pf-image-url" type="url" maxlength="500"><span class="pp-current" data-current="image_url"></span></div>
-          <div class="field full"><label for="pf-sheet-url">Ficha técnica <span class="hint">(enlace https://)</span></label><input id="pf-sheet-url" type="url" maxlength="500"><span class="pp-current" data-current="technical_sheet_url"></span></div>
-          <div class="field full"><label for="pf-cad-url">CAD / BIM / 3D <span class="hint">(enlace https://)</span></label><input id="pf-cad-url" type="url" maxlength="500"><span class="pp-current" data-current="cad_bim_3d_url"></span></div>
+          <div class="field"><label for="pf-finishes">Acabados <span class="hint">(opcional; con acabados abajo, se usan sus nombres)</span></label><input id="pf-finishes" type="text" maxlength="200"><span class="pp-current" data-current="finishes"></span></div>
         </div>
+      </fieldset>
+
+      <!-- Punto 44: archivos reales en lugar de enlaces. Cada archivo se sube
+           al elegirlo (queda pendiente) y la propuesta guarda la lista. -->
+      <fieldset id="pf-media-fields" class="pp-media">
+        <legend>Referencia, fotos y archivos</legend>
+        <div class="field-grid">
+          <div class="field"><label for="pf-reference">Referencia</label><input id="pf-reference" type="text" maxlength="60" autocomplete="off"><span class="pp-current">La del fabricante, por ejemplo 3225. Obligatoria para enviar.</span></div>
+        </div>
+
+        <h3>Portada</h3>
+        <p class="pp-media-help">Elige tú la foto principal del producto en el catálogo. Se recorta en vertical 4:5. Obligatoria para enviar.</p>
+        <div class="pp-photos" id="pf-cover"></div>
+        <button type="button" class="btn btn-outline btn-sm" id="pf-cover-btn">Subir portada</button>
+        <input type="file" id="pf-cover-input" accept="image/jpeg,image/png,image/webp" hidden>
+
+        <h3>Acabados</h3>
+        <p class="pp-media-help">Una fila por acabado, con su código, nombre, referencia y foto (recortada 4:5). Marca uno por defecto. Si el producto no tiene acabados, deja la lista vacía.</p>
+        <div id="pf-finishes-list"></div>
+        <button type="button" class="btn btn-outline btn-sm" id="pf-finish-add" style="margin-top:10px;">Añadir acabado</button>
+        <input type="file" id="pf-finish-input" accept="image/jpeg,image/png,image/webp" hidden>
+
+        <h3>Galería</h3>
+        <p class="pp-media-help">Fotos de ambiente y detalle, en el orden en que las añadas. Se reducen a 2400 px.</p>
+        <div class="pp-photos" id="pf-gallery"></div>
+        <button type="button" class="btn btn-outline btn-sm" id="pf-gallery-btn">Añadir fotos</button>
+        <input type="file" id="pf-gallery-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+
+        <h3>Ficha técnica, vídeos y archivos profesionales</h3>
+        <p class="pp-media-help">Ficha técnica (PDF), vídeo, CAD 2D, CAD 3D, BIM, cálculo de iluminación o manual. Máximo 50 MB por archivo.</p>
+        <div id="pf-files-list"></div>
+        <div class="pp-file-add">
+          <select id="pf-file-kind" aria-label="Tipo de archivo"></select>
+          <input id="pf-file-label" type="text" maxlength="80" placeholder="Etiqueta (opcional)" aria-label="Etiqueta del archivo">
+          <button type="button" class="btn btn-outline btn-sm" id="pf-file-btn">Subir archivo</button>
+          <input type="file" id="pf-file-input" hidden>
+        </div>
+        <p class="pp-media-status" id="pf-media-status" role="status" aria-live="polite"></p>
       </fieldset>
 
       <fieldset id="pf-price-fields">
@@ -180,6 +236,7 @@
 <script src="proyectos-data.js"></script>
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
+<script src="producto-archivos.js"></script>
 <script>
 /* Formulario de propuesta de producto (38-C). No es una lista ni un
    historial: solo se llega desde Mis productos (distribuidor-productos.html)
@@ -199,6 +256,10 @@
              proposed_new_subcategory, proposed_price_status,
              proposed_price_amount, internal_note
      UPDATE: las mismas salvo proposal_kind y product_id, más status.
+   Punto 44: también proposed_media (referencia, portada, acabados y lista
+   de archivos). Los archivos se registran en product_assets (pendientes)
+   y se suben a Storage al elegirlos; en un cambio, proposed_media solo se
+   envía si difiere de lo que el producto ya tiene.
    La seguridad real está en RLS, permisos por columna y triggers; las
    validaciones de aquí solo adelantan los mensajes. */
 (() => {
@@ -244,10 +305,7 @@
     { key: "description",         id: "pf-description",  label: "Descripción",   requiredOnCreate: true, max: 2000 },
     { key: "measurements",        id: "pf-measurements", label: "Medidas",       max: 200 },
     { key: "materials",           id: "pf-materials",    label: "Materiales",    max: 200 },
-    { key: "finishes",            id: "pf-finishes",     label: "Acabados",      max: 200 },
-    { key: "image_url",           id: "pf-image-url",    label: "Imagen",        max: 500, url: true },
-    { key: "technical_sheet_url", id: "pf-sheet-url",    label: "Ficha técnica", max: 500, url: true },
-    { key: "cad_bim_3d_url",      id: "pf-cad-url",      label: "CAD / BIM / 3D", max: 500, url: true }
+    { key: "finishes",            id: "pf-finishes",     label: "Acabados",      max: 200 }
   ];
   const AVAILABILITY_LABELS = { "en-stock": "En stock", "bajo-pedido": "Bajo pedido", "por-confirmar": "Por confirmar" };
   const USE_OPTIONS = [["residencial", "Residencial"], ["comercial", "Comercial"], ["hospitality", "Hospitality"], ["oficina", "Oficina"]];
@@ -267,6 +325,12 @@
   let editing = null;      // propuesta abierta en el formulario, o null si es nueva
   let mode = null;         // "create" | "update" (fijo por la URL)
   let productId = null;    // producto del cambio (update), fijo por la URL
+  let distributorId = null;
+  /* Punto 44: archivos de la propuesta. */
+  let media = null;          // { reference_code, cover_asset_id, finishes[], assets[{id,label}] }
+  let mediaBaseline = null;  // lo que el producto ya tiene (cambio), en el mismo formato
+  let assetsById = new Map();
+  let uploading = 0;
 
   function showOnly(id){
     ["pp-loading", "pp-load-error", "pp-form-view"].forEach(x => { $(x).hidden = x !== id; });
@@ -321,7 +385,10 @@
     product_proposals_price_amount_check: "El precio debe ser un número igual o mayor que 0.",
     product_proposals_price_published_amount: "Para proponer un precio publicado indica el importe en USD.",
     product_proposals_price_amount_needs_status: "Para indicar un importe elige también el tipo de precio.",
-    product_proposals_changes_size: "La propuesta es demasiado larga. Acorta los textos."
+    product_proposals_changes_size: "La propuesta es demasiado larga. Acorta los textos.",
+    product_proposals_media_size: "La propuesta tiene demasiados archivos o textos.",
+    product_assets_format_valid: "Ese formato no se admite para este tipo de archivo.",
+    product_assets_text_lengths: "El nombre o la etiqueta del archivo es demasiado largo."
   };
   const GENERIC_SAVE_ERROR = "No pudimos guardar. Intenta de nuevo.";
 
@@ -355,6 +422,257 @@
       return null;
     }
     return dp.distributor_id;
+  }
+
+  /* ---------- punto 44: referencia, fotos y archivos ---------- */
+  const emptyMedia = () => ({ reference_code: null, cover_asset_id: null, finishes: [], assets: [] });
+  const PRO_FILE_KINDS = ["ficha_tecnica", "video", "cad_2d", "cad_3d", "bim", "calculo_iluminacion", "manual"];
+
+  /* Formato estable para guardar y comparar. */
+  function normalizedMedia(m){
+    const text = (v, max) => { const s = (v ?? "").toString().trim(); return s ? s.slice(0, max) : null; };
+    return {
+      reference_code: text(m.reference_code, 60),
+      cover_asset_id: m.cover_asset_id || null,
+      finishes: m.finishes.map(f => ({
+        code: text(f.code, 20) || "", name: text(f.name, 60) || "", reference_code: text(f.reference_code, 60),
+        image_asset_id: f.image_asset_id || null, is_default: !!f.is_default
+      })),
+      assets: m.assets.map(a => ({ id: a.id, label: text(a.label, 80) }))
+    };
+  }
+
+  /* Lo que el producto tiene hoy (cambio) o nada (producto nuevo). */
+  async function loadMediaBaseline(product){
+    if (!product) return emptyMedia();
+    const [finishesRes, assets] = await Promise.all([
+      supabaseClient.from("product_finishes").select("code, name, reference_code, image_asset_id, is_default, sort_order")
+        .eq("product_id", product.id).order("sort_order", { ascending: true }),
+      MobauArchivos.listApproved(product.id)
+    ]);
+    if (finishesRes.error) throw finishesRes.error;
+    assets.forEach(a => assetsById.set(a.id, a));
+    return normalizedMedia({
+      reference_code: product.reference_code, cover_asset_id: product.cover_asset_id,
+      finishes: finishesRes.data || [], assets: assets.map(a => ({ id: a.id, label: a.label }))
+    });
+  }
+
+  async function loadMedia(proposal, product){
+    assetsById = new Map();
+    mediaBaseline = await loadMediaBaseline(product);
+    const saved = proposal && proposal.proposed_media;
+    media = saved ? normalizedMedia({ ...emptyMedia(), ...saved, finishes: saved.finishes || [], assets: saved.assets || [] })
+                  : JSON.parse(JSON.stringify(mediaBaseline));
+    (await MobauArchivos.listByIds(media.assets.map(a => a.id))).forEach(a => assetsById.set(a.id, a));
+    $("pf-reference").value = media.reference_code || "";
+    renderMedia();
+  }
+
+  function mediaStatus(text, isError){
+    $("pf-media-status").textContent = text || "";
+    $("pf-media-status").classList.toggle("is-error", !!isError);
+  }
+
+  function assetUsedAsImage(id){
+    return media.cover_asset_id === id || media.finishes.some(f => f.image_asset_id === id);
+  }
+
+  /* Quita un archivo de la lista (no lo borra: puede ser del producto). */
+  function dropAsset(id){
+    media.assets = media.assets.filter(a => a.id !== id);
+    if (media.cover_asset_id === id) media.cover_asset_id = null;
+    media.finishes.forEach(f => { if (f.image_asset_id === id) f.image_asset_id = null; });
+  }
+
+  function photoFigure(asset, caption, onRemove){
+    const figure = document.createElement("figure");
+    figure.className = "pp-photo";
+    const img = document.createElement("img");
+    img.src = MobauArchivos.cardUrl(asset);
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    const cap = document.createElement("figcaption");
+    cap.textContent = caption;
+    figure.append(img, cap);
+    if (onRemove){
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn btn-outline btn-sm";
+      remove.textContent = "Quitar";
+      remove.addEventListener("click", onRemove);
+      figure.append(remove);
+    }
+    return figure;
+  }
+
+  function renderMedia(){
+    const cover = media.cover_asset_id && assetsById.get(media.cover_asset_id);
+    $("pf-cover").replaceChildren(cover
+      ? photoFigure(cover, "Portada", () => { dropAsset(cover.id); renderMedia(); })
+      : Object.assign(document.createElement("p"), { className: "card-meta", textContent: "Sin portada." }));
+    $("pf-cover-btn").textContent = cover ? "Cambiar portada" : "Subir portada";
+
+    $("pf-finishes-list").replaceChildren(...media.finishes.map((f, index) => finishRow(f, index)));
+
+    const gallery = media.assets.map(a => assetsById.get(a.id))
+      .filter(a => a && a.kind === "foto" && !assetUsedAsImage(a.id));
+    $("pf-gallery").replaceChildren(...gallery.map((a, i) => photoFigure(a, `Foto ${i + 1}`, () => { dropAsset(a.id); renderMedia(); })));
+
+    const files = media.assets.filter(a => assetsById.get(a.id) && assetsById.get(a.id).kind !== "foto");
+    $("pf-files-list").replaceChildren(...files.map(entry => fileRow(entry, assetsById.get(entry.id))));
+    updateWarning();
+  }
+
+  function finishRow(f, index){
+    const row = document.createElement("div");
+    row.className = "pp-row";
+    const input = (key, label, max, width) => {
+      const wrap = document.createElement("div");
+      const id = `pf-finish-${key}-${index}`;
+      wrap.innerHTML = `<label for="${id}">${label}</label>`;
+      const el = document.createElement("input");
+      el.type = "text"; el.id = id; el.maxLength = max; el.value = f[key] || "";
+      if (width) el.style.width = width;
+      el.addEventListener("input", () => { f[key] = el.value; });
+      wrap.append(el);
+      return wrap;
+    };
+    const image = f.image_asset_id && assetsById.get(f.image_asset_id);
+    const photo = document.createElement("div");
+    photo.innerHTML = image ? "" : `<span class="card-meta">Sin foto</span>`;
+    if (image){
+      const img = document.createElement("img");
+      img.src = MobauArchivos.cardUrl(image); img.alt = ""; img.referrerPolicy = "no-referrer";
+      photo.append(img);
+    }
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex; flex-wrap:wrap; gap:6px;";
+    const upload = document.createElement("button");
+    upload.type = "button"; upload.className = "btn btn-outline btn-sm";
+    upload.textContent = image ? "Cambiar foto" : "Subir foto";
+    upload.addEventListener("click", () => { finishTarget = f; $("pf-finish-input").click(); });
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "btn btn-outline btn-sm";
+    remove.textContent = "Quitar";
+    remove.addEventListener("click", () => {
+      const imageId = f.image_asset_id;
+      media.finishes.splice(media.finishes.indexOf(f), 1);
+      if (imageId && !assetUsedAsImage(imageId)) media.assets = media.assets.filter(a => a.id !== imageId);
+      if (f.is_default && media.finishes.length) media.finishes[0].is_default = true;
+      renderMedia();
+    });
+    actions.append(upload, remove);
+    const def = document.createElement("label");
+    def.className = "pp-default";
+    def.innerHTML = `<input type="radio" name="pf-finish-default"${f.is_default ? " checked" : ""}> Por defecto`;
+    def.querySelector("input").addEventListener("change", () => { media.finishes.forEach(x => { x.is_default = x === f; }); });
+    row.append(input("code", "Código", 20), input("name", "Nombre", 60), input("reference_code", "Referencia", 60), photo, def, actions);
+    return row;
+  }
+
+  function fileRow(entry, asset){
+    const row = document.createElement("div");
+    row.className = "pp-file-row";
+    const name = document.createElement("span");
+    name.textContent = `${MobauArchivos.KINDS[asset.kind].label} · ${asset.original_name} · ${MobauArchivos.sizeText(asset.bytes)}`;
+    const label = document.createElement("input");
+    label.type = "text"; label.maxLength = 80; label.placeholder = "Etiqueta (opcional)";
+    label.setAttribute("aria-label", `Etiqueta de ${asset.original_name}`);
+    label.value = entry.label || "";
+    label.addEventListener("input", () => { entry.label = label.value; });
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "btn btn-outline btn-sm";
+    remove.textContent = "Quitar";
+    remove.addEventListener("click", () => { dropAsset(entry.id); renderMedia(); });
+    row.append(name, label, remove);
+    return row;
+  }
+
+  let finishTarget = null;
+
+  /* Sube un archivo; mientras haya subidas no se puede guardar ni enviar. */
+  async function withUpload(file, task){
+    uploading++;
+    [$("pf-save-btn"), $("pf-submit-btn")].forEach(b => { b.disabled = true; });
+    mediaStatus(`Subiendo «${file.name}»…`);
+    try {
+      const row = await task();
+      if (row) assetsById.set(row.id, row);
+      mediaStatus(row ? `«${file.name}» subido.` : "");
+      return row;
+    } catch (error){
+      mediaStatus(`No pudimos subir «${file.name}»: ${(error && error.message) || "inténtalo de nuevo."}`, true);
+      return null;
+    } finally {
+      uploading--;
+      if (!uploading) [$("pf-save-btn"), $("pf-submit-btn")].forEach(b => { b.disabled = false; });
+    }
+  }
+
+  function replaceImage(oldId, row, label){
+    media.assets.push({ id: row.id, label });
+    if (oldId && !assetUsedAsImage(oldId)) media.assets = media.assets.filter(a => a.id !== oldId);
+  }
+
+  async function onCoverFile(file){
+    const row = await withUpload(file, () => MobauArchivos.uploadPhoto({ distributorId, file, crop: true }));
+    if (!row) return;
+    const old = media.cover_asset_id;
+    media.cover_asset_id = row.id;
+    replaceImage(old, row, "Portada");
+    renderMedia();
+  }
+
+  async function onFinishFile(file){
+    const target = finishTarget;
+    finishTarget = null;
+    if (!target) return;
+    const row = await withUpload(file, () => MobauArchivos.uploadPhoto({ distributorId, file, crop: true }));
+    if (!row) return;
+    const old = target.image_asset_id;
+    target.image_asset_id = row.id;
+    replaceImage(old, row, (target.name || "").trim() || null);
+    renderMedia();
+  }
+
+  async function onGalleryFiles(files){
+    for (const file of files){
+      const row = await withUpload(file, () => MobauArchivos.uploadPhoto({ distributorId, file, crop: false }));
+      if (row){ media.assets.push({ id: row.id, label: null }); renderMedia(); }
+    }
+  }
+
+  async function onProFile(file){
+    const kind = $("pf-file-kind").value;
+    const row = await withUpload(file, () => MobauArchivos.uploadFile({ distributorId, kind, file }));
+    if (!row) return;
+    media.assets.push({ id: row.id, label: $("pf-file-label").value.trim() || null });
+    $("pf-file-label").value = "";
+    renderMedia();
+  }
+
+  /* null si no cambia lo que el producto ya tiene (cambio sin archivos). */
+  function readMedia(){
+    media.reference_code = $("pf-reference").value;
+    const value = normalizedMedia(media);
+    if (mode === "update" && JSON.stringify(value) === JSON.stringify(mediaBaseline)) return null;
+    return value;
+  }
+
+  function validateMedia(value, { submit }){
+    if (!value) return null;
+    const codes = new Set();
+    for (const f of value.finishes){
+      if (!f.code || !f.name) return "Acabados: indica el código y el nombre de cada acabado (o quita la fila).";
+      if (codes.has(f.code.toLowerCase())) return `Acabados: el código ${f.code} está repetido.`;
+      codes.add(f.code.toLowerCase());
+    }
+    if (value.finishes.length && value.finishes.filter(f => f.is_default).length !== 1) return "Acabados: marca un único acabado por defecto.";
+    if (!submit) return null;
+    if (!value.reference_code) return "Referencia: es obligatoria para enviar.";
+    if (!value.cover_asset_id) return "Portada: sube y recorta la foto principal antes de enviar.";
+    return null;
   }
 
   /* ---------- formulario ---------- */
@@ -455,7 +773,7 @@
 
   /* Abre el formulario con el tipo fijo: una propuesta existente (editable)
      o una nueva de producto nuevo o de cambio del producto indicado. */
-  function openForm({ proposal = null, kind, product = null }){
+  async function openForm({ proposal = null, kind, product = null }){
     editing = proposal;
     mode = proposal ? kindOf(proposal) : kind;
     productId = mode === "update" ? (proposal ? proposal.product_id : product.id) : null;
@@ -467,6 +785,7 @@
     } else {
       loadProductIntoForm(productById(productId), proposal);
     }
+    await loadMedia(proposal, mode === "update" ? productById(productId) : null);
     updateWarning();
     showOnly("pp-form-view");
     window.scrollTo(0, 0);
@@ -494,7 +813,8 @@
       proposed_new_subcategory: newSub,
       proposed_price_status: priceStatus,
       proposed_price_amount: priceStatus && rawAmount !== "" ? Number(rawAmount) : null,
-      internal_note: norm($("pf-note").value)
+      internal_note: norm($("pf-note").value),
+      proposed_media: readMedia()
     };
   }
 
@@ -550,7 +870,8 @@
     if (values.proposed_price_status === "published" && values.proposed_price_amount === null){
       return "Para proponer un precio publicado indica el importe en USD.";
     }
-    return null;
+    /* Un cambio solo exige referencia y portada si toca los archivos. */
+    return validateMedia(values.proposed_media, { submit: submit && (mode === "create" || !!values.proposed_media) });
   }
 
   /* Avisos que no bloquean (Mobau decide). */
@@ -561,11 +882,11 @@
       notes.push("Ya tienes un producto con este nombre. Si quieres modificarlo, usa «Proponer cambios» en ese producto desde Mis productos.");
     }
     const missing = [];
-    if (!norm($("pf-image-url").value)) missing.push("imagen");
+    const kinds = new Set(media ? media.assets.map(a => (assetsById.get(a.id) || {}).kind) : []);
     if ($("pf-category").value !== "accesorios-decorativos"){
       if (!norm($("pf-measurements").value)) missing.push("medidas");
-      if (!norm($("pf-finishes").value)) missing.push("acabados");
-      if (!norm($("pf-sheet-url").value) && !norm($("pf-cad-url").value)) missing.push("ficha técnica o CAD/BIM");
+      if (!norm($("pf-finishes").value) && !(media && media.finishes.length)) missing.push("acabados");
+      if (!["ficha_tecnica", "cad_2d", "cad_3d", "bim"].some(k => kinds.has(k))) missing.push("ficha técnica o archivos CAD/BIM");
     }
     if (mode === "create" && !norm($("pf-lead").value)) missing.push("plazo de entrega");
     const desc = norm($("pf-description").value);
@@ -579,10 +900,11 @@
     const errorEl = $("pf-error");
     const fail = (message) => { errorEl.textContent = message; errorEl.style.display = "block"; };
     errorEl.style.display = "none";
+    if (uploading) return fail("Espera a que terminen de subirse los archivos.");
     const values = readProposal();
     const problem = validate(values, { submit });
     if (problem) return fail(problem);
-    if (mode === "update" && submit && !Object.keys(values.proposed_changes).length && !values.proposed_new_subcategory && !values.proposed_price_status){
+    if (mode === "update" && submit && !Object.keys(values.proposed_changes).length && !values.proposed_new_subcategory && !values.proposed_price_status && !values.proposed_media){
       return fail("La propuesta no contiene ningún cambio.");
     }
 
@@ -657,12 +979,12 @@
   async function load(){
     showOnly("pp-loading");
     try {
-      const distributorId = await requireVerifiedDistributor();
+      distributorId = await requireVerifiedDistributor();
       if (!distributorId) return;
 
       const [productsRes, categoriesRes, proposalsRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status")
+          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id")
           .eq("distributor_id", distributorId).order("name"),
         supabaseClient.from("categories").select("id, name, subcategories").order("name"),
         supabaseClient.from("product_proposals").select("*").in("status", OPEN).order("updated_at", { ascending: false })
@@ -685,23 +1007,24 @@
       fillSelect($("pf-category"), categories.map(c => [c.id, c.name]), "Selecciona una categoría");
       fillSelect($("pf-use"), USE_OPTIONS, "—");
       fillSelect($("pf-space"), SPACE_OPTIONS, "—");
+      fillSelect($("pf-file-kind"), PRO_FILE_KINDS.map(k => [k, MobauArchivos.KINDS[k].label]), null);
 
       if (presetProposalId){
         /* Compatibilidad: solo se abre si es editable; si no (en revisión o
            cerrada), se consulta desde Mis productos. */
         const proposal = proposals.find(p => p.id === presetProposalId);
-        if (proposal && kindOf(proposal) !== "republish" && EDITABLE.includes(proposal.status)) openForm({ proposal });
+        if (proposal && kindOf(proposal) !== "republish" && EDITABLE.includes(proposal.status)) await openForm({ proposal });
         else backToProducts("consulta", proposal ? proposal.id : null);
       } else if (presetNew){
-        openForm({ kind: "create" });
+        await openForm({ kind: "create" });
       } else {
         const product = productById(presetProductId);
         if (!product) return backToProducts("no-encontrado");
         /* Una abierta por producto, sea cambio o republicación (índice único de 41-04). */
         const open = proposals.find(p => kindOf(p) !== "create" && p.product_id === product.id);
         if (open && kindOf(open) === "republish") backToProducts("consulta", open.id);
-        else if (!open) openForm({ kind: "update", product });
-        else if (EDITABLE.includes(open.status)) openForm({ proposal: open });
+        else if (!open) await openForm({ kind: "update", product });
+        else if (EDITABLE.includes(open.status)) await openForm({ proposal: open });
         else backToProducts("en-revision", open.id); // nunca una segunda propuesta
       }
     } catch (error){
@@ -712,7 +1035,29 @@
 
   $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); updateWarning(); });
   $("pf-new-sub-toggle").addEventListener("change", (e) => { setNewSub(e.target.checked, ""); if (e.target.checked) $("pf-new-sub").focus(); });
-  ["pf-name", "pf-lead", "pf-image-url", "pf-measurements", "pf-finishes", "pf-sheet-url", "pf-cad-url", "pf-description"].forEach(id => $(id).addEventListener("input", updateWarning));
+  ["pf-name", "pf-lead", "pf-measurements", "pf-finishes", "pf-description"].forEach(id => $(id).addEventListener("input", updateWarning));
+  /* Punto 44: subidas. El valor del input se vacía para poder elegir el mismo archivo otra vez. */
+  const pick = (inputId, handler) => $(inputId).addEventListener("change", (e) => {
+    const files = [...e.target.files];
+    e.target.value = "";
+    if (files.length) handler(files);
+  });
+  $("pf-cover-btn").addEventListener("click", () => $("pf-cover-input").click());
+  $("pf-gallery-btn").addEventListener("click", () => $("pf-gallery-input").click());
+  $("pf-file-btn").addEventListener("click", () => {
+    $("pf-file-input").accept = MobauArchivos.acceptFor($("pf-file-kind").value);
+    $("pf-file-input").click();
+  });
+  pick("pf-cover-input", files => onCoverFile(files[0]));
+  pick("pf-finish-input", files => onFinishFile(files[0]));
+  pick("pf-gallery-input", files => onGalleryFiles(files));
+  pick("pf-file-input", files => onProFile(files[0]));
+  $("pf-finish-add").addEventListener("click", () => {
+    media.finishes.push({ code: "", name: "", reference_code: null, image_asset_id: null, is_default: media.finishes.length === 0 });
+    renderMedia();
+    const inputs = $("pf-finishes-list").querySelectorAll("input[type=text]");
+    if (inputs.length >= 3) inputs[inputs.length - 3].focus();
+  });
   $("pf-save-btn").addEventListener("click", () => save({ submit: false }));
   $("pf-submit-btn").addEventListener("click", () => save({ submit: true }));
   $("pf-withdraw-btn").addEventListener("click", withdraw);
