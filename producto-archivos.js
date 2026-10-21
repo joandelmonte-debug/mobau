@@ -347,3 +347,78 @@ const MobauArchivos = (() => {
     listApproved, listByIds, downloadUrl, uploadFile, uploadPhoto
   });
 })();
+
+/* ============================================================
+   Punto 44 · temperatura de color y tono de luz (plantilla de Iluminación)
+   ------------------------------------------------------------
+   products.color_temperature, texto canónico:
+     opciones fijas       «2700» o «2700,3000» (hasta 10, sin repetir)
+     intervalo regulable  «2700-6500» (de menor a mayor)
+   El tono se calcula a partir de los K con los criterios adoptados por
+   Mobau (no es una norma oficial): cálida < 3300 K ≤ neutra ≤ 5300 K < fría.
+   ============================================================ */
+const MobauTonoLuz = (() => {
+  const MIN = 1000, MAX = 20000, MAX_OPTIONS = 10;
+  const TONES = [
+    { id: "calida", label: "Luz cálida", help: "Tono dorado y acogedor", min: -Infinity, max: 3299 },
+    { id: "neutra", label: "Luz neutra", help: "Tono equilibrado, entre cálido y frío", min: 3300, max: 5300 },
+    { id: "fria",   label: "Luz fría",   help: "Tono blanco y fresco", min: 5301, max: Infinity }
+  ];
+  const toneOf = (k) => TONES.find(t => k >= t.min && k <= t.max);
+  const nf = (k) => String(k);
+
+  /* Valor guardado -> { kind: "fixed", values } | { kind: "range", from, to } | null. */
+  function parse(value){
+    const s = String(value || "").trim();
+    if (!s) return null;
+    let m = /^(\d{4,5})-(\d{4,5})$/.exec(s);
+    if (m) return { kind: "range", from: Number(m[1]), to: Number(m[2]) };
+    if (/^\d{4,5}(,\d{4,5})*$/.test(s)) return { kind: "fixed", values: s.split(",").map(Number) };
+    return { kind: "invalid", raw: s };
+  }
+
+  /* Opciones fijas escritas por la persona («2700, 3000 K») -> canónico, o error. */
+  function fixedFromText(text){
+    const parts = String(text || "").replace(/k/gi, " ").split(/[,;/\s]+/).filter(Boolean);
+    if (!parts.length) return { value: "" };
+    if (parts.some(p => !/^\d{4,5}$/.test(p))) return { error: "Temperatura de color: escribe solo números en K, separados por comas (por ejemplo 2700, 3000)." };
+    const values = [...new Set(parts.map(Number))].sort((a, b) => a - b);
+    if (values.some(v => v < MIN || v > MAX)) return { error: `Temperatura de color: cada valor debe estar entre ${MIN} y ${MAX} K.` };
+    if (values.length > MAX_OPTIONS) return { error: `Temperatura de color: como máximo ${MAX_OPTIONS} opciones fijas.` };
+    return { value: values.join(",") };
+  }
+
+  /* Intervalo regulable -> canónico, o error (vacío los dos = sin valor). */
+  function rangeFromText(fromText, toText){
+    const a = String(fromText || "").trim(), b = String(toText || "").trim();
+    if (!a && !b) return { value: "" };
+    if (!/^\d{4,5}$/.test(a) || !/^\d{4,5}$/.test(b)) return { error: "Temperatura regulable: indica los dos extremos en K (por ejemplo 2700 y 6500)." };
+    const from = Number(a), to = Number(b);
+    if ([from, to].some(v => v < MIN || v > MAX)) return { error: `Temperatura regulable: los extremos deben estar entre ${MIN} y ${MAX} K.` };
+    if (from >= to) return { error: "Temperatura regulable: el primer valor debe ser menor que el segundo." };
+    return { value: `${from}-${to}` };
+  }
+
+  /* Presentación: líneas { text, help } para la ficha pública. */
+  function describe(value){
+    const p = parse(value);
+    if (!p || p.kind === "invalid") return [];
+    if (p.kind === "range"){
+      const covered = TONES.filter(t => t.max >= p.from && t.min <= p.to).map(t => t.label.replace("Luz ", ""));
+      const list = covered.length > 1 ? `${covered.slice(0, -1).join(", ")} y ${covered.at(-1)}` : covered[0];
+      return [{ text: `Temperatura de color regulable · ${nf(p.from)}–${nf(p.to)} K`, help: `Abarca luz ${list}.` }];
+    }
+    return TONES.map(t => ({ tone: t, values: p.values.filter(v => toneOf(v) === t) }))
+      .filter(g => g.values.length)
+      .map(g => ({ text: `${g.tone.label} · ${g.values.map(nf).join(" / ")} K`, help: g.tone.help }));
+  }
+
+  /* Una sola línea (moderación, «Actual» del formulario). */
+  function summary(value){
+    const lines = describe(value);
+    if (!lines.length) return value ? String(value) : "";
+    return lines.map(l => l.text).join(" · ");
+  }
+
+  return Object.freeze({ MIN, MAX, MAX_OPTIONS, TONES, parse, fixedFromText, rangeFromText, describe, summary, toneOf });
+})();

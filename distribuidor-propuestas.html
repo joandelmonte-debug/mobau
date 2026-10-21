@@ -38,6 +38,11 @@
   .pp-file-add select, .pp-file-add input{ width:auto; flex:1 1 160px; }
   .pp-media-status{ margin:12px 0 0; font-size:13.5px; }
   .pp-media-status.is-error{ color: var(--danger); }
+  /* Punto 44: temperatura de color (opciones fijas o intervalo regulable). */
+  .pp-ct-modes{ display:flex; flex-wrap:wrap; gap:4px 18px; }
+  .pp-ct-modes .pp-check{ margin:6px 0 0; }
+  .pp-ct-input{ margin-top:10px; }
+  .pp-ct-range{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
   /* Punto 44: producto nuevo, primero la categoría; el resto aparece al elegirla. */
   .pp-category-first{ margin:0 0 12px; font-size:13.5px; color: var(--ink-soft); }
   #pp-form.pp-needs-category > fieldset:not(#pf-fields),
@@ -133,6 +138,22 @@
           <!-- Plantilla de Iluminación: solo con la categoría Iluminación. -->
           <div class="field" data-template="iluminacion" hidden><label for="pf-light-source">Fuente de luz <span class="hint">(opcional)</span></label><input id="pf-light-source" type="text" maxlength="200" placeholder="Por ejemplo: 1 × LED 16,7 W"><span class="pp-current" data-current="light_source"></span></div>
           <div class="field" data-template="iluminacion" hidden><label for="pf-electrical-connection">Conexión eléctrica <span class="hint">(opcional)</span></label><input id="pf-electrical-connection" type="text" maxlength="200" placeholder="Por ejemplo: con enchufe"><span class="pp-current" data-current="electrical_connection"></span></div>
+          <div class="field full" data-template="iluminacion" id="pf-color-temp-field" hidden>
+            <label id="pf-color-temp-label">Temperatura de color (K) <span class="hint">(opcional)</span></label>
+            <div class="pp-ct-modes" role="radiogroup" aria-labelledby="pf-color-temp-label">
+              <label class="pp-check"><input type="radio" name="pf-ct-mode" value="" checked> Sin indicar</label>
+              <label class="pp-check"><input type="radio" name="pf-ct-mode" value="fixed"> Opciones fijas</label>
+              <label class="pp-check"><input type="radio" name="pf-ct-mode" value="range"> Temperatura regulable</label>
+            </div>
+            <div class="pp-ct-input" id="pf-ct-fixed" hidden><label for="pf-ct-values">Valores en K, separados por comas</label><input id="pf-ct-values" type="text" maxlength="80" inputmode="numeric" placeholder="2700, 3000"></div>
+            <div class="pp-ct-input pp-ct-range" id="pf-ct-range" hidden>
+              <div><label for="pf-ct-from">Desde (K)</label><input id="pf-ct-from" type="text" maxlength="5" inputmode="numeric" placeholder="2700"></div>
+              <div><label for="pf-ct-to">Hasta (K)</label><input id="pf-ct-to" type="text" maxlength="5" inputmode="numeric" placeholder="6500"></div>
+            </div>
+            <span class="pp-current" style="display:block;">Opciones fijas: el producto se elige con una de esas temperaturas. Regulable: la temperatura de color se ajusta dentro del intervalo (no es la regulación de intensidad).</span>
+            <input type="hidden" id="pf-color-temp">
+            <span class="pp-current" data-current="color_temperature"></span>
+          </div>
           <div class="field full"><label for="pf-lead">Tiempo de entrega <span class="hint">(opcional)</span></label><input id="pf-lead" type="text" maxlength="160"><span class="pp-current" data-current="lead_time"></span></div>
           <div class="field full"><label for="pf-description">Descripción <span class="hint" id="pf-description-hint">(opcional)</span></label><textarea id="pf-description" maxlength="2000"></textarea><span class="pp-current" data-current="description"></span></div>
           <div class="field full"><label for="pf-measurements">Medidas <span class="hint">(con unidades, por ejemplo: Ø 45 × 61 cm)</span></label><input id="pf-measurements" type="text" maxlength="200" placeholder="Ø 45 × 61 cm"><span class="pp-current" data-current="measurements"></span></div>
@@ -311,7 +332,8 @@
     { key: "materials",           id: "pf-materials",    label: "Materiales",    max: 200 },
     /* Plantilla de Iluminación (punto 44): solo con esa categoría. */
     { key: "light_source",        id: "pf-light-source", label: "Fuente de luz", max: 200, template: "iluminacion" },
-    { key: "electrical_connection", id: "pf-electrical-connection", label: "Conexión eléctrica", max: 200, template: "iluminacion" }
+    { key: "electrical_connection", id: "pf-electrical-connection", label: "Conexión eléctrica", max: 200, template: "iluminacion" },
+    { key: "color_temperature",   id: "pf-color-temp",   label: "Temperatura de color", template: "iluminacion" }
   ];
   const ENVIRONMENT_OPTIONS = [["interior", "Interior"], ["exterior", "Exterior"], ["ambos", "Ambos"]];
   /* Un campo de plantilla solo cuenta con su categoría elegida. */
@@ -374,6 +396,7 @@
     if (key === "use_context") { const o = USE_OPTIONS.find(([v]) => v === value); return o ? o[1] : value; }
     if (key === "space") { const o = SPACE_OPTIONS.find(([v]) => v === value); return o ? o[1] : value; }
     if (key === "environment") { const o = ENVIRONMENT_OPTIONS.find(([v]) => v === value); return o ? o[1] : value; }
+    if (key === "color_temperature") return MobauTonoLuz.summary(value);
     return String(value);
   }
 
@@ -777,6 +800,7 @@
     } else {
       loadProductIntoForm(productById(productId), proposal);
     }
+    colorTempToUi($("pf-color-temp").value);
     await loadMedia(proposal, mode === "update" ? productById(productId) : null);
     applyTemplate();
     updateWarning();
@@ -789,7 +813,40 @@
   /* create: todos los campos con valor. update: solo los que difieren del
      producto actual. La nueva subcategoría va en su propia columna y excluye
      a la subcategoría de la lista. */
+  /* Punto 44: temperatura de color. El campo oculto pf-color-temp guarda el
+     valor canónico («2700,3000» o «2700-6500»). Solo se recalcula si se ha
+     tocado (así un valor sin modificar no cuenta como cambio); «Sin indicar»
+     deja el campo vacío (en un cambio, elimina el valor). */
+  let colorTempDirty = false;
+  let colorTempError = null;
+  function colorTempMode(){ return (document.querySelector('input[name="pf-ct-mode"]:checked') || {}).value || ""; }
+  function showColorTempMode(){
+    const m = colorTempMode();
+    $("pf-ct-fixed").hidden = m !== "fixed";
+    $("pf-ct-range").hidden = m !== "range";
+  }
+  function colorTempToUi(value){
+    const p = MobauTonoLuz.parse(value);
+    const mode = !p ? "" : (p.kind === "range" ? "range" : "fixed");
+    document.querySelector(`input[name="pf-ct-mode"][value="${mode}"]`).checked = true;
+    $("pf-ct-values").value = p && p.kind === "fixed" ? p.values.join(", ") : (p && p.kind === "invalid" ? p.raw : "");
+    $("pf-ct-from").value = p && p.kind === "range" ? p.from : "";
+    $("pf-ct-to").value = p && p.kind === "range" ? p.to : "";
+    colorTempDirty = false;
+    colorTempError = null;
+    showColorTempMode();
+  }
+  function colorTempFromUi(){
+    if (!colorTempDirty) return;
+    const m = colorTempMode();
+    const r = m === "fixed" ? MobauTonoLuz.fixedFromText($("pf-ct-values").value)
+      : m === "range" ? MobauTonoLuz.rangeFromText($("pf-ct-from").value, $("pf-ct-to").value) : { value: "" };
+    colorTempError = r.error || null;
+    if (!r.error) $("pf-color-temp").value = r.value;
+  }
+
   function readProposal(){
+    colorTempFromUi();
     const newSub = $("pf-new-sub-toggle").checked ? norm($("pf-new-sub").value) : null;
     const product = mode === "update" ? productById(productId) : null;
     const changes = {};
@@ -828,6 +885,7 @@
        omite la de la lista cuando se marca «No encuentro…»). */
   function validate(values, { submit }){
     const changes = values.proposed_changes;
+    if (colorTempError && $("pf-category").value === "iluminacion") return colorTempError;
     if (mode === "create" && !changes.name) return "Nombre: indica el nombre del producto.";
     for (const f of FIELDS){
       if (!fieldActive(f)) continue;
@@ -983,7 +1041,7 @@
 
       const [productsRes, categoriesRes, proposalsRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id, environment, light_source, electrical_connection")
+          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id, environment, light_source, electrical_connection, color_temperature")
           .eq("distributor_id", distributorId).order("name"),
         supabaseClient.from("categories").select("id, name, subcategories").order("name"),
         supabaseClient.from("product_proposals").select("*").in("status", OPEN).order("updated_at", { ascending: false })
@@ -1032,6 +1090,8 @@
   }
 
   $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); applyTemplate(); updateWarning(); });
+  document.querySelectorAll('input[name="pf-ct-mode"]').forEach(r => r.addEventListener("change", () => { colorTempDirty = true; showColorTempMode(); }));
+  ["pf-ct-values", "pf-ct-from", "pf-ct-to"].forEach(id => $(id).addEventListener("input", () => { colorTempDirty = true; }));
   $("pf-new-sub-toggle").addEventListener("change", (e) => { setNewSub(e.target.checked, ""); if (e.target.checked) $("pf-new-sub").focus(); });
   ["pf-name", "pf-lead", "pf-measurements", "pf-description"].forEach(id => $(id).addEventListener("input", updateWarning));
   /* Punto 44: subidas. El valor del input se vacía para poder elegir el mismo archivo otra vez. */

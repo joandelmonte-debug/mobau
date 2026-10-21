@@ -58,6 +58,13 @@
     <div id="p-price-actions" hidden style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 10px;"></div>
     <p class="resource-note">Precio, disponibilidad y plazo sujetos a confirmación del distribuidor.</p>
 
+    <!-- Punto 44: acabado elegido (código y nombre). No cambia la foto.
+         Debajo del precio y antes de «Antes de sumarlo…». -->
+    <div class="product-finish-field" id="product-finish-field" hidden>
+      <span class="product-finish-label" id="product-finish-label">Acabado</span>
+      <div class="finish-options" id="product-finish" role="group" aria-labelledby="product-finish-label"></div>
+    </div>
+
     <p class="section-note">Antes de sumarlo a tu proyecto, esto es lo que necesitas saber:</p>
     <dl class="spec-table">
       <div class="spec-row" id="p-referencia-row" hidden><dt>Referencia</dt><dd id="p-referencia">—</dd></div>
@@ -68,16 +75,11 @@
       <div class="spec-row" id="p-ambiente-row" hidden><dt>Interior o exterior</dt><dd id="p-ambiente">—</dd></div>
       <div class="spec-row" id="p-fuente-luz-row" hidden><dt>Fuente de luz</dt><dd id="p-fuente-luz">—</dd></div>
       <div class="spec-row" id="p-conexion-row" hidden><dt>Conexión eléctrica</dt><dd id="p-conexion">—</dd></div>
+      <div class="spec-row" id="p-tono-row" hidden><dt>Tono de luz</dt><dd id="p-tono">—</dd></div>
       <div class="spec-row" id="p-uso-row"><dt>Uso recomendado</dt><dd id="p-uso">—</dd></div>
       <div class="spec-row"><dt>Distribuidor</dt><dd id="p-distribuidor">—</dd></div>
       <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
     </dl>
-
-    <!-- Punto 44: acabado elegido (código y nombre). No cambia la foto. -->
-    <div class="product-finish-field" id="product-finish-field" hidden>
-      <span class="product-finish-label" id="product-finish-label">Acabado</span>
-      <div class="finish-options" id="product-finish" role="group" aria-labelledby="product-finish-label"></div>
-    </div>
 
     <div class="product-actions product-selection-actions" hidden>
       <div class="product-qty-field">
@@ -423,6 +425,11 @@ runWithCatalog(async function renderProductPage(){
     document.getElementById(id).textContent = value || "—";
   });
   document.getElementById("p-uso-row").hidden = !LABELS.uso[product.uso] && !!product.ambiente;
+  /* Punto 44: tono de luz calculado a partir de la temperatura de color. */
+  const tono = MobauTonoLuz.describe(product.temperaturaColor);
+  document.getElementById("p-tono-row").hidden = !tono.length;
+  document.getElementById("p-tono").innerHTML = tono.map(l =>
+    `<span class="tono-linea">${escapeHtml(l.text)}<span class="tono-ayuda">${escapeHtml(l.help)}</span></span>`).join("");
   document.getElementById("p-distribuidor").textContent = `${distribuidor.nombre} — ${distribuidor.ubicacion}`;
   document.getElementById("p-marca").textContent = marcaLabel;
 

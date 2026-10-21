@@ -666,6 +666,8 @@ button{ font-family: inherit; }
 .gallery-thumbs .gallery-thumb img{ display:block; width:100%; height:100%; object-fit:cover; }
 /* Punto 44: elección de acabado en la ficha (botones de texto). */
 .product-finish-field{ margin: 0 0 18px; }
+/* Bajo la nota del precio: menos aire arriba y el mismo que la nota abajo. */
+.resource-note + .product-finish-field{ margin: -14px 0 28px; }
 .product-finish-label{ display:block; font-size: 13px; color: var(--ink-soft); margin-bottom: 8px; }
 .finish-options{ display:flex; flex-wrap:wrap; gap:8px; }
 .finish-option{
@@ -726,6 +728,10 @@ button{ font-family: inherit; }
 }
 .dl-link:disabled{ color: var(--ink-faint); text-decoration:none; cursor:default; }
 .dl-link:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+/* Punto 44: tono de luz (una línea por tono, con su ayuda debajo). */
+.tono-linea{ display:block; }
+.tono-linea + .tono-linea{ margin-top:6px; }
+.tono-ayuda{ display:block; font-size: 12.5px; color: var(--ink-faint); }
 
 .product-actions{ display:flex; gap:14px; margin-bottom: 36px; }
 

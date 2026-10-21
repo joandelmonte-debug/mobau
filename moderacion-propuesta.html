@@ -111,7 +111,7 @@
   const M = MobauModeracion;
   const $ = (id) => document.getElementById(id);
   const MAX_MESSAGE = 2000;
-  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, environment, light_source, electrical_connection";
+  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, environment, light_source, electrical_connection, color_temperature";
   const PUBLICATION = { draft: "Borrador", in_review: "En revisión", changes_requested: "Cambios solicitados", published: "Publicado", archived: "Archivado" };
 
   const params = new URLSearchParams(window.location.search);
@@ -156,6 +156,7 @@
     if (key === "category_id") return (ctx.categories.get(value) || {}).name || String(value);
     if (key === "availability") return M.AVAILABILITY[value] || String(value);
     if (key === "environment") return ({ interior: "Interior", exterior: "Exterior", ambos: "Ambos" })[value] || String(value);
+    if (key === "color_temperature") return MobauTonoLuz.summary(value);
     return typeof value === "string" ? value : JSON.stringify(value);
   }
 
@@ -396,7 +397,8 @@
                   cell("", open));
         return tr;
       });
-      section.append(M.el("h3", "", "Archivos"), table(["Tipo", "Archivo", ""], rows));
+      section.append(M.el("h3", "", "Archivos"), table(["Tipo", "Archivo", ""], rows),
+                     M.el("p", "card-meta", "Los enlaces caducan a los 30 minutos. Recarga la página para renovarlos."));
     }
     return section;
   }
