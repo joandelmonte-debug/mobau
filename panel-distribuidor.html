@@ -115,8 +115,9 @@
 
         <section class="pd-section" id="mis-productos" aria-labelledby="pd-products-title">
           <h2 class="pd-label" id="pd-products-title">Productos recientes</h2>
-          <!-- Empresa verificada: carga inicial acompañada por Mobau (mailto).
-               Sin "Añadir producto": no hay escritura de productos desde el panel. -->
+          <!-- Empresa verificada sin productos incorporados todavía: carga
+               inicial acompañada por Mobau (mailto). Sin "Añadir producto": no
+               hay escritura de productos desde el panel. -->
           <div class="pd-locked" id="pd-products-locked" hidden>
             <p class="pd-locked__title">Carga inicial acompañada por Mobau</p>
             <p class="pd-locked__text">Envíanos tus catálogos, fichas y enlaces y preparamos contigo las fichas de producto. También puedes proponer productos nuevos o cambios, uno a uno, desde Mis productos.</p>
@@ -180,7 +181,7 @@
 
         <section class="pd-card" aria-labelledby="pd-help-title">
           <h2 class="pd-label" id="pd-help-title">Ayuda</h2>
-          <p class="pd-body">La carga inicial está acompañada por Mobau: te ayudamos a incorporar tus primeros productos.</p>
+          <p class="pd-body" id="pd-help-text">La carga inicial está acompañada por Mobau: te ayudamos a incorporar tus primeros productos.</p>
           <a class="btn btn-primary btn-sm btn-block" id="pd-help-cta" href="#" hidden>Solicitar carga inicial</a>
           <p class="pd-meta" id="pd-help-cta-note" hidden>Disponible cuando tu empresa esté verificada.</p>
           <p class="pd-meta">Para cualquier duda, escríbenos a <a class="pd-link" href="mailto:hola@mobau.do">hola@mobau.do</a>.</p>
@@ -339,6 +340,19 @@
     "Enlaces a catálogos, fichas o archivos:"
   ].join("\r\n");
   const INITIAL_LOAD_MAILTO = `mailto:hola@mobau.do?subject=${encodeURIComponent(INITIAL_LOAD_SUBJECT)}&body=${encodeURIComponent(INITIAL_LOAD_BODY)}`;
+  /* Punto 45: con productos ya incorporados, la misma vía de contacto para
+     ayuda general (añadir productos, completar fichas, actualizar el catálogo). */
+  const HELP_SUBJECT = "Solicitud de ayuda con mis productos — Mobau";
+  const HELP_BODY = [
+    "Hola,",
+    "",
+    "Necesito ayuda con los productos de mi empresa en Mobau.",
+    "",
+    "Empresa:",
+    "Qué necesito (añadir productos, completar fichas, actualizar el catálogo…):",
+    "Productos o referencias:"
+  ].join("\r\n");
+  const HELP_MAILTO = `mailto:hola@mobau.do?subject=${encodeURIComponent(HELP_SUBJECT)}&body=${encodeURIComponent(HELP_BODY)}`;
 
   function renderAviso(){
     const params = new URLSearchParams(window.location.search);
@@ -396,9 +410,39 @@
     $("pd-help-cta-note").hidden = verified;
     if (verified) $("pd-help-cta").href = INITIAL_LOAD_MAILTO;
 
-    /* "Mis productos" bloqueado (38-A): solo para empresas verificadas. */
-    $("pd-products-locked").hidden = !verified;
-    if (verified) $("pd-locked-cta").href = INITIAL_LOAD_MAILTO;
+    /* Carga inicial: se decide con los productos ya leídos (renderOnboarding). */
+    $("pd-products-locked").hidden = true;
+  }
+
+  /* Punto 45: la oferta de carga inicial solo para empresas que aún no han
+     incorporado productos. "new": ningún producto en ningún estado (incluidos
+     borrador, retirado y papelera) ni ninguno eliminado definitivamente;
+     "loaded": alguno; "unknown": no se pudo comprobar (no se afirma que la
+     cuenta sea nueva: se ofrece la ayuda general). Las propuestas abiertas no
+     cuentan como carga realizada. */
+  function renderOnboarding(state){
+    const isNew = state === "new";
+    $("pd-products-locked").hidden = !isNew;
+    if (isNew) $("pd-locked-cta").href = INITIAL_LOAD_MAILTO;
+    $("pd-help-title").textContent = isNew ? "Ayuda" : "¿Necesitas ayuda con tus productos?";
+    $("pd-help-text").textContent = isNew
+      ? "La carga inicial está acompañada por Mobau: te ayudamos a incorporar tus primeros productos."
+      : "Mobau te acompaña para añadir productos, completar sus fichas o actualizar tu catálogo.";
+    $("pd-help-cta").textContent = isNew ? "Solicitar carga inicial" : "Solicitar ayuda";
+    $("pd-help-cta").href = isNew ? INITIAL_LOAD_MAILTO : HELP_MAILTO;
+  }
+
+  /* Productos incorporados antes y eliminados definitivamente: quedan en el
+     historial de ciclo de vida de la empresa (acción purge). */
+  async function onboardingState(products){
+    if (products.length) return "loaded";
+    try {
+      const { data, error } = await supabaseClient.rpc("my_product_lifecycle_events", { p_product_id: null });
+      if (error || !Array.isArray(data)) return "unknown";
+      return data.some(ev => ev.action === "purge") ? "loaded" : "new";
+    } catch (e) {
+      return "unknown";
+    }
   }
 
   function renderProductsStep(verified){
@@ -561,6 +605,7 @@
     }
 
     renderProducts(profile, products, prices, categoryNames, completeness);
+    renderOnboarding(await onboardingState(products));
     showState("pd-content");
   }
 
