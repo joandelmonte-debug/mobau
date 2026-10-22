@@ -72,6 +72,17 @@
   .pl-selbar label{ display:inline-flex; align-items:center; gap:6px; min-height:44px; cursor:pointer; }
   .pl-selbar .pl-toggle{ min-height:44px; }
   .pl-selbar .pl-toggle:disabled{ color: var(--ink-soft); cursor:default; text-decoration:none; }
+  /* Acciones de grupo (45): en el flujo de la página, nunca encima de filas. */
+  .pl-groupbar{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:4px 0 8px; padding:8px 12px; border:1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size:14px; }
+  .pl-groupbar .pl-group-count{ font-weight:600; color: var(--ink); margin-right:6px; }
+  .pl-groupbar .btn{ min-height:40px; }
+  .pl-group-panel{ margin:0 0 12px; padding:14px 16px; border:1px solid var(--line); border-radius: var(--radius); background: var(--white); font-size:14px; }
+  .pl-group-panel h3{ font-size:16px; margin:0 0 6px; }
+  .pl-group-panel p{ margin:6px 0; max-width:none; }
+  .pl-group-panel ul{ margin:4px 0 10px; padding-left:18px; }
+  .pl-group-panel li{ margin:3px 0; overflow-wrap:anywhere; }
+  .pl-group-panel .pl-group-label{ margin-top:10px; font-weight:600; color: var(--ink); }
+  .pl-group-panel .lc-actions{ margin-top:12px; }
   /* Columnas compartidas por todas las filas (subgrid); sin subgrid, anchos fijos. */
   .pl-rows{ display:grid; grid-template-columns:32px minmax(56px,100px) minmax(64px,120px) minmax(0,1fr) max-content max-content; column-gap:14px; }
   .pl-row, .pl-rowhead{ grid-column:1 / -1; display:grid; grid-template-columns:subgrid; align-items:center; row-gap:2px; padding:2px 8px; border-bottom:1px solid var(--line); }
@@ -201,6 +212,12 @@
         <button type="button" class="pl-toggle" id="pl-select-visible">Seleccionar resultados visibles</button>
         <button type="button" class="pl-toggle" id="pl-clear-selection">Limpiar selección</button>
       </div>
+      <!-- Acciones de grupo (45): solo sobre los seleccionados de la pestaña activa. -->
+      <div class="pl-groupbar" id="pl-groupbar" role="group" aria-label="Acciones con los seleccionados" hidden>
+        <span class="pl-group-count" id="pl-group-count"></span>
+        <span id="pl-group-actions" style="display:contents;"></span>
+      </div>
+      <div class="pl-group-panel" id="pl-group-panel" role="region" aria-labelledby="pl-group-title" aria-live="polite" hidden></div>
     </div>
 
     <!-- Sin productos ni productos propuestos: un único estado vacío. -->
@@ -1316,6 +1333,7 @@
   const VIEW_TAB = { notifications: "pl-tab-notifications", catalog: "pl-tab-catalog", drafts: "pl-tab-drafts", trash: "pl-tab-trash" };
   const TAB_NAMES = { catalog: "En catálogo", drafts: "Borradores y propuestas", trash: "la papelera" };
   function setView(target){
+    if (group.phase === "confirm") closeGroupPanel();
     view = target;
     history.replaceState(null, "", window.location.pathname + window.location.search + VIEW_HASH[target]);
     render();
@@ -1403,6 +1421,7 @@
     if (!on && $("pl-only-selected").checked){ render(); return; }
     document.querySelectorAll(".pl-row").forEach(row => { if (row.dataset.key === key) row.classList.toggle("is-selected", on); });
     renderSelection();
+    renderGroupBar(entriesByTab());
   }
   function renderSelection(){
     const n = selected.size;
@@ -1414,6 +1433,279 @@
   function pruneSelection(entries){
     const valid = new Set([...entries.catalog, ...entries.drafts, ...entries.trash].map(e => e.key));
     [...selected].forEach(k => { if (!valid.has(k)) selected.delete(k); });
+  }
+
+  /* ---------- Acciones de grupo (45) ----------
+     Solo sobre los seleccionados de la pestaña activa. Una llamada por
+     elemento, en orden, con las funciones y reglas existentes (no hay una
+     transacción conjunta). Antes de confirmar se listan los que se procesan
+     y los que quedan fuera con su motivo. Un error de un elemento no detiene
+     el grupo; una sesión perdida o un resultado incierto (sin respuesta del
+     servidor) sí. Sin reintentos, sin envío masivo de altas o cambios y sin
+     eliminación definitiva masiva. */
+  const group = { phase: null, action: null, plan: null }; // phase: confirm | running | summary
+  const OPEN_EDITABLE = ["draft", "changes_requested"];
+  const entryLabel = (e) => (e.type === "update" ? `Cambios de ${e.name}` : e.name) + (e.code ? ` (${e.code})` : "");
+  const proposalOf = (e) => e.proposal || (e.product ? openUpdates.get(e.product.id) : null) || null;
+
+  function trashEligibility(e){
+    const lc = lcRow(e.product);
+    if (!lcUsable(lc)) return "no pudimos comprobar su estado";
+    if ((lc.allowed_actions || []).includes("trash")) return null;
+    if (lc.has_open_proposal) return "tiene una propuesta abierta";
+    if (lc.lifecycle_state === "legacy_retired") return "pendiente de revisión por Mobau";
+    return "su estado no lo permite";
+  }
+  async function runTrash(e){
+    await LC.trash(e.product.id, lcRow(e.product).updated_at);
+    return "movido a la papelera";
+  }
+
+  const GROUP_ACTIONS = {
+    catalog: [
+      { id: "trash", label: "Mover a papelera", title: "Mover a papelera",
+        intro: "Dejarán de estar disponibles en el catálogo y pasarán a la papelera, desde donde podrás restaurarlos. No es una eliminación definitiva.",
+        eligible: trashEligibility, run: runTrash },
+      { id: "prepare", label: "Preparar cambios", title: "Preparar cambios",
+        intro: "Se crea un borrador de cambios por producto (o se reutiliza el que ya tenga). No se envía nada a Mobau y cada producto sigue publicado con su versión actual. Los borradores aparecen en Borradores y propuestas y, mientras existan, no se puede retirar el producto ni solicitar su republicación.",
+        eligible(e){
+          const update = openUpdates.get(e.product.id);
+          if (update && update.status === "submitted") return "tiene una propuesta de cambios enviada; no se modifica";
+          if (openRepublish.get(e.product.id)) return "tiene una solicitud de republicación abierta";
+          return null;
+        },
+        async run(e){
+          const update = openUpdates.get(e.product.id);
+          if (update && OPEN_EDITABLE.includes(update.status)) return "ya tenía un borrador de cambios: se reutiliza";
+          const { data, error } = await supabaseClient.from("product_proposals")
+            .insert({ proposal_kind: "update", product_id: e.product.id, proposed_changes: {} }).select("id, status").single();
+          if (error || !data) throw error || { code: "", message: "respuesta no válida" };
+          return "borrador de cambios creado";
+        } }
+    ],
+    drafts: [
+      { id: "trash", label: "Mover a papelera", title: "Mover a papelera",
+        intro: "Solo productos en borrador o retirados que no tengan propuestas abiertas. Pasarán a la papelera, desde donde podrás restaurarlos. No es una eliminación definitiva.",
+        eligible(e){
+          if (e.type === "update") return "es un borrador de cambios de un producto publicado: el producto no se retira desde aquí";
+          if (e.type === "create") return "es un alta nueva sin producto: usa «Descartar borradores»";
+          return trashEligibility(e);
+        },
+        run: runTrash },
+      { id: "discard", label: "Descartar borradores", title: "Descartar borradores",
+        intro: "Se cancelan las altas nuevas y los borradores de cambios en borrador o con cambios solicitados. El producto publicado o retirado no cambia. Las propuestas enviadas no se incluyen.",
+        eligible(e){
+          const proposal = proposalOf(e);
+          if (!proposal) return "no tiene un borrador de propuesta";
+          if (proposal.status === "submitted") return "propuesta enviada: cancélala individualmente";
+          return OPEN_EDITABLE.includes(proposal.status) ? null : "su estado no lo permite";
+        },
+        describe: (e) => e.type === "create" ? `Alta nueva: ${entryLabel(e)}` : `Borrador de cambios de ${e.name}${e.code ? ` (${e.code})` : ""}`,
+        async run(e){
+          const proposal = proposalOf(e);
+          const { data, error } = await supabaseClient.from("product_proposals")
+            .update({ status: "withdrawn" }).eq("id", proposal.id).select("id, status").single();
+          if (error) throw error;
+          if (!data || data.status !== "withdrawn") throw { code: "", message: "respuesta no válida" };
+          return e.type === "create" ? "alta descartada" : "borrador de cambios descartado";
+        } },
+      { id: "republish", label: "Solicitar republicación", title: "Solicitar republicación",
+        intro: "Se envía a Mobau una solicitud de republicación por cada producto retirado elegible. Solicitar no publica: el producto sigue retirado hasta que Mobau la apruebe. No se envían propuestas de cambios pendientes.",
+        eligible(e){
+          if (e.type !== "draft") return "solo productos retirados";
+          const lc = lcRow(e.product);
+          if (!lcUsable(lc)) return "no pudimos comprobar su estado";
+          if (lc.lifecycle_state !== "retired") return lc.lifecycle_state === "legacy_retired" ? "pendiente de revisión por Mobau" : "no está retirado";
+          if ((lc.allowed_actions || []).includes("request_republish")) return null;
+          const update = openUpdates.get(e.product.id);
+          const republish = openRepublish.get(e.product.id);
+          if (update) return `tiene una propuesta de cambios (${PROPOSAL[update.status].label.toLowerCase()})`;
+          if (republish) return `ya tiene una solicitud de republicación (${PROPOSAL[republish.status].label.toLowerCase()})`;
+          return "tiene una propuesta abierta";
+        },
+        /* Dos pasos (crear y enviar). Si el envío falla, la solicitud queda
+           en borrador con su identificador: no se crea otra. */
+        async run(e){
+          const { data, error } = await supabaseClient.from("product_proposals")
+            .insert({ proposal_kind: "republish", product_id: e.product.id }).select("id, status, version").single();
+          if (error || !data) throw error || { code: "", message: "respuesta no válida" };
+          try {
+            await LC.submitRepublish(data.id);
+          } catch (submitError){
+            submitError.partial = `la solicitud se creó en borrador (identificador ${data.id}) pero no se pudo enviar; envíala desde el producto con «Enviar solicitud»`;
+            throw submitError;
+          }
+          return "solicitud enviada a Mobau";
+        } }
+    ],
+    trash: [
+      { id: "restore", label: "Restaurar para revisar", title: "Restaurar para revisar",
+        intro: "Vuelven al estado que tenían antes de la papelera: los retirados siguen retirados (no se publican) y los borradores siguen en borrador. Después podrás proponer cambios o solicitar la republicación desde Borradores y propuestas.",
+        eligible(e){
+          const lc = lcRow(e.product);
+          if (!lcUsable(lc)) return "no pudimos comprobar su estado";
+          if ((lc.allowed_actions || []).includes("restore")) return null;
+          return lc.trashed_by_kind === "mobau" ? "Mobau lo movió a la papelera: solo Mobau puede restaurarlo" : "su estado no lo permite";
+        },
+        async run(e){
+          await LC.restore(e.product.id, lcRow(e.product).updated_at);
+          return "restaurado";
+        } }
+    ]
+  };
+
+  function selectedIn(entries, tab){
+    return (entries[tab] || []).filter(e => selected.has(e.key));
+  }
+
+  function renderGroupBar(entries){
+    const bar = $("pl-groupbar");
+    const actions = GROUP_ACTIONS[view];
+    const inTab = actions ? selectedIn(entries, view) : [];
+    bar.hidden = !actions || selected.size === 0 || group.phase === "running";
+    if (bar.hidden) return;
+    const elsewhere = selected.size - new Set(inTab.map(e => e.key)).size;
+    $("pl-group-count").textContent = inTab.length
+      ? `${inTab.length} ${inTab.length === 1 ? "seleccionado" : "seleccionados"} en esta pestaña${elsewhere > 0 ? ` · ${elsewhere} en otras (no se tocan)` : ""}`
+      : "Ninguno de los seleccionados está en esta pestaña";
+    $("pl-group-actions").replaceChildren(...(inTab.length ? actions : []).map(action => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn btn-outline btn-sm";
+      b.textContent = action.label;
+      b.dataset.groupAction = action.id;
+      b.disabled = group.phase === "running";
+      b.addEventListener("click", () => openGroupConfirm(action));
+      return b;
+    }));
+  }
+
+  function li(text){ const el = document.createElement("li"); el.textContent = text; return el; }
+  function closeGroupPanel(){
+    group.phase = null; group.action = null; group.plan = null;
+    $("pl-group-panel").hidden = true;
+    $("pl-group-panel").replaceChildren();
+  }
+
+  function openGroupConfirm(action){
+    if (group.phase === "running") return;
+    const entries = entriesByTab();
+    const inTab = selectedIn(entries, view);
+    const keysInTab = new Set(inTab.map(e => e.key));
+    const elsewhere = [...selected].filter(k => !keysInTab.has(k)).length;
+    const plan = { eligible: [], excluded: [] };
+    inTab.forEach(e => {
+      const reason = action.eligible(e);
+      if (reason) plan.excluded.push({ e, reason }); else plan.eligible.push(e);
+    });
+    group.phase = "confirm"; group.action = action; group.plan = plan;
+    const panel = $("pl-group-panel");
+    const title = document.createElement("h3");
+    title.id = "pl-group-title";
+    title.textContent = `${action.title}: ${plan.eligible.length} de ${inTab.length} ${inTab.length === 1 ? "seleccionado" : "seleccionados"} en esta pestaña`;
+    const nodes = [title, textDiv("", action.intro)];
+    const describe = action.describe || entryLabel;
+    if (plan.eligible.length){
+      const list = document.createElement("ul");
+      list.append(...plan.eligible.map(e => li(describe(e))));
+      nodes.push(textDiv("pl-group-label", `Se procesarán (${plan.eligible.length}), uno a uno:`), list);
+    }
+    if (plan.excluded.length){
+      const list = document.createElement("ul");
+      list.append(...plan.excluded.map(x => li(`${entryLabel(x.e)}: ${x.reason}`)));
+      nodes.push(textDiv("pl-group-label", `Quedan fuera (${plan.excluded.length}):`), list);
+    }
+    if (elsewhere > 0) nodes.push(textDiv("", `${elsewhere} ${elsewhere === 1 ? "seleccionado está" : "seleccionados están"} en otras pestañas y no se tocan.`));
+    if (!plan.eligible.length) nodes.push(textDiv("pl-group-label", "Ninguno de los seleccionados admite esta acción."));
+    nodes.push(textDiv("", "Cada elemento se procesa por separado: si alguno falla, los anteriores ya quedan hechos."));
+    const buttons = document.createElement("div");
+    buttons.className = "lc-actions";
+    if (plan.eligible.length){
+      const ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = action.id === "trash" ? "btn btn-primary btn-sm lc-danger" : "btn btn-primary btn-sm";
+      ok.textContent = `${action.label} (${plan.eligible.length})`;
+      ok.id = "pl-group-confirm";
+      ok.addEventListener("click", () => runGroup(), { once: true });
+      buttons.append(ok);
+    }
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn btn-outline btn-sm";
+    cancel.textContent = "Cancelar";
+    cancel.addEventListener("click", closeGroupPanel);
+    buttons.append(cancel);
+    nodes.push(buttons);
+    panel.replaceChildren(...nodes);
+    panel.hidden = false;
+    (buttons.querySelector("#pl-group-confirm") || cancel).focus();
+  }
+
+  async function runGroup(){
+    if (group.phase !== "confirm") return;
+    const { action, plan } = group;
+    group.phase = "running";
+    renderGroupBar(entriesByTab());
+    const panel = $("pl-group-panel");
+    const progress = textDiv("pl-group-label", "");
+    panel.querySelectorAll("button").forEach(b => { b.disabled = true; });
+    panel.append(progress);
+    const results = { ok: [], failed: [], skipped: plan.excluded.map(x => ({ e: x.e, text: x.reason })) };
+    let stopped = null;
+    for (let i = 0; i < plan.eligible.length; i++){
+      const e = plan.eligible[i];
+      progress.textContent = `Procesando ${i + 1} de ${plan.eligible.length}…`;
+      try {
+        results.ok.push({ e, text: await action.run(e) });
+      } catch (error){
+        const c = LC.classify(error);
+        results.failed.push({ e, text: error && error.partial ? error.partial
+          : (c.kind === "network" ? "sin respuesta del servidor: no sabemos si llegó a ejecutarse" : c.message) });
+        /* Sin sesión o sin saber si llegó a ejecutarse: se detiene el grupo. */
+        if (c.kind === "login" || c.kind === "network"){
+          stopped = c.kind === "login"
+            ? "Se perdió la sesión. Vuelve a entrar y revisa el estado antes de continuar."
+            : "No pudimos confirmar si la última operación llegó a ejecutarse. Hemos actualizado la lista: revisa su estado antes de continuar.";
+          plan.eligible.slice(i + 1).forEach(rest => results.skipped.push({ e: rest, text: "no procesado: el grupo se detuvo" }));
+          break;
+        }
+      }
+    }
+    /* Los correctos salen de la selección; los fallidos y omitidos se quedan. */
+    results.ok.forEach(r => selected.delete(r.e.key));
+    if (results.ok.length && ["trash", "restore"].includes(action.id)) LC.invalidateCatalog();
+    group.phase = "summary";
+    showGroupSummary(action, results, stopped);
+    await load();
+  }
+
+  function showGroupSummary(action, results, stopped){
+    const panel = $("pl-group-panel");
+    const title = document.createElement("h3");
+    title.id = "pl-group-title";
+    title.textContent = `${action.title}: ${results.ok.length} ${results.ok.length === 1 ? "correcto" : "correctos"}, ${results.failed.length} con error, ${results.skipped.length} ${results.skipped.length === 1 ? "omitido" : "omitidos"}`;
+    const nodes = [title];
+    if (stopped) nodes.push(textDiv("pl-note", stopped));
+    const block = (label, rows) => {
+      if (!rows.length) return;
+      const list = document.createElement("ul");
+      list.append(...rows.map(r => li(`${entryLabel(r.e)}: ${r.text}`)));
+      nodes.push(textDiv("pl-group-label", label), list);
+    };
+    block("Correctos", results.ok);
+    block("Con error (siguen seleccionados para revisarlos)", results.failed);
+    block("Omitidos", results.skipped);
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "btn btn-outline btn-sm";
+    close.textContent = "Cerrar resumen";
+    close.addEventListener("click", () => { closeGroupPanel(); renderGroupBar(entriesByTab()); });
+    const buttons = document.createElement("div");
+    buttons.className = "lc-actions";
+    buttons.append(close);
+    nodes.push(buttons);
+    panel.replaceChildren(...nodes);
+    panel.hidden = false;
   }
 
   const ROW_BUILDERS = { catalog: buildCatalogRow, draft: buildDraftRow, update: buildUpdateRow, create: buildCreateRow, trash: buildTrashRow };
@@ -1454,7 +1746,7 @@
       $(`pl-view-${tab}`).hidden = !lists || view !== tab;
       if (view !== tab) $(`pl-${tab}-list`).replaceChildren();
     });
-    if (!lists){ visibleKeys = []; renderSelection(); return; }
+    if (!lists){ visibleKeys = []; renderSelection(); renderGroupBar(entries); return; }
 
     fillStatusOptions();
     const query = $("pl-search").value.trim().toLowerCase();
@@ -1485,6 +1777,7 @@
     $(`pl-${view}-empty-text`).textContent = text;
     if (view === "trash") $("pl-trash-back").hidden = all.length > 0;
     renderSelection();
+    renderGroupBar(entries);
   }
 
   async function load(){
