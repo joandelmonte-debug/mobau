@@ -219,3 +219,15 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
   - referencias que no cuadran;
   - Athens sin PDF;
   - 5520 con `.mtl` sin `.obj`.
+
+## 5. Punto 45 (nota breve)
+
+- **Estado (2026-10-22):** 45-01 **aplicada y registrada** (`20261025120000 · 45_01_restaurar_sin_publicar`, 43 migraciones).
+  - Migración: `migrations/20261025120000_45_01_restaurar_sin_publicar.sql`, MD5 `6066795e…`.
+  - Recuperación: `rollback/…rollback.sql`, MD5 `05175129…` (no ejecutada).
+  - Lectura posterior: productos, archivos, acabados, propuestas, permisos y políticas sin cambios.
+- **45-01:** al restaurar desde la papelera, lo que la empresa retiró vuelve a «retirado», no a publicado. Para volver al catálogo: proponer cambios (si hace falta) y después solicitar la republicación. El resto de casos y restricciones no cambia.
+- **Orden de despliegue:** 45-01 antes que la interfaz. Sin 45-01 aplicada, restaurar sigue publicando, y la interfaz lo dice así.
+- **Interfaz:**
+  - Resumen: datos por completar con portada, fotos y descargables aprobados; sin papelera.
+  - Mis productos: pestañas, filas compactas, búsqueda por código y selección en memoria.
