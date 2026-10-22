@@ -481,7 +481,7 @@ runWithCatalog(async function renderProductPage(){
   let chosenFinish = defaultFinishCode(product);
   finishField.hidden = finishes.length === 0;
   function renderFinishButtons(){
-    finishGroup.innerHTML = finishes.map(f => `<button type="button" class="finish-option" data-finish="${escapeHtml(f.codigo)}" aria-pressed="${f.codigo === chosenFinish}">${escapeHtml(`${f.codigo} · ${f.nombre}`)}</button>`).join("");
+    finishGroup.innerHTML = finishes.map(f => `<button type="button" class="finish-option" data-finish="${escapeHtml(f.codigo)}" aria-pressed="${f.codigo === chosenFinish}">${escapeHtml(finishOptionText(f))}</button>`).join("");
   }
   renderFinishButtons();
   const selectedFinish = () => (finishes.length ? chosenFinish : null);

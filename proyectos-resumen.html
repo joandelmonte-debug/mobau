@@ -355,7 +355,7 @@
     if (!p){
       return `
         <tr class="ps-unavailable-row">
-          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)}${row.finish_code ? ` · acabado ${escapeHtml(row.finish_code)}` : ""})</td>
+          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td>
         </tr>`;
     }
     const dist = DISTRIBUTORS[p.distribuidor];
@@ -514,7 +514,7 @@
       document.getElementById("ps-table-body").innerHTML = rows.map(row => {
         const p = PRODUCTS.find(pp => pp.id === row.product_id);
         if (!p){
-          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)}${row.finish_code ? ` · acabado ${escapeHtml(row.finish_code)}` : ""})</td></tr>`;
+          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td></tr>`;
         }
         const dist = DISTRIBUTORS[p.distribuidor];
         const unit = row.unit || getProductUnit(p);

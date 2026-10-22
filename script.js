@@ -399,11 +399,14 @@ function productImageUrl(path){
   return `${SUPABASE_URL}/storage/v1/object/public/productos-imagenes/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-/* Acabados de catalog_products.finish_options -> forma del front. */
+/* Acabados de catalog_products.finish_options -> forma del front. Punto 45:
+   «codigo» es la clave técnica del acabado (la que guardan selección,
+   proyecto y cotización; nunca se muestra) y «referencia» su código
+   comercial, opcional. */
 function mapFinishOptions(options){
   if (!Array.isArray(options)) return [];
   return options.filter(f => f && typeof f.code === "string" && f.code).map(f => ({
-    codigo: f.code, nombre: f.name || f.code, referencia: f.reference_code || null, porDefecto: !!f.is_default,
+    codigo: f.code, nombre: f.name || "", referencia: f.reference_code || null, porDefecto: !!f.is_default,
     imagen: productImageUrl(f.image_card_path) || productImageUrl(f.image_path), imagenGrande: productImageUrl(f.image_path)
   }));
 }
@@ -415,12 +418,19 @@ function defaultFinishCode(product){
   return chosen ? chosen.codigo : null;
 }
 
-/* Texto del acabado de una línea ("25 · Beige D1"), o "" sin acabado. */
+/* Texto de un acabado: «código · nombre» o solo el nombre si no tiene
+   código comercial ("25 · Beige D1", "Blanco"). */
+function finishOptionText(option){
+  return option.referencia ? `${option.referencia} · ${option.nombre}` : option.nombre;
+}
+
+/* Texto del acabado de una línea, o "" sin acabado. Sin datos del acabado
+   no se muestra su clave técnica. */
 function finishLabel(product, code){
   if (!code) return "";
   const option = ((product && product.acabadosOpciones) || []).find(f => f.codigo === code);
-  if (!option) return `Acabado ${code}`;
-  return `${option.codigo} · ${option.nombre}`;
+  if (!option) return "acabado no disponible";
+  return finishOptionText(option);
 }
 
 /* Producto con la foto de su acabado como imagen (para miniaturas de líneas). */

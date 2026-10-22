@@ -31,7 +31,7 @@
   .pp-photo button{ margin-top:4px; }
   .pp-photo label{ display:block; margin-top:6px; font-size:12px; color: var(--ink-soft); }
   .pp-photo select{ width:100%; font-size:12.5px; margin-top:2px; }
-  .pp-row{ display:grid; grid-template-columns: 110px 1fr auto auto; gap:8px; align-items:end; padding:10px 0; border-bottom:1px solid var(--line); }
+  .pp-row{ display:grid; grid-template-columns: 170px 1fr auto auto; gap:8px; align-items:end; padding:10px 0; border-bottom:1px solid var(--line); }
   .pp-row label{ display:block; font-size:12.5px; color: var(--ink-soft); margin-bottom:4px; }
   .pp-row input[type=text]{ width:100%; }
   .pp-row .pp-default{ display:flex; gap:6px; align-items:center; font-size:13px; white-space:nowrap; }
@@ -52,7 +52,7 @@
   #pp-form.pp-needs-category .pp-form-actions,
   #pp-form.pp-needs-category #pf-warning{ display:none !important; }
   @media (max-width: 640px){
-    .pp-row{ grid-template-columns: 90px 1fr; }
+    .pp-row{ grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
     .pp-file-row{ grid-template-columns: 1fr; }
   }
 </style>
@@ -464,9 +464,12 @@
   const PRO_FILE_KINDS = ["ficha_tecnica", "video", "cad_2d", "cad_3d", "bim", "calculo_iluminacion", "manual"];
 
   /* Formato estable para guardar y comparar. Punto 44-05: cada foto puede
-     llevar «finish» (código de uno de los acabados de la propuesta). En el
-     editor la foto apunta al acabado por una clave interna (_fk → _k), así
-     que cambiar el código no rompe la asociación; se omite si no tiene. */
+     llevar «finish» (clave de uno de los acabados de la propuesta). En el
+     editor la foto apunta al acabado por una clave de sesión (_fk → _k); se
+     omite si no tiene.
+     Punto 45: «code» es la clave técnica del acabado (oculta y estable: la
+     usan fotos, predeterminado, selección, proyectos y cotización) y
+     «reference_code» su código comercial, opcional. */
   function normalizedMedia(m){
     const text = (v, max) => { const s = (v ?? "").toString().trim(); return s ? s.slice(0, max) : null; };
     const codeOf = (k) => { const f = m.finishes.find(x => x._k === k); return f ? text(f.code, 20) : null; };
@@ -485,6 +488,24 @@
         return entry;
       })
     };
+  }
+
+  /* Clave técnica de un acabado nuevo (punto 45): se genera una vez, se
+     guarda con la propuesta y no cambia al editar nombre ni código. */
+  function newFinishKey(){
+    const used = new Set(media.finishes.map(f => (f.code || "").toLowerCase()));
+    let key;
+    do {
+      const rand = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().replace(/-/g, "") : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      key = `f${rand.slice(0, 12)}`;
+    } while (used.has(key));
+    return key;
+  }
+  /* «código · nombre», o solo el nombre si no tiene código comercial. */
+  function finishText(f){
+    const name = (f.name || "").trim() || "(sin nombre)";
+    const ref = (f.reference_code || "").trim();
+    return ref ? `${ref} · ${name}` : name;
   }
 
   /* Claves internas: cada acabado una _k; cada foto, la _k de su acabado. */
@@ -562,7 +583,7 @@
       const select = document.createElement("select");
       select.id = id;
       select.append(new Option("Sin asignar / imagen de referencia", ""),
-        ...media.finishes.map(f => new Option(`${(f.code || "").trim() || "(sin código)"} · ${(f.name || "").trim() || "(sin nombre)"}`, String(f._k))));
+        ...media.finishes.map(f => new Option(finishText(f), String(f._k))));
       select.value = entry._fk ? String(entry._fk) : "";
       select.addEventListener("change", () => { entry._fk = select.value ? Number(select.value) : null; });
       figure.append(label, select);
@@ -619,7 +640,7 @@
       /* Las fotos de este acabado quedan sin asignar (nunca se reasignan). */
       const orphaned = media.assets.filter(a => a._fk === f._k);
       orphaned.forEach(a => { a._fk = null; });
-      if (orphaned.length) mediaStatus(`Se quitó el acabado «${(f.name || f.code || "").trim()}»: ${orphaned.length === 1 ? "1 foto queda" : `${orphaned.length} fotos quedan`} sin asignar.`);
+      if (orphaned.length) mediaStatus(`Se quitó el acabado «${finishText(f)}»: ${orphaned.length === 1 ? "1 foto queda" : `${orphaned.length} fotos quedan`} sin asignar.`);
       media.finishes.splice(media.finishes.indexOf(f), 1);
       if (imageId && !assetUsedAsImage(imageId)) media.assets = media.assets.filter(a => a.id !== imageId);
       if (f.is_default && media.finishes.length) media.finishes[0].is_default = true;
@@ -630,7 +651,7 @@
     def.className = "pp-default";
     def.innerHTML = `<input type="radio" name="pf-finish-default"${f.is_default ? " checked" : ""}> Predeterminado`;
     def.querySelector("input").addEventListener("change", () => { media.finishes.forEach(x => { x.is_default = x === f; }); });
-    row.append(input("code", "Código", 20), input("name", "Nombre", 60), def, remove);
+    row.append(input("reference_code", "Código del acabado (opcional)", 60), input("name", "Nombre", 60), def, remove);
     return row;
   }
 
@@ -711,11 +732,16 @@
 
   function validateMedia(value, { submit }){
     if (!value) return null;
-    const codes = new Set();
+    const keys = new Set();
+    const refs = new Set();
     for (const f of value.finishes){
-      if (!f.code || !f.name) return "Acabados: indica el código y el nombre de cada acabado (o quita la fila).";
-      if (codes.has(f.code.toLowerCase())) return `Acabados: el código ${f.code} está repetido.`;
-      codes.add(f.code.toLowerCase());
+      if (!f.name) return "Acabados: indica el nombre de cada acabado (o quita la fila).";
+      if (!f.code || keys.has(f.code.toLowerCase())) return "Acabados: no pudimos identificar un acabado. Quita la fila y vuelve a añadirlo.";
+      keys.add(f.code.toLowerCase());
+      if (f.reference_code){
+        if (refs.has(f.reference_code.toLowerCase())) return `Acabados: el código del acabado ${f.reference_code} está repetido.`;
+        refs.add(f.reference_code.toLowerCase());
+      }
     }
     if (value.finishes.length && value.finishes.filter(f => f.is_default).length !== 1) return "Acabados: marca un único acabado por defecto.";
     if (!submit) return null;
@@ -1154,7 +1180,7 @@
   pick("pf-gallery-input", files => onGalleryFiles(files));
   pick("pf-file-input", files => onProFile(files[0]));
   $("pf-finish-add").addEventListener("click", () => {
-    media.finishes.push({ code: "", name: "", reference_code: null, image_asset_id: null, is_default: media.finishes.length === 0, _k: ++finishSeq });
+    media.finishes.push({ code: newFinishKey(), name: "", reference_code: null, image_asset_id: null, is_default: media.finishes.length === 0, _k: ++finishSeq });
     renderMedia();
     const inputs = $("pf-finishes-list").querySelectorAll("input[type=text]");
     if (inputs.length >= 2) inputs[inputs.length - 2].focus();

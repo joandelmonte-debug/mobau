@@ -326,10 +326,14 @@
   /* Punto 44-05: acabado de una foto. Propuesto: el «finish» de la lista de
      la propuesta (nombre según sus acabados). Actual: el aprobado de la foto
      (solo en fotos ya aprobadas del producto). */
+  /* Punto 45: «código · nombre» o solo el nombre (code es la clave técnica). */
+  function finishText(f){
+    return f.reference_code ? `${f.reference_code} · ${f.name}` : f.name;
+  }
   function finishName(code, finishes){
     if (!code) return "sin asignar";
     const f = (finishes || []).find(x => x.code === code);
-    return f ? f.name : `acabado ${code}`;
+    return f ? finishText(f) : "acabado no disponible";
   }
   function photoFinishNode(entry, asset){
     const m = ctx.proposal.proposed_media || {};
@@ -381,7 +385,7 @@
       photos.forEach(({ entry, asset }) => {
         const isCover = asset.id === m.cover_asset_id;
         const finish = (m.finishes || []).find(f => f.image_asset_id === asset.id);
-        const caption = isCover ? "Portada" : (finish ? `Acabado ${finish.code}` : (entry.label || "Galería"));
+        const caption = isCover ? "Portada" : (finish ? `Acabado ${finishText(finish)}` : (entry.label || "Galería"));
         grid.append(photoFigure(asset, caption, isCover, entry));
       });
       section.append(grid);
@@ -393,12 +397,12 @@
         const tr = document.createElement("tr");
         const image = f.image_asset_id && ctx.assets.get(f.image_asset_id);
         const thumb = image ? (() => { const i = document.createElement("img"); i.className = "mod-thumb"; i.src = MobauArchivos.cardUrl(image); i.alt = ""; i.referrerPolicy = "no-referrer"; return i; })() : document.createTextNode("—");
-        tr.append(cell("Código", document.createTextNode(f.code)), cell("Nombre", document.createTextNode(f.name)),
-                  cell("Referencia", document.createTextNode(f.reference_code || "—")), cell("Foto", thumb),
+        tr.append(cell("Código del acabado", document.createTextNode(f.reference_code || "")), cell("Nombre", document.createTextNode(f.name)),
+                  cell("Foto", thumb),
                   cell("Por defecto", document.createTextNode(f.is_default ? "Sí" : "")));
         return tr;
       });
-      section.append(M.el("h3", "", "Acabados"), table(["Código", "Nombre", "Referencia", "Foto", "Por defecto"], rows));
+      section.append(M.el("h3", "", "Acabados"), table(["Código del acabado", "Nombre", "Foto", "Por defecto"], rows));
     }
 
     const files = listed.filter(x => x.asset.kind !== "foto");
@@ -861,7 +865,7 @@
       const assetRows = await MobauArchivos.listByIds(assetIds);
       /* Punto 44-05: acabados actuales del producto (para «actual → propuesto»). */
       const finishesRes = p.product_id
-        ? await supabaseClient.from("product_finishes").select("code, name").eq("product_id", p.product_id)
+        ? await supabaseClient.from("product_finishes").select("code, name, reference_code").eq("product_id", p.product_id)
         : { data: [], error: null };
       if (finishesRes.error) throw finishesRes.error;
       /* Enlaces firmados (30 min) de los archivos privados; los vídeos son públicos. */
