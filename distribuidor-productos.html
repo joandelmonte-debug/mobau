@@ -19,10 +19,6 @@
   .pl-empty .btn{ margin-top:12px; }
   .pl-proposal{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-top:10px; font-size:13px; color: var(--ink-soft); }
   .pl-note{ margin-top:8px; font-size:13px; padding:8px 10px; border-left:3px solid var(--danger); background: var(--surface); }
-  .cart-row .pl-actions{ flex-direction:column; align-items:flex-end; gap:10px; }
-  /* Tarjeta entera clicable: abre la misma acción que su enlace o botón. */
-  .cart-row.pl-clickable{ cursor:pointer; }
-  .cart-row.pl-clickable:hover .c-name{ text-decoration:underline; }
   .pl-toggle{ background:none; border:0; padding:0; cursor:pointer; font:inherit; font-size:14px; color: var(--accent); }
   .pl-toggle:hover{ text-decoration:underline; }
   .pl-details{ margin-top:10px; padding:10px 12px; border:1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size:13px; color: var(--ink-soft); }
@@ -69,7 +65,61 @@
   .pl-deleted-list .c-name{ color: var(--ink); font-weight:600; }
   .lc-block{ margin-top:10px; padding:10px 12px; border-left:3px solid var(--danger); background: var(--surface); font-size:13px; }
   .lc-block p{ margin:0; max-width:none; }
-  @media (max-width: 900px){ .cart-row .pl-actions{ flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:center; } }
+  /* Filas compactas (45): selección | código | marca | nombre | estado | acciones.
+     Notas, confirmaciones e historial se abren debajo de la fila. */
+  .pl-selbar{ display:flex; flex-wrap:wrap; align-items:center; gap:0 18px; margin:6px 0 4px; font-size:14px; }
+  .pl-selcount{ font-weight:600; color: var(--ink); }
+  .pl-selbar label{ display:inline-flex; align-items:center; gap:6px; min-height:44px; cursor:pointer; }
+  .pl-selbar .pl-toggle{ min-height:44px; }
+  .pl-selbar .pl-toggle:disabled{ color: var(--ink-soft); cursor:default; text-decoration:none; }
+  /* Columnas compartidas por todas las filas (subgrid); sin subgrid, anchos fijos. */
+  .pl-rows{ display:grid; grid-template-columns:32px minmax(56px,100px) minmax(64px,120px) minmax(0,1fr) max-content max-content; column-gap:14px; }
+  .pl-row, .pl-rowhead{ grid-column:1 / -1; display:grid; grid-template-columns:subgrid; align-items:center; row-gap:2px; padding:2px 8px; border-bottom:1px solid var(--line); }
+  @supports not (grid-template-columns: subgrid){
+    .pl-rows{ display:block; }
+    .pl-row, .pl-rowhead{ grid-template-columns:32px 110px 130px minmax(0,1fr) 150px 330px; column-gap:14px; }
+  }
+  .pl-rowhead{ border-top:1px solid var(--line); padding-top:8px; padding-bottom:8px; font-size:12px; letter-spacing:.04em; text-transform:uppercase; color: var(--ink-soft); }
+  .pl-rowhead span:last-child{ text-align:right; }
+  .pl-row{ min-height:48px; background: var(--white); font-size:14px; }
+  .pl-row.is-selected{ background: var(--surface); }
+  .pl-sel{ display:grid; place-items:center; width:32px; height:44px; cursor:pointer; }
+  .pl-sel input{ width:18px; height:18px; margin:0; cursor:pointer; }
+  .pl-c-meta{ display:contents; }
+  .pl-code{ font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .pl-brand{ color: var(--ink-soft); overflow-wrap:anywhere; }
+  .pl-name{ min-width:0; overflow-wrap:anywhere; }
+  .pl-name .c-name{ font-weight:600; color: var(--ink); }
+  .pl-kind{ margin-top:1px; font-size:12px; color: var(--ink-soft); }
+  .pl-state{ display:flex; flex-wrap:wrap; gap:4px; }
+  .pl-acts{ display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:0 2px; }
+  .pl-acts .pd-link, .pl-acts .pl-toggle, .pl-acts .pp-withdraw-btn{ display:inline-flex; align-items:center; min-height:44px; margin:0; padding:0 8px; white-space:nowrap; }
+  .pl-icon{ display:inline-grid; place-items:center; width:40px; height:44px; padding:0; border:0; border-radius: var(--radius); background:none; color: var(--ink-soft); cursor:pointer; }
+  .pl-icon:hover{ color: var(--ink); background: var(--surface); }
+  .pl-icon--danger{ color: var(--danger); }
+  .pl-icon svg{ width:18px; height:18px; }
+  .pl-icon:focus-visible, .pl-acts .pd-link:focus-visible, .pl-acts .pl-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+  .pl-acts [aria-disabled="true"]{ opacity:.5; cursor:not-allowed; text-decoration:none; }
+  /* Tooltip visible al pasar el ratón y con el foco del teclado. */
+  .pl-tip{ position:relative; }
+  .pl-tip:hover::after, .pl-tip:focus-visible::after{ content:attr(data-tip); position:absolute; right:0; bottom:calc(100% + 4px); z-index:5; width:max-content; max-width:240px; padding:6px 8px; border-radius:4px; background: var(--ink); color: var(--white); font-size:12px; font-weight:400; line-height:1.35; text-align:left; white-space:normal; pointer-events:none; }
+  .pl-row-details{ grid-column:1 / -1; min-width:0; }
+  .pl-row-details:empty{ display:none; }
+  .pl-row-details > :last-child{ margin-bottom:8px; }
+  @media (max-width: 700px){
+    .pl-rows{ display:block; }
+    .pl-rowhead{ display:none; }
+    .pl-row{ grid-template-columns:28px minmax(0,1fr) auto; grid-template-areas:"sel name state" "sel meta meta" "sel acts acts"; gap:0 10px; padding:6px 0; }
+    .pl-sel{ grid-area:sel; align-self:start; width:28px; }
+    .pl-name{ grid-area:name; align-self:center; }
+    .pl-state{ grid-area:state; justify-content:flex-end; }
+    .pl-c-meta{ grid-area:meta; display:flex; flex-wrap:wrap; gap:0 10px; font-size:13px; min-width:0; }
+    .pl-acts{ grid-area:acts; justify-content:flex-start; gap:0; margin-left:-6px; }
+    .pl-acts .pd-link, .pl-acts .pl-toggle, .pl-acts .pp-withdraw-btn{ padding:0 6px; }
+    .pl-icon{ width:36px; }
+    .pl-row-details{ grid-column:2 / -1; }
+    .pl-tip:hover::after, .pl-tip:focus-visible::after{ right:auto; left:0; }
+  }
 </style>
 </head>
 <body>
@@ -118,44 +168,38 @@
   <div id="pl-content" style="display:none;">
     <p id="pl-alert" class="pl-alert" role="alert" hidden></p>
 
-    <!-- Productos / Papelera (41-07) / Notificaciones. Sin datos de ciclo de
-         vida no se sabe qué está en la papelera: sin esa pestaña, y en
-         Productos se ve la lista completa. -->
+    <!-- Notificaciones | En catálogo | Borradores y propuestas | Papelera (45).
+         Se entra en «En catálogo». Sin datos de ciclo de vida no se sabe qué
+         está en la papelera: sin esa pestaña. -->
     <div class="pl-tabs" id="pl-tabs" role="tablist" aria-label="Tus productos" hidden>
-      <button type="button" role="tab" id="pl-tab-products" aria-controls="pl-view-products" aria-selected="true">Productos<span class="pl-tab-count" id="pl-tab-products-count"></span></button>
-      <button type="button" role="tab" id="pl-tab-trash" aria-controls="pl-view-trash" aria-selected="false" tabindex="-1">Papelera<span class="pl-tab-count" id="pl-tab-trash-count"></span></button>
       <button type="button" role="tab" id="pl-tab-notifications" aria-controls="pl-view-notifications" aria-selected="false" tabindex="-1">Notificaciones<span class="pl-tab-count" id="pl-tab-notifications-count"></span></button>
+      <button type="button" role="tab" id="pl-tab-catalog" aria-controls="pl-view-catalog" aria-selected="true">En catálogo<span class="pl-tab-count" id="pl-tab-catalog-count"></span></button>
+      <button type="button" role="tab" id="pl-tab-drafts" aria-controls="pl-view-drafts" aria-selected="false" tabindex="-1">Borradores y propuestas<span class="pl-tab-count" id="pl-tab-drafts-count"></span></button>
+      <button type="button" role="tab" id="pl-tab-trash" aria-controls="pl-view-trash" aria-selected="false" tabindex="-1">Papelera<span class="pl-tab-count" id="pl-tab-trash-count"></span></button>
     </div>
 
-    <div id="pl-view-products" role="tabpanel" aria-labelledby="pl-tab-products">
-    <div class="pl-filters" id="pl-filters">
-      <div class="field" style="margin:0;">
-        <label for="pl-search">Buscar</label>
-        <input id="pl-search" type="search" placeholder="Nombre o marca">
+    <!-- Filtros y selección: comunes a las tres listas. La selección se
+         conserva al cambiar de filtro o de pestaña (solo en esta página). -->
+    <div id="pl-tools">
+      <div class="pl-filters" id="pl-filters">
+        <div class="field" style="margin:0;">
+          <label for="pl-search">Buscar</label>
+          <input id="pl-search" type="search" placeholder="Código, nombre o marca">
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="pl-category">Categoría</label>
+          <select id="pl-category"><option value="">Todas</option></select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label for="pl-status">Estado</label>
+          <select id="pl-status"><option value="">Todos</option></select>
+        </div>
       </div>
-      <div class="field" style="margin:0;">
-        <label for="pl-category">Categoría</label>
-        <select id="pl-category"><option value="">Todas</option></select>
-      </div>
-      <div class="field" style="margin:0;">
-        <label for="pl-status">Estado</label>
-        <select id="pl-status">
-          <option value="">Todos</option>
-          <option value="published">Publicados</option>
-          <option value="draft">Borradores</option>
-          <option value="pending">Pendientes de publicación</option>
-          <option value="archived">Retirados por Mobau</option>
-        </select>
-      </div>
-      <div class="field" style="margin:0;">
-        <label for="pl-proposal">Propuesta</label>
-        <select id="pl-proposal">
-          <option value="">Todas</option>
-          <option value="none">Sin propuesta abierta</option>
-          <option value="draft">Borrador</option>
-          <option value="submitted">En revisión</option>
-          <option value="changes_requested">Cambios solicitados</option>
-        </select>
+      <div class="pl-selbar" id="pl-selbar">
+        <span class="pl-selcount" id="pl-selcount" aria-live="polite"></span>
+        <label><input type="checkbox" id="pl-only-selected"> Solo seleccionados</label>
+        <button type="button" class="pl-toggle" id="pl-select-visible">Seleccionar resultados visibles</button>
+        <button type="button" class="pl-toggle" id="pl-clear-selection">Limpiar selección</button>
       </div>
     </div>
 
@@ -165,35 +209,37 @@
       <p style="margin:0;">Usa «Crear nuevo producto» para añadir el primero; Mobau lo revisará antes de publicarlo.</p>
     </div>
 
-    <section class="pl-section" id="pl-catalog" aria-labelledby="pl-catalog-title">
-      <h2 class="pl-section-title" id="pl-catalog-title">Productos</h2>
-      <p id="pl-count" class="card-meta" style="margin:6px 0 12px;"></p>
-      <div id="pl-empty" class="cart-empty pl-empty" hidden>
-        <p id="pl-empty-title" style="margin:0; color:var(--ink); font-weight:600;"></p>
-        <p id="pl-empty-text" style="margin:0;"></p>
+    <section id="pl-view-catalog" class="pl-section" role="tabpanel" aria-labelledby="pl-tab-catalog">
+      <h2 class="pl-section-title">En catálogo</h2>
+      <p id="pl-catalog-count" class="card-meta" style="margin:6px 0 12px;"></p>
+      <div id="pl-catalog-empty" class="cart-empty pl-empty" hidden>
+        <p id="pl-catalog-empty-title" style="margin:0; color:var(--ink); font-weight:600;"></p>
+        <p id="pl-catalog-empty-text" style="margin:0;"></p>
       </div>
-      <div class="cart-list" id="pl-list"></div>
+      <div class="pl-rows" id="pl-catalog-list"></div>
     </section>
 
-    <!-- Propuestas de producto nuevo (create) abiertas: aún no están en products. -->
-    <section class="pl-section" id="pl-proposed" aria-labelledby="pl-proposed-title" hidden>
-      <h2 class="pl-section-title" id="pl-proposed-title">Productos propuestos</h2>
-      <p class="card-meta" style="margin:6px 0 12px; max-width:70ch;">Productos nuevos que has creado y que Mobau aún no ha incorporado al catálogo.</p>
-      <p id="pl-proposed-empty" class="card-meta" hidden>Ningún producto propuesto coincide con los filtros.</p>
-      <div class="cart-list" id="pl-proposed-list"></div>
+    <section id="pl-view-drafts" class="pl-section" role="tabpanel" aria-labelledby="pl-tab-drafts" hidden>
+      <h2 class="pl-section-title">Borradores y propuestas</h2>
+      <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Productos nuevos, cambios propuestos, borradores y productos retirados del catálogo. Un producto publicado sigue publicado, con su versión actual, mientras Mobau revisa sus cambios.</p>
+      <p id="pl-drafts-count" class="card-meta" style="margin:6px 0 12px;"></p>
+      <div id="pl-drafts-empty" class="cart-empty pl-empty" hidden>
+        <p id="pl-drafts-empty-title" style="margin:0; color:var(--ink); font-weight:600;"></p>
+        <p id="pl-drafts-empty-text" style="margin:0;"></p>
+      </div>
+      <div class="pl-rows" id="pl-drafts-list"></div>
     </section>
-    </div>
 
     <section id="pl-view-trash" class="pl-section" role="tabpanel" aria-labelledby="pl-tab-trash" hidden>
       <h2 class="pl-section-title">Papelera</h2>
       <p class="card-meta" style="margin:6px 0 0; max-width:70ch;">Productos retirados: no aparecen en el catálogo. Puedes restaurarlos o eliminarlos definitivamente.</p>
       <p id="pl-trash-count" class="card-meta" style="margin:6px 0 12px;"></p>
       <div id="pl-trash-empty" class="cart-empty pl-empty" hidden>
-        <p style="margin:0; color:var(--ink); font-weight:600;">La papelera está vacía.</p>
-        <p style="margin:0;">Cuando retires un producto, aparecerá aquí.</p>
-        <button type="button" class="btn btn-outline" id="pl-trash-back">Ver productos</button>
+        <p id="pl-trash-empty-title" style="margin:0; color:var(--ink); font-weight:600;"></p>
+        <p id="pl-trash-empty-text" style="margin:0;"></p>
+        <button type="button" class="btn btn-outline" id="pl-trash-back">Ver productos en catálogo</button>
       </div>
-      <div class="cart-list" id="pl-trash-list"></div>
+      <div class="pl-rows" id="pl-trash-list"></div>
 
       <!-- Productos ya eliminados (41-07): solo nombre, identificador, fecha,
            quién lo eliminó y, si fue Mobau, su motivo. Sin límite de fecha. -->
@@ -268,11 +314,10 @@
 <script src="product-lifecycle.js"></script>
 <script>
 /* Mis productos (38-C): centro de control del distribuidor verificado.
-   Lee en cuatro consultas sin N+1: products (los de su empresa,
-   incluidos los no publicados: 38-B), categories, product_prices (una
-   consulta con in) y product_proposals (las suyas, por RLS). Se combinan en
-   el cliente: cada propuesta update abierta con su producto (product_id) y
-   las create abiertas como "Productos propuestos".
+   Lee en tres consultas sin N+1: products (los de su empresa,
+   incluidos los no publicados: 38-B), categories y product_proposals (las
+   suyas, por RLS). Se combinan en el cliente: cada propuesta update abierta
+   con su producto (product_id) y las create abiertas como productos nuevos.
    Nunca escribe en products ni en product_prices. Crear o cambiar
    productos se hace con una propuesta, en
    el formulario de distribuidor-propuestas.html, que solo escribe en
@@ -294,7 +339,10 @@
    my_products_lifecycle). «Retirar» lleva el producto del catálogo a la
    papelera en una sola acción; en la papelera, «Restaurar» y «Eliminar
    definitivamente». «Avisos de Mobau» muestra sus intervenciones de los
-   últimos 30 días con su motivo. */
+   últimos 30 días con su motivo.
+   45: pestañas Notificaciones | En catálogo | Borradores y propuestas |
+   Papelera, filas compactas, búsqueda por código y selección acumulativa
+   en memoria (sin acciones masivas). */
 (() => {
   const $ = (id) => document.getElementById(id);
 
@@ -306,14 +354,7 @@
     published:         { label: "Publicado",           kind: "ok" },
     archived:          { label: "Retirado",            kind: "neutral" }
   };
-  /* Filtro "Estado" → valores reales de publication_status. Con la papelera
-     separada (41-07), "archived" en Productos son los retirados por Mobau. */
-  const CATALOG_FILTER = {
-    published: ["published"],
-    draft:     ["draft"],
-    pending:   ["in_review", "changes_requested"],
-    archived:  ["archived"]
-  };
+
   /* Propuestas abiertas (product_proposals.status) y su acción. Las
      cerradas (withdrawn, approved, rejected) solo se ven en la actividad. */
   const OPEN = ["draft", "submitted", "changes_requested"];
@@ -327,11 +368,6 @@
     "en-stock":      { label: "En stock",      cls: "quoted" },
     "bajo-pedido":   { label: "Bajo pedido",   cls: "progress" },
     "por-confirmar": { label: "Por confirmar", cls: "draft" }
-  };
-  const PRICE_LABELS = {
-    quote_required: "Bajo cotización",
-    pending_confirmation: "Precio por confirmar",
-    unavailable: "No disponible"
   };
   const AVISOS = {
     borrador: "Borrador guardado.",
@@ -353,7 +389,6 @@
 
   let session = null;
   let products = [];
-  let prices = new Map();
   let categoryNames = new Map();
   let openUpdates = new Map(); // product_id -> propuesta update abierta (como máximo una: índice único)
   let openCreates = [];        // propuestas create abiertas
@@ -365,7 +400,13 @@
   let lcEvents = [];             // my_product_lifecycle_events() de la empresa (avisos y motivos de Mobau)
   const OWN = LC.OWN;
   const NOTICE_DAYS = 30;
-  let view = window.location.hash === "#papelera" ? "trash" : (window.location.hash === "#notificaciones" ? "notifications" : "products");
+  /* Pestaña inicial: «En catálogo», salvo un destino explícito en el enlace. */
+  const HASH_VIEW = { "#notificaciones": "notifications", "#borradores": "drafts", "#papelera": "trash" };
+  let view = HASH_VIEW[window.location.hash] || "catalog";
+  /* Selección acumulativa (45), solo en memoria: product:ID (el producto y
+     su propuesta de cambios) o create:ID (producto nuevo sin producto aún). */
+  const selected = new Set();
+  let visibleKeys = [];
   /* Notificaciones: las decisiones se cargan aparte; hasta entonces no se
      muestra el estado vacío. newDecisions: decisiones con «Nueva» (criterio
      existente, por dispositivo) para el indicador de la pestaña. */
@@ -409,38 +450,10 @@
     return dp.distributor_id;
   }
 
-  function priceText(productId){
-    const row = prices.get(productId);
-    if (!row) return "Sin precio";
-    if (row.price_status === "published" && row.price_amount !== null){
-      return `US$ ${Number(row.price_amount).toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    return PRICE_LABELS[row.price_status] || "Sin precio";
-  }
-
   function formatDate(value){
     if (!value) return "";
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" });
-  }
-
-  function makeThumb(name, imageUrl){
-    const thumb = document.createElement("div");
-    thumb.className = "c-thumb";
-    const placeholder = () => { thumb.replaceChildren(document.createTextNode((name || "?").trim().charAt(0).toUpperCase())); };
-    if (imageUrl){
-      const img = document.createElement("img");
-      img.alt = "";
-      img.loading = "lazy";
-      img.referrerPolicy = "no-referrer";
-      img.style.cssText = "width:100%; height:100%; object-fit:cover; border-radius:inherit;";
-      img.addEventListener("error", placeholder);
-      img.src = imageUrl;
-      thumb.appendChild(img);
-    } else {
-      placeholder();
-    }
-    return thumb;
   }
 
   function textDiv(className, text){
@@ -562,31 +575,10 @@
     showToast(AVISOS.retirada);
   }
 
-  /* La tarjeta entera hace lo mismo que su acción (salvo clics en enlaces o botones). */
-  function makeClickable(row, action){
-    row.classList.add("pl-clickable");
-    row.addEventListener("click", (e) => {
-      if (e.target.closest("a, button, input, select, textarea, .pl-details, .lc-panel, .lc-history")) return;
-      if (action.tagName === "A") window.location.href = action.href;
-      else action.click();
-    });
-  }
-
-  /* "Propuesta: En revisión · versión 2 · enviada el …" y, si Mobau pidió
-     cambios, su nota. */
-  function proposalBlock(proposal){
-    const info = PROPOSAL[proposal.status];
-    const line = document.createElement("div");
-    line.className = "pl-proposal";
-    const parts = [`versión ${proposal.version}`];
-    if (proposal.submitted_at) parts.push(`enviada el ${formatDate(proposal.submitted_at)}`);
-    if (proposal.status === "changes_requested" && proposal.reviewed_at) parts.push(`cambios solicitados el ${formatDate(proposal.reviewed_at)}`);
-    line.append(chip(`Propuesta: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
-    const block = [line];
-    if (proposal.status === "changes_requested" && proposal.rejection_reason){
-      block.push(textDiv("pl-note", `Nota de Mobau: ${proposal.rejection_reason}`));
-    }
-    return block;
+  /* Nota de Mobau de una propuesta con cambios solicitados. */
+  function proposalNote(proposal){
+    return proposal.status === "changes_requested" && proposal.rejection_reason
+      ? [textDiv("pl-note", `Nota de Mobau: ${proposal.rejection_reason}`)] : [];
   }
 
   /* ---------- Ciclo de vida (41, D2) ----------
@@ -647,20 +639,18 @@
     return ev ? ev.reason : null;
   }
 
-  /* Productos (41-07): solo explica la retirada de Mobau (con su motivo) y
-     los bloqueos. La papelera tiene su propia vista. */
-  function lifecycleLines(product, lc){
+  /* Retirado fuera de la papelera (45): fecha en la fila; el motivo de Mobau
+     y el aviso de los retirados antiguos, debajo. */
+  function retiredKind(lc){
+    if (!lc || lc.lifecycle_state !== "retired" || !lc.retired_at) return "";
+    return lc.retired_by_kind === "mobau"
+      ? `Retirado por Mobau el ${LC.formatDate(lc.retired_at)}`
+      : `Retirado del catálogo el ${LC.formatDate(lc.retired_at)}`;
+  }
+  function lifecycleNotes(lc){
     const lines = [];
-    if (lc.lifecycle_state === "retired" && lc.retired_at){
-      if (lc.retired_by_kind === "mobau"){
-        if (lc.retired_reason) lines.push(textDiv("pl-note", `Motivo de Mobau: ${lc.retired_reason}`));
-        lines.push(textDiv("lc-line", `Mobau lo retiró del catálogo el ${LC.formatDate(lc.retired_at)}. Para publicarlo de nuevo, solicita la revisión a Mobau.`));
-      } else {
-        lines.push(textDiv("lc-line", `Retirado del catálogo el ${LC.formatDate(lc.retired_at)}.`));
-      }
-    }
-    if (lc.lifecycle_state === "legacy_retired") lines.push(textDiv("lc-line", LC.BLOCKS.legacy_pending_review));
-    if (lc.has_open_proposal && ["published", "retired", "draft"].includes(lc.lifecycle_state)) lines.push(openProposalBlock(product, "retirarlo"));
+    if (lc && lc.lifecycle_state === "retired" && lc.retired_by_kind === "mobau" && lc.retired_reason) lines.push(textDiv("pl-note", `Motivo de Mobau: ${lc.retired_reason}`));
+    if (lc && lc.lifecycle_state === "legacy_retired") lines.push(textDiv("lc-line", LC.BLOCKS.legacy_pending_review));
     return lines;
   }
 
@@ -731,10 +721,10 @@
   }
   const CONFIRM_BUTTON = { trash: "Retirar", restore: "Restaurar", purge: "Eliminar definitivamente", request_republish: "Enviar solicitud" };
 
-  /* Una confirmación por acción. Eliminar definitivamente pide además marcar
-     una casilla. Cancelar no escribe nada. */
-  function openPanel(product, lc, action, anchor){
-    anchor.parentElement.querySelectorAll(".lc-panel").forEach(p => p.remove());
+  /* Una confirmación por acción, debajo de la fila (box). Eliminar
+     definitivamente pide además marcar una casilla. Cancelar no escribe nada. */
+  function openPanel(product, lc, action, box){
+    box.querySelectorAll(".lc-panel, .lc-block").forEach(p => p.remove());
     const panel = document.createElement("div");
     panel.className = "lc-panel";
     const intro = document.createElement("p");
@@ -790,21 +780,66 @@
       showToast(action === "restore" && lc.restore_to === "published" ? OWN.done.restore_published : OWN.done[action]);
       await load();
     });
-    anchor.after(panel);
+    box.append(panel);
     (ack || ok).focus();
   }
 
-  function historyToggle(product, container){
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "pl-toggle";
-    toggle.textContent = "Ver historial";
+  /* Iconos de acción (45): nombre accesible y tooltip visible (ratón y foco). */
+  const SVG = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+  const ICONS = {
+    eye:     SVG('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+    history: SVG('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>'),
+    retire:  SVG('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/>')
+  };
+  function iconButton(icon, label, href){
+    const el = document.createElement(href ? "a" : "button");
+    if (href) el.href = href; else el.type = "button";
+    el.className = "pl-icon pl-tip";
+    el.innerHTML = ICONS[icon];
+    el.setAttribute("aria-label", label);
+    el.dataset.tip = label;
+    return el;
+  }
+  /* Acción no disponible: sigue enfocable para leer el motivo (tooltip y
+     nombre accesible); al pulsarla, la explicación se abre debajo de la fila. */
+  function markUnavailable(el, label, reason){
+    el.setAttribute("aria-disabled", "true");
+    el.setAttribute("aria-label", `${label} (no disponible): ${reason}`);
+    el.dataset.tip = reason;
+  }
+  function showBelow(box, node){
+    box.querySelectorAll(".lc-panel, .lc-block").forEach(p => p.remove());
+    box.append(node);
+  }
+  function unavailableAction(label, reason, box){
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pl-toggle pl-tip";
+    b.textContent = label;
+    markUnavailable(b, label, reason);
+    b.addEventListener("click", () => {
+      const block = document.createElement("div");
+      block.className = "lc-block";
+      block.append(textDiv("", reason));
+      showBelow(box, block);
+    });
+    return b;
+  }
+
+  function historyButton(product, box){
+    const toggle = iconButton("history", "Ver historial");
+    toggle.setAttribute("aria-expanded", "false");
     let list = null;    // historial ya cargado
     let problem = null; // mensaje del último fallo (se puede reintentar)
+    const label = (open) => {
+      toggle.setAttribute("aria-label", open ? "Ocultar historial" : "Ver historial");
+      toggle.dataset.tip = open ? "Ocultar historial" : "Ver historial";
+      toggle.setAttribute("aria-expanded", String(open));
+    };
     toggle.addEventListener("click", async () => {
       if (list){
         list.hidden = !list.hidden;
-        toggle.textContent = list.hidden ? "Ver historial" : "Ocultar historial";
+        label(!list.hidden);
         return;
       }
       toggle.disabled = true;
@@ -821,35 +856,70 @@
             : "Sin eventos de ciclo de vida.";
           return li;
         }));
-        container.after(list);
-        toggle.textContent = "Ocultar historial";
+        box.append(list);
+        label(true);
       } catch (error){
         problem = textDiv("lc-line", LC.classify(error).message);
-        container.after(problem);
+        box.append(problem);
       }
       toggle.disabled = false;
     });
     return toggle;
   }
 
-  /* Acciones del servidor (allowed_actions) que corresponden a cada vista:
-     Productos → solicitar revisión y Retirar; Papelera → Restaurar y
-     Eliminar definitivamente. */
-  const VIEW_ACTIONS = { products: ["request_republish", "trash"], trash: ["restore", "purge"] };
-  function lifecycleActions(product, lc, where){
-    const wrap = document.createElement("div");
-    wrap.className = "lc-actions";
-    VIEW_ACTIONS[where].filter(a => (lc.allowed_actions || []).includes(a)).forEach(action => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = (action === "trash" || action === "purge") ? "pp-withdraw-btn" : "pl-toggle";
-      b.textContent = OWN.actions[action];
-      b.dataset.lcAction = action;
-      b.addEventListener("click", () => openPanel(product, lc, action, wrap));
-      wrap.append(b);
-    });
-    wrap.append(historyToggle(product, wrap));
-    return wrap;
+  /* Retirar (a la papelera), con su confirmación. Con una propuesta abierta
+     el servidor no lo permite: se explica cuál es y cómo cancelarla. */
+  function retireButton(product, lc, box){
+    const allowed = (lc.allowed_actions || []).includes("trash");
+    const blocked = !allowed && lc.has_open_proposal && ["published", "retired", "draft"].includes(lc.lifecycle_state);
+    if (!allowed && !blocked) return null;
+    const b = iconButton("retire", OWN.actions.trash);
+    b.classList.add("pl-icon--danger");
+    b.dataset.lcAction = "trash";
+    if (blocked){
+      markUnavailable(b, OWN.actions.trash, "Tiene una propuesta abierta.");
+      b.addEventListener("click", () => showBelow(box, openProposalBlock(product, "retirarlo")));
+    } else {
+      b.addEventListener("click", () => openPanel(product, lc, "trash", box));
+    }
+    return b;
+  }
+
+  /* Solicitar republicación (45): solo de un retirado sin propuesta abierta
+     (lo decide el servidor en allowed_actions). Con una propuesta abierta se
+     muestra no disponible, con el motivo según su tipo y estado. */
+  const REPUBLISH_BLOCKED = {
+    update: {
+      draft:             "Tiene una propuesta de cambios en borrador: envíala y espera la decisión de Mobau, o cancélala, antes de solicitar la republicación.",
+      submitted:         "Tiene una propuesta de cambios en revisión: espera la decisión de Mobau o cancélala antes de solicitar la republicación.",
+      changes_requested: "Mobau pidió cambios en su propuesta: corrígela y reenvíala, o cancélala, antes de solicitar la republicación."
+    },
+    republish: {
+      draft:             "Ya tiene una solicitud de republicación en borrador: envíala o cancélala.",
+      submitted:         "Ya tiene una solicitud de republicación en revisión por Mobau.",
+      changes_requested: "Mobau pidió cambios en su solicitud de republicación: reenvíala o cancélala."
+    }
+  };
+  function republishButton(product, lc, box){
+    if (!lc || lc.lifecycle_state !== "retired") return null;
+    const allowed = (lc.allowed_actions || []).includes("request_republish");
+    if (!allowed && !lc.has_open_proposal) return null;
+    if (!allowed){
+      const update = openUpdates.get(product.id);
+      const republish = openRepublish.get(product.id);
+      const reason = update ? REPUBLISH_BLOCKED.update[update.status]
+        : (republish ? REPUBLISH_BLOCKED.republish[republish.status] : null) || OWN.hints.open_proposal;
+      const off = unavailableAction(OWN.actions.request_republish, reason, box);
+      off.dataset.lcAction = "request_republish";
+      return off;
+    }
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pl-toggle";
+    b.textContent = OWN.actions.request_republish;
+    b.dataset.lcAction = "request_republish";
+    b.addEventListener("click", () => openPanel(product, lc, "request_republish", box));
+    return b;
   }
 
   /* Solicitud de republicación abierta: enviarla (borrador o cambios
@@ -860,7 +930,7 @@
     line.className = "pl-proposal";
     const parts = [`versión ${proposal.version}`];
     if (proposal.submitted_at) parts.push(`enviada el ${formatDate(proposal.submitted_at)}`);
-    line.append(chip(`Solicitud de revisión: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
+    line.append(chip(`Solicitud de republicación: ${info.label}`, info.kind), document.createTextNode(` ${parts.join(" · ")}`));
     const nodes = [line];
     if (proposal.status === "changes_requested" && proposal.rejection_reason) nodes.push(textDiv("pl-note", `Nota de Mobau: ${proposal.rejection_reason}`));
     const actions = document.createElement("div");
@@ -892,7 +962,7 @@
     withdraw.className = "pp-withdraw-btn";
     withdraw.textContent = "Cancelar solicitud";
     withdraw.addEventListener("click", async () => {
-      if (!confirm("¿Cancelar la solicitud de revisión?\nEl producto seguirá retirado.")) return;
+      if (!confirm("¿Cancelar la solicitud de republicación?\nEl producto seguirá retirado.")) return;
       withdraw.disabled = true;
       let data = null;
       let error = null;
@@ -914,90 +984,156 @@
     return nodes;
   }
 
-  function buildProductRow(product){
-    const open = openUpdates.get(product.id) || null;
+  /* ---------- Filas compactas (45) ----------
+     selección | código comercial | marca | nombre | estado | acciones. Sin
+     reference_code se muestra «—» (nunca el identificador interno). */
+  function rowShell(entry, kind, states){
     const row = document.createElement("div");
-    row.className = "cart-row";
+    row.className = "pl-row";
+    row.dataset.key = entry.key;
+    row.classList.toggle("is-selected", selected.has(entry.key));
+    const sel = document.createElement("label");
+    sel.className = "pl-sel";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = selected.has(entry.key);
+    box.setAttribute("aria-label", `Seleccionar ${entry.name}`);
+    box.addEventListener("change", () => toggleSelected(entry.key, box.checked));
+    sel.append(box);
+    const meta = document.createElement("div");
+    meta.className = "pl-c-meta";
+    meta.append(textDiv("pl-code", entry.code || "—"), textDiv("pl-brand", entry.brand || "Sin marca"));
+    const name = document.createElement("div");
+    name.className = "pl-name";
+    name.append(textDiv("c-name", entry.name));
+    if (kind) name.append(textDiv("pl-kind", kind));
+    const state = document.createElement("div");
+    state.className = "pl-state";
+    state.append(...states);
+    const acts = document.createElement("div");
+    acts.className = "pl-acts";
+    const details = document.createElement("div");
+    details.className = "pl-row-details";
+    row.append(sel, meta, name, state, acts, details);
+    return { row, acts, details };
+  }
 
-    const avail = AVAILABILITY[product.availability] || AVAILABILITY["por-confirmar"];
-    const badge = document.createElement("span");
-    badge.className = `status-chip ${avail.cls}`;
-    badge.textContent = avail.label;
-    const statusLine = document.createElement("div");
-    statusLine.style.cssText = "display:flex; align-items:center; gap:4px 12px; flex-wrap:wrap; margin-top:8px;";
-    statusLine.append(badge, textDiv("c-meta", priceText(product.id)));
+  const viewHref = (product) => `producto.html?id=${encodeURIComponent(product.id)}`;
+  const lcRow = (product) => (LC.enabled() && lifecycle ? lifecycle.get(product.id) || null : null);
+  const lcUsable = (lc) => !!lc && !lifecycleError;
 
-    const info = document.createElement("div");
-    info.append(
-      textDiv("c-name", product.name),
-      textDiv("c-brand", product.brand || "Sin marca"),
-      textDiv("c-meta", [categoryNames.get(product.category_id) || product.category_id, product.subcategory || "Sin subcategoría"].filter(Boolean).join(" · ")),
-      statusLine
-    );
-    if (open) info.append(...proposalBlock(open));
-    if (LC.enabled() && lifecycle){
-      const lc = lifecycle.get(product.id) || null;
-      if (lc) info.append(...lifecycleLines(product, lc));
-      else info.append(textDiv("lc-line", LC.TEXT.notChecked));
-      const republish = openRepublish.get(product.id);
-      if (republish) info.append(...republishBlock(republish));
-      if (lc && !lifecycleError) info.append(lifecycleActions(product, lc, "products"));
+  /* Acción de texto de una propuesta: continuar, corregir o ver la enviada
+     (en revisión no se edita: se despliega debajo, con «Cancelar propuesta»). */
+  function proposalAction(proposal, href, details){
+    if (proposal && proposal.status === "submitted"){
+      const sent = sentDetails(proposal);
+      details.append(sent.details);
+      return sent.toggle;
     }
+    return link(proposal ? PROPOSAL[proposal.status].action : "Proponer cambios", href);
+  }
 
-    /* Una propuesta abierta se continúa; nunca se ofrece crear una segunda.
-       En revisión no se edita: se muestra en la propia tarjeta. */
-    let action;
-    if (open && open.status === "submitted"){
-      const sent = sentDetails(open);
-      info.append(sent.details);
-      action = sent.toggle;
-    } else {
-      action = link(open ? PROPOSAL[open.status].action : "Proponer cambios", productHref(product));
+  /* En catálogo: el producto publicado, con su versión actual aunque tenga
+     cambios abiertos (esos cambios se ven también en Borradores y propuestas). */
+  function buildCatalogRow(entry){
+    const product = entry.product;
+    const open = openUpdates.get(product.id) || null;
+    const lc = lcRow(product);
+    const kind = open ? `Cambios propuestos · ${PROPOSAL[open.status].label}` : (LC.enabled() && lifecycle && !lc ? LC.TEXT.notChecked : "");
+    const { row, acts, details } = rowShell(entry, kind, [statusChip(product, lc)]);
+    acts.append(proposalAction(open, productHref(product), details), iconButton("eye", "Ver producto", viewHref(product)));
+    if (lcUsable(lc)){
+      acts.append(historyButton(product, details));
+      const retire = retireButton(product, lc, details);
+      if (retire) acts.append(retire);
     }
+    return row;
+  }
 
-    /* .c-qty ya ocupa todo el ancho en móvil (regla existente de .cart-row). */
-    const actions = document.createElement("div");
-    actions.className = "c-qty pl-actions";
-    actions.append(statusChip(product, LC.enabled() && lifecycle ? lifecycle.get(product.id) : null), action);
-    if (product.publication_status === "published") actions.append(link("Ver producto", `producto.html?id=${encodeURIComponent(product.id)}`));
+  /* Borradores y propuestas: producto no publicado (borrador, en revisión o
+     retirado: «Retirado», nunca «Borrador»), con su propuesta de cambios si
+     la tiene. */
+  function buildDraftRow(entry){
+    const product = entry.product;
+    const open = openUpdates.get(product.id) || null;
+    const lc = lcRow(product);
+    const kinds = [];
+    if (open) kinds.push(`Cambios de ${product.name} · ${PROPOSAL[open.status].label}`);
+    else if (retiredKind(lc)) kinds.push(retiredKind(lc));
+    if (LC.enabled() && lifecycle && !lc) kinds.push(LC.TEXT.notChecked);
+    const { row, acts, details } = rowShell(entry, kinds.join(" · "), [statusChip(product, lc)]);
+    details.append(...lifecycleNotes(lc));
+    if (open) details.append(...proposalNote(open));
+    const republish = openRepublish.get(product.id);
+    if (republish) details.append(...republishBlock(republish));
+    /* Una sola propuesta abierta por producto: con la solicitud de
+       republicación abierta no se pueden proponer cambios. */
+    acts.append(!open && republish
+      ? unavailableAction("Proponer cambios", "Tiene una solicitud de republicación abierta: espera la decisión de Mobau o cancélala para proponer cambios.", details)
+      : proposalAction(open, productHref(product), details));
+    if (lcUsable(lc)){
+      const request = republishButton(product, lc, details);
+      if (request) acts.append(request);
+      acts.append(historyButton(product, details));
+      const retire = retireButton(product, lc, details);
+      if (retire) acts.append(retire);
+    }
+    return row;
+  }
 
-    row.append(makeThumb(product.name, product.image_url), info, actions);
-    makeClickable(row, action);
+  /* Cambios de un producto publicado: el producto sigue publicado. */
+  function buildUpdateRow(entry){
+    const product = entry.product;
+    const open = entry.proposal;
+    const info = PROPOSAL[open.status];
+    const { row, acts, details } = rowShell(entry, `Cambios de ${product.name} · sigue publicado con su versión actual`, [chip(info.label, info.kind)]);
+    details.append(...proposalNote(open));
+    acts.append(proposalAction(open, productHref(product), details), iconButton("eye", "Ver producto", viewHref(product)));
+    return row;
+  }
+
+  /* Producto nuevo (propuesta create): aún no está en products. */
+  function buildCreateRow(entry){
+    const proposal = entry.proposal;
+    const info = PROPOSAL[proposal.status];
+    const { row, acts, details } = rowShell(entry, "Producto nuevo", [chip(info.label, info.kind)]);
+    details.append(...proposalNote(proposal));
+    acts.append(proposalAction(proposal, proposalHref(proposal), details));
     return row;
   }
 
   const RESTORE_TO = {
     published: "Al restaurarlo volverá al catálogo.",
-    retired:   "Al restaurarlo volverá a Productos, retirado por Mobau.",
-    draft:     "Al restaurarlo volverá a Productos como borrador."
+    retired:   "Al restaurarlo volverá a Borradores y propuestas como retirado; para publicarlo, solicita la republicación.",
+    draft:     "Al restaurarlo volverá a Borradores y propuestas como borrador."
   };
 
   /* Papelera (41-07): sin «Proponer cambios» ni enlace a la ficha. */
-  function buildTrashRow(product){
+  function buildTrashRow(entry){
+    const product = entry.product;
     const lc = lifecycle.get(product.id);
-    const row = document.createElement("div");
-    row.className = "cart-row";
-    const info = document.createElement("div");
-    info.append(
-      textDiv("c-name", product.name),
-      textDiv("c-brand", product.brand || "Sin marca"),
-      textDiv("c-meta", [categoryNames.get(product.category_id) || product.category_id, product.subcategory || "Sin subcategoría"].filter(Boolean).join(" · "))
-    );
     const byMobau = lc.trashed_by_kind === "mobau";
+    const kind = byMobau
+      ? `Mobau lo movió a la papelera el ${LC.formatDate(lc.trashed_at)}. Solo Mobau puede restaurarlo; tú puedes eliminarlo definitivamente.`
+      : `Retirado el ${LC.formatDate(lc.trashed_at)}. ${RESTORE_TO[lc.restore_to] || ""}`.trim();
+    const { row, acts, details } = rowShell(entry, kind, [chip(byMobau ? "Movido por Mobau" : "En la papelera", byMobau ? "alert" : "neutral")]);
     if (byMobau){
       const reason = mobauReason(product.id, "trash") || (lc.retired_by_kind === "mobau" ? lc.retired_reason : null);
-      if (reason) info.append(textDiv("pl-note", `Motivo de Mobau: ${reason}`));
-      info.append(textDiv("lc-line", `Mobau lo movió a la papelera el ${LC.formatDate(lc.trashed_at)}. Solo Mobau puede restaurarlo; tú puedes eliminarlo definitivamente.`));
-    } else {
-      info.append(textDiv("lc-line", `Retirado el ${LC.formatDate(lc.trashed_at)}. ${RESTORE_TO[lc.restore_to] || ""}`.trim()));
+      if (reason) details.append(textDiv("pl-note", `Motivo de Mobau: ${reason}`));
     }
-    if (lc.has_open_proposal) info.append(openProposalBlock(product, "eliminarlo definitivamente"));
-    if (!lifecycleError) info.append(lifecycleActions(product, lc, "trash"));
-
-    const side = document.createElement("div");
-    side.className = "c-qty pl-actions";
-    side.append(chip(byMobau ? "Movido por Mobau" : "En la papelera", byMobau ? "alert" : "neutral"));
-    row.append(makeThumb(product.name, product.image_url), info, side);
+    if (lc.has_open_proposal) details.append(openProposalBlock(product, "eliminarlo definitivamente"));
+    if (!lifecycleError){
+      ["restore", "purge"].filter(a => (lc.allowed_actions || []).includes(a)).forEach(action => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = action === "purge" ? "pp-withdraw-btn" : "pl-toggle";
+        b.textContent = OWN.actions[action];
+        b.dataset.lcAction = action;
+        b.addEventListener("click", () => openPanel(product, lc, action, details));
+        acts.append(b);
+      });
+      acts.append(historyButton(product, details));
+    }
     return row;
   }
 
@@ -1033,8 +1169,10 @@
       row.append(head, meta);
       if (ev.reason) row.append(textDiv("pl-note", `Motivo: ${ev.reason}`));
       const product = products.find(p => p.id === ev.product_id);
-      if (product && lifecycleState(product) === "trashed") row.append(viewLink("Ver en la papelera", "trash"));
-      else if (product) row.append(viewLink("Ver en Productos", "products"));
+      if (product){
+        const target = tabOf(product);
+        row.append(viewLink(`Ver en ${TAB_NAMES[target]}`, target));
+      }
       return row;
     }));
   }
@@ -1057,46 +1195,10 @@
   function viewLink(text, target){
     const a = document.createElement("a");
     a.className = "pd-link";
-    a.href = target === "trash" ? "#papelera" : "#productos";
+    a.href = VIEW_HASH[target] || "#catalogo";
     a.textContent = text;
-    a.addEventListener("click", (e) => { e.preventDefault(); setView(target); $(target === "trash" ? "pl-tab-trash" : "pl-tab-products").focus(); });
+    a.addEventListener("click", (e) => { e.preventDefault(); setView(target); $(VIEW_TAB[target]).focus(); });
     return a;
-  }
-
-  function buildProposedRow(proposal){
-    const changes = proposal.proposed_changes || {};
-    const row = document.createElement("div");
-    row.className = "cart-row";
-
-    const category = changes.category_id ? (categoryNames.get(changes.category_id) || changes.category_id) : "Sin categoría";
-    const subcategory = proposal.proposed_new_subcategory
-      ? `Nueva subcategoría propuesta: ${proposal.proposed_new_subcategory}`
-      : (changes.subcategory || "Sin subcategoría");
-
-    const info = document.createElement("div");
-    info.append(
-      textDiv("c-name", changes.name || "Producto nuevo sin nombre"),
-      textDiv("c-brand", changes.brand || "Sin marca"),
-      textDiv("c-meta", `${category} · ${subcategory}`),
-      ...proposalBlock(proposal)
-    );
-
-    let action;
-    if (proposal.status === "submitted"){
-      const sent = sentDetails(proposal);
-      info.append(sent.details);
-      action = sent.toggle;
-    } else {
-      action = link(PROPOSAL[proposal.status].action, proposalHref(proposal));
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "c-qty pl-actions";
-    actions.append(chip("Producto nuevo", "neutral"), action);
-
-    row.append(makeThumb(changes.name, changes.image_url), info, actions);
-    makeClickable(row, action);
-    return row;
   }
 
   /* ---------- Decisiones recientes de Mobau (39) ---------- */
@@ -1209,17 +1311,13 @@
     renderNotificationsState();
   }
 
-  function matchesProposal(open, filter){
-    if (!filter) return true;
-    if (filter === "none") return !open;
-    return !!open && open.status === filter;
-  }
-
-  const VIEW_HASH = { products: "", trash: "#papelera", notifications: "#notificaciones" };
-  const VIEW_TAB = { products: "pl-tab-products", trash: "pl-tab-trash", notifications: "pl-tab-notifications" };
+  /* Pestañas (45), en su orden visual. */
+  const VIEW_HASH = { notifications: "#notificaciones", catalog: "", drafts: "#borradores", trash: "#papelera" };
+  const VIEW_TAB = { notifications: "pl-tab-notifications", catalog: "pl-tab-catalog", drafts: "pl-tab-drafts", trash: "pl-tab-trash" };
+  const TAB_NAMES = { catalog: "En catálogo", drafts: "Borradores y propuestas", trash: "la papelera" };
   function setView(target){
     view = target;
-    history.replaceState(null, "", window.location.pathname + VIEW_HASH[target]);
+    history.replaceState(null, "", window.location.pathname + window.location.search + VIEW_HASH[target]);
     render();
   }
 
@@ -1231,88 +1329,162 @@
     $("pl-tab-notifications-count").textContent = newDecisions ? ` · ${newDecisions} ${newDecisions === 1 ? "nueva" : "nuevas"}` : "";
   }
 
+  const trashKnown = () => LC.enabled() && !!lifecycle;
+  function tabOf(product){
+    if (trashKnown() && lifecycleState(product) === "trashed") return "trash";
+    return product.publication_status === "published" ? "catalog" : "drafts";
+  }
+
+  /* Elementos de cada pestaña, sin duplicar productos dentro de una pestaña.
+     Un publicado con cambios abiertos está en En catálogo (su versión
+     actual) y sus cambios en Borradores y propuestas, con la misma clave. */
+  function entriesByTab(){
+    const out = { catalog: [], drafts: [], trash: [] };
+    const search = (e) => `${e.code} ${e.name} ${e.brand}`.toLowerCase();
+    products.forEach(p => {
+      const base = { key: `product:${p.id}`, product: p, code: p.reference_code || "", brand: p.brand || "", name: p.name, category: p.category_id, date: p.updated_at };
+      base.search = search(base);
+      const tab = tabOf(p);
+      out[tab].push({ ...base, type: tab === "drafts" ? "draft" : tab });
+      const open = openUpdates.get(p.id);
+      if (tab === "catalog" && open) out.drafts.push({ ...base, type: "update", proposal: open, date: open.updated_at });
+    });
+    openCreates.forEach(pr => {
+      const c = pr.proposed_changes || {};
+      const e = { key: `create:${pr.id}`, type: "create", proposal: pr, code: c.reference_code || "", brand: c.brand || "", name: c.name || "Producto nuevo sin nombre", category: c.category_id || "", date: pr.updated_at };
+      e.search = search(e);
+      out.drafts.push(e);
+    });
+    out.drafts.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    return out;
+  }
+
+  /* Un único filtro «Estado», con opciones propias de cada pestaña. */
+  const STATUS_OPTIONS = {
+    catalog: [["", "Todos"], ["sin_cambios", "Sin cambios propuestos"], ["con_cambios", "Con cambios propuestos"]],
+    drafts:  [["", "Todos"], ["nuevo", "Productos nuevos"], ["cambios", "Cambios propuestos"], ["borrador", "Borradores"], ["revision", "En revisión"], ["cambios_solicitados", "Cambios solicitados"], ["retirado", "Retirados"]],
+    trash:   [["", "Todos"], ["propia", "Retirados por tu empresa"], ["mobau", "Movidos por Mobau"]]
+  };
+  const PROPOSAL_STATE = { draft: "borrador", submitted: "revision", changes_requested: "cambios_solicitados" };
+  const PUBLICATION_STATE = { draft: "borrador", in_review: "revision", changes_requested: "cambios_solicitados", archived: "retirado", published: "publicado" };
+  let statusOptionsFor = null;
+  function fillStatusOptions(){
+    if (statusOptionsFor === view) return;
+    const select = $("pl-status");
+    const current = select.value;
+    select.replaceChildren(...STATUS_OPTIONS[view].map(([value, label]) => new Option(label, value)));
+    select.value = STATUS_OPTIONS[view].some(([value]) => value === current) ? current : "";
+    statusOptionsFor = view;
+  }
+  function entryStates(e){
+    if (e.type === "create" || e.type === "update") return [PROPOSAL_STATE[e.proposal.status]];
+    const lc = lcRow(e.product);
+    const states = [lc && ["retired", "legacy_retired"].includes(lc.lifecycle_state) ? "retirado" : PUBLICATION_STATE[e.product.publication_status]];
+    const open = openUpdates.get(e.product.id);
+    if (open) states.push(PROPOSAL_STATE[open.status]);
+    return states;
+  }
+  function matchesStatus(e, status){
+    if (!status) return true;
+    if (status === "sin_cambios") return !openUpdates.has(e.product.id);
+    if (status === "con_cambios") return openUpdates.has(e.product.id);
+    if (status === "nuevo") return e.type === "create";
+    if (status === "cambios") return e.type === "update" || (e.type === "draft" && openUpdates.has(e.product.id));
+    if (status === "propia" || status === "mobau"){
+      const lc = lcRow(e.product);
+      return (lc && lc.trashed_by_kind === "mobau" ? "mobau" : "propia") === status;
+    }
+    return entryStates(e).includes(status);
+  }
+
+  /* ---------- Selección acumulativa (45) ---------- */
+  function toggleSelected(key, on){
+    if (on) selected.add(key); else selected.delete(key);
+    if (!on && $("pl-only-selected").checked){ render(); return; }
+    document.querySelectorAll(".pl-row").forEach(row => { if (row.dataset.key === key) row.classList.toggle("is-selected", on); });
+    renderSelection();
+  }
+  function renderSelection(){
+    const n = selected.size;
+    $("pl-selcount").textContent = n === 0 ? "Ningún producto seleccionado" : `${n} ${n === 1 ? "seleccionado" : "seleccionados"} en total`;
+    $("pl-clear-selection").disabled = n === 0;
+    $("pl-select-visible").disabled = visibleKeys.length === 0 || visibleKeys.every(k => selected.has(k));
+  }
+  /* Claves que ya no existen (producto eliminado, propuesta cerrada). */
+  function pruneSelection(entries){
+    const valid = new Set([...entries.catalog, ...entries.drafts, ...entries.trash].map(e => e.key));
+    [...selected].forEach(k => { if (!valid.has(k)) selected.delete(k); });
+  }
+
+  const ROW_BUILDERS = { catalog: buildCatalogRow, draft: buildDraftRow, update: buildUpdateRow, create: buildCreateRow, trash: buildTrashRow };
+  const HEAD = ["", "Código", "Marca", "Nombre", "Estado", "Acciones"];
+  const EMPTY = {
+    catalog: ["Todavía no tienes productos en el catálogo.", "Tus productos nuevos, borradores y retirados están en «Borradores y propuestas»."],
+    drafts:  ["No tienes borradores ni propuestas abiertas.", "Usa «Crear nuevo producto» o «Proponer cambios» en un producto."],
+    trash:   ["La papelera está vacía.", "Cuando retires un producto, aparecerá aquí."]
+  };
+  function countText(tab, shown, total){
+    const nouns = {
+      catalog: total === 1 ? "producto publicado" : "productos publicados",
+      drafts:  total === 1 ? "borrador o propuesta" : "borradores y propuestas",
+      trash:   total === 1 ? "producto en la papelera" : "productos en la papelera"
+    };
+    return shown === total ? `${total} ${nouns[tab]}` : `${shown} de ${total} ${nouns[tab]}`;
+  }
+
   function render(){
-    const query = $("pl-search").value.trim().toLowerCase();
-    const category = $("pl-category").value;
-    const catalog = $("pl-status").value;
-    const proposal = $("pl-proposal").value;
-
-    /* Sin datos de ciclo de vida no se sabe qué está en la papelera: sin
-       pestañas, todos los productos en una lista (como antes de 41). */
-    const trashKnown = LC.enabled() && !!lifecycle;
-    const active = trashKnown ? products.filter(p => lifecycleState(p) !== "trashed") : products;
-    const trashed = trashKnown ? products.filter(p => lifecycleState(p) === "trashed") : [];
-
+    const entries = entriesByTab();
+    pruneSelection(entries);
     /* Distribuidor sin productos ni productos propuestos: un solo estado vacío. */
     const nothingYet = products.length === 0 && openCreates.length === 0;
-    $("pl-first").hidden = !nothingYet;
-    /* Notificaciones siempre; Papelera solo con datos de ciclo de vida. */
     $("pl-tabs").hidden = false;
-    $("pl-tab-trash").hidden = nothingYet || !trashKnown;
-    if (view === "trash" && $("pl-tab-trash").hidden) view = "products";
+    $("pl-tab-trash").hidden = nothingYet || !trashKnown();
+    if (view === "trash" && $("pl-tab-trash").hidden) view = "catalog";
     Object.entries(VIEW_TAB).forEach(([name, id]) => {
       $(id).setAttribute("aria-selected", String(view === name));
       $(id).tabIndex = view === name ? 0 : -1;
     });
+    ["catalog", "drafts", "trash"].forEach(tab => { $(`pl-tab-${tab}-count`).textContent = ` · ${entries[tab].length}`; });
     $("pl-view-notifications").hidden = view !== "notifications";
     renderNotificationsState();
-    $("pl-tab-products-count").textContent = ` · ${active.length}`;
-    $("pl-tab-trash-count").textContent = ` · ${trashed.length}`;
-    $("pl-view-products").hidden = view !== "products";
-    $("pl-view-trash").hidden = view !== "trash" || nothingYet;
-    $("pl-filters").hidden = nothingYet;
-    $("pl-catalog").hidden = nothingYet;
-    if (nothingYet){ $("pl-proposed").hidden = true; return; }
+    const lists = view !== "notifications" && !nothingYet;
+    $("pl-first").hidden = !nothingYet || view === "notifications";
+    $("pl-tools").hidden = !lists;
+    ["catalog", "drafts", "trash"].forEach(tab => {
+      $(`pl-view-${tab}`).hidden = !lists || view !== tab;
+      if (view !== tab) $(`pl-${tab}-list`).replaceChildren();
+    });
+    if (!lists){ visibleKeys = []; renderSelection(); return; }
 
-    /* ---- Papelera ---- */
-    $("pl-trash-list").replaceChildren(...(view === "trash" ? trashed.map(buildTrashRow) : []));
-    $("pl-trash-count").textContent = `${trashed.length} ${trashed.length === 1 ? "producto" : "productos"} en la papelera`;
-    $("pl-trash-count").hidden = trashed.length === 0;
-    $("pl-trash-empty").hidden = trashed.length > 0;
-    $("pl-trash-list").hidden = trashed.length === 0;
-
-    /* ---- Productos (sin los de la papelera) ---- */
-    const visible = active.filter(p =>
-      (!catalog || CATALOG_FILTER[catalog].includes(p.publication_status)) &&
-      (!category || p.category_id === category) &&
-      (!query || `${p.name} ${p.brand || ""}`.toLowerCase().includes(query)) &&
-      matchesProposal(openUpdates.get(p.id), proposal)
+    fillStatusOptions();
+    const query = $("pl-search").value.trim().toLowerCase();
+    const category = $("pl-category").value;
+    const status = $("pl-status").value;
+    const onlySelected = $("pl-only-selected").checked;
+    const all = entries[view];
+    const visible = all.filter(e =>
+      (!category || e.category === category) &&
+      (!query || e.search.includes(query)) &&
+      matchesStatus(e, status) &&
+      (!onlySelected || selected.has(e.key))
     );
-    $("pl-list").replaceChildren(...visible.map(buildProductRow));
-    const inCatalog = active.filter(p => p.publication_status === "published").length;
-    const noun = active.length === 1 ? "producto" : "productos";
-    $("pl-count").textContent = visible.length === active.length
-      ? `${active.length} ${noun} · ${inCatalog} en el catálogo`
-      : `${visible.length} de ${active.length} ${noun} · ${inCatalog} en el catálogo`;
-    const empty = visible.length === 0;
-    $("pl-empty").hidden = !empty;
-    $("pl-list").hidden = empty;
-    if (empty){
-      const noneActive = active.length === 0;
-      $("pl-empty-title").textContent = noneActive
-        ? (trashed.length ? "No tienes productos fuera de la papelera." : "Todavía no tienes productos en el catálogo.")
-        : "Ningún producto coincide con los filtros.";
-      $("pl-empty-text").textContent = noneActive
-        ? (trashed.length ? "Los productos que has retirado están en la papelera." : "Tus productos propuestos aparecen más abajo hasta que Mobau los incorpore.")
-        : "Prueba con otra búsqueda, categoría o estado.";
-    }
+    visibleKeys = visible.map(e => e.key);
 
-    /* Productos propuestos: aún no están en el catálogo, así que solo se
-       muestran con "Todos" o "Pendientes de publicación"; y siempre tienen
-       propuesta abierta, así que no con "Sin propuesta abierta". */
-    const showProposed = openCreates.length > 0 && (!catalog || catalog === "pending") && proposal !== "none";
-    $("pl-proposed").hidden = !showProposed;
-    if (showProposed){
-      const proposed = openCreates.filter(p => {
-        const changes = p.proposed_changes || {};
-        return (!category || changes.category_id === category) &&
-          (!query || `${changes.name || ""} ${changes.brand || ""}`.toLowerCase().includes(query)) &&
-          matchesProposal(p, proposal);
-      });
-      $("pl-proposed-list").replaceChildren(...proposed.map(buildProposedRow));
-      $("pl-proposed-list").hidden = proposed.length === 0;
-      $("pl-proposed-empty").hidden = proposed.length > 0;
-    }
+    const head = document.createElement("div");
+    head.className = "pl-rowhead";
+    head.setAttribute("aria-hidden", "true");
+    head.append(...HEAD.map(text => { const s = document.createElement("span"); s.textContent = text; return s; }));
+    $(`pl-${view}-list`).replaceChildren(...(visible.length ? [head, ...visible.map(e => ROW_BUILDERS[e.type](e))] : []));
+    $(`pl-${view}-count`).textContent = countText(view, visible.length, all.length);
+    $(`pl-${view}-count`).hidden = all.length === 0;
+    $(`pl-${view}-empty`).hidden = visible.length > 0;
+    const [title, text] = all.length === 0 ? EMPTY[view]
+      : (onlySelected && !visible.length ? ["No hay productos seleccionados en esta pestaña.", "Desmarca «Solo seleccionados» para ver todos."]
+      : ["Ningún producto coincide con los filtros.", "Prueba con otra búsqueda, categoría o estado."]);
+    $(`pl-${view}-empty-title`).textContent = title;
+    $(`pl-${view}-empty-text`).textContent = text;
+    if (view === "trash") $("pl-trash-back").hidden = all.length > 0;
+    renderSelection();
   }
 
   async function load(){
@@ -1323,7 +1495,7 @@
 
       const [productsRes, categoriesRes, proposalsRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, category_id, subcategory, availability, publication_status, image_url, updated_at")
+          .select("id, name, brand, reference_code, category_id, subcategory, availability, publication_status, updated_at")
           .eq("distributor_id", distributorId).order("updated_at", { ascending: false }),
         supabaseClient.from("categories").select("id, name").order("name"),
         supabaseClient.from("product_proposals")
@@ -1337,15 +1509,6 @@
       categoryNames = new Map(categoriesRes.data.map(c => [c.id, c.name]));
       setProposals(proposalsRes.data);
 
-      prices = new Map();
-      if (products.length){
-        const { data: priceRows, error: priceError } = await supabaseClient
-          .from("product_prices").select("product_id, price_amount, price_status")
-          .in("product_id", products.map(p => p.id));
-        if (priceError) throw priceError;
-        prices = new Map(priceRows.map(r => [r.product_id, r]));
-      }
-
       const select = $("pl-category");
       select.replaceChildren(new Option("Todas", ""), ...categoriesRes.data.map(c => new Option(c.name, c.id)));
 
@@ -1353,24 +1516,27 @@
          impide ver la página, pero deja la página sin acciones de ciclo de vida. */
       await loadLifecycle();
 
+      /* Al volver del formulario: aviso (?aviso=…) y, si procede, la
+         propuesta en revisión a mostrar desplegada (?ver=ID). Las vueltas
+         sobre una propuesta abren «Borradores y propuestas». */
+      const params = new URLSearchParams(window.location.search);
+      const aviso = params.get("aviso");
+      const ver = params.get("ver");
+      if (!HASH_VIEW[window.location.hash] && (ver || ["borrador", "enviada", "consulta", "en-revision"].includes(aviso))) view = "drafts";
+
       showOnly("pl-content");
       render();
       renderNotices();
       renderDeleted();
       loadDecisions();
 
-      /* Al volver del formulario: aviso (?aviso=…) y, si procede, la
-         propuesta en revisión a mostrar desplegada (?ver=ID). */
-      const params = new URLSearchParams(window.location.search);
-      const aviso = params.get("aviso");
-      const ver = params.get("ver");
-      if (aviso || ver) history.replaceState(null, "", window.location.pathname + window.location.hash);
+      if (aviso || ver) history.replaceState(null, "", window.location.pathname + VIEW_HASH[view]);
       if (AVISOS[aviso]) showToast(AVISOS[aviso]);
       const toggle = ver ? [...document.querySelectorAll(".pl-toggle")].find(b => b.dataset.proposalId === ver) : null;
       if (toggle){
         toggle.click();
         /* Sin el desplazamiento suave global, que la carga interrumpe. */
-        setTimeout(() => toggle.closest(".cart-row").scrollIntoView({ block: "center", behavior: "instant" }), 50);
+        setTimeout(() => toggle.closest(".pl-row").scrollIntoView({ block: "center", behavior: "instant" }), 50);
       }
     } catch (error){
       $("pl-load-error-detail").textContent = (error && error.message) || "Ocurrió un error al consultar tus datos. Intenta de nuevo.";
@@ -1379,13 +1545,13 @@
   }
 
   ["input", "change"].forEach(evt => {
-    ["pl-search", "pl-category", "pl-status", "pl-proposal"].forEach(id => $(id).addEventListener(evt, render));
+    ["pl-search", "pl-category", "pl-status", "pl-only-selected"].forEach(id => $(id).addEventListener(evt, render));
   });
+  $("pl-select-visible").addEventListener("click", () => { visibleKeys.forEach(k => selected.add(k)); render(); });
+  $("pl-clear-selection").addEventListener("click", () => { selected.clear(); render(); });
   $("pl-retry-btn").addEventListener("click", load);
-  $("pl-tab-products").addEventListener("click", () => setView("products"));
-  $("pl-tab-trash").addEventListener("click", () => setView("trash"));
-  $("pl-tab-notifications").addEventListener("click", () => setView("notifications"));
-  $("pl-trash-back").addEventListener("click", () => { setView("products"); $("pl-tab-products").focus(); });
+  Object.entries(VIEW_TAB).forEach(([name, id]) => $(id).addEventListener("click", () => setView(name)));
+  $("pl-trash-back").addEventListener("click", () => { setView("catalog"); $("pl-tab-catalog").focus(); });
   /* Flechas izquierda/derecha entre pestañas (patrón ARIA de pestañas). */
   $("pl-tabs").addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;

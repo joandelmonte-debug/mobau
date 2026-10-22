@@ -71,7 +71,7 @@ const MobauLifecycle = (() => {
       trash:             "Retirar",
       restore:           "Restaurar",
       purge:             "Eliminar definitivamente",
-      request_republish: "Solicitar revisión a Mobau"
+      request_republish: "Solicitar republicación"
     },
     confirm: {
       trash_published: "El producto dejará de aparecer en el catálogo y se moverá a la papelera. Podrás restaurarlo desde allí.",
@@ -79,8 +79,8 @@ const MobauLifecycle = (() => {
       trash_other:     "El producto se moverá a la papelera. Podrás restaurarlo desde allí.",
       trash_retired:   "El producto se moverá a la papelera. Podrás restaurarlo desde allí; seguirá retirado por Mobau.",
       restore_published: "El producto volverá a Productos y al catálogo, con el mismo contenido que tenía.",
-      restore_retired:   "El producto volverá a Productos, todavía retirado por Mobau. Para publicarlo tendrás que solicitar la revisión.",
-      restore_draft:     "El borrador volverá a Productos.",
+      restore_retired:   "El producto volverá a Borradores y propuestas, retirado. Para publicarlo de nuevo, propone cambios si hace falta y solicita la republicación.",
+      restore_draft:     "El borrador volverá a Borradores y propuestas.",
       purge: "Se borrarán el producto, su precio y sus propuestas. No se puede deshacer. Si el producto está en proyectos o solicitudes de cotización de clientes, no se podrá eliminar y seguirá en la papelera. Solo quedará constancia de su nombre y su identificador en tu historial.",
       purge_ack: "Entiendo que esta acción no se puede deshacer.",
       request_republish: "Mobau revisará el producto. Seguirá retirado hasta que lo apruebe."
@@ -90,7 +90,7 @@ const MobauLifecycle = (() => {
       restore_published: "Producto restaurado y publicado de nuevo.",
       restore: "Producto restaurado.",
       purge:   "Producto eliminado definitivamente.",
-      request_republish: "Solicitud de revisión enviada a Mobau."
+      request_republish: "Solicitud de republicación enviada a Mobau."
     },
     hints: {
       purge_blocked_references: "Este producto está en proyectos o solicitudes de cotización de clientes, así que no se puede eliminar definitivamente. Seguirá en la papelera, fuera del catálogo.",

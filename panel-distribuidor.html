@@ -125,7 +125,7 @@
               <a class="btn btn-outline btn-sm" id="pd-locked-catalog" href="catalogo.html">Ver catálogo</a>
             </div>
           </div>
-          <p class="pd-meta" id="pd-products-intro" hidden>Solo lectura: tus productos actualizados más recientemente. Los datos por completar son orientativos; los accesorios decorativos no necesitan dimensiones, acabados ni archivos descargables.</p>
+          <p class="pd-meta" id="pd-products-intro" hidden>Solo lectura: tus productos actualizados más recientemente. Los datos por completar son orientativos y no cuentan los productos de la papelera; los accesorios decorativos no necesitan dimensiones, acabados ni archivos descargables.</p>
           <div class="pd-table-wrap" id="pd-products-table" hidden>
             <table class="pd-table">
               <thead>
@@ -292,15 +292,18 @@
   };
 
   /* Datos por completar (orientativo): la imagen siempre; dimensiones,
-     acabados y archivo descargable (ficha técnica o CAD/BIM) salvo en
-     accesorios decorativos. Solo columnas reales de products. */
-  function missingData(p){
+     acabados y archivo descargable salvo en accesorios decorativos.
+     Punto 45: la imagen la cumple el enlace antiguo, la portada o una foto
+     aprobada; el descargable, los enlaces antiguos o un archivo aprobado que
+     no sea foto ni vídeo (los que solo están en una propuesta no cuentan).
+     files: { photos: Set, downloads: Set } de product_assets aprobados. */
+  function missingData(p, files){
     const out = [];
-    if (!p.image_url) out.push("imagen");
+    if (!p.image_url && !p.cover_asset_id && !files.photos.has(p.id)) out.push("imagen");
     if (p.category_id !== "accesorios-decorativos"){
       if (!p.measurements) out.push("dimensiones");
       if (!p.finishes) out.push("acabados");
-      if (!p.technical_sheet_url && !p.cad_bim_3d_url) out.push("archivo descargable");
+      if (!p.technical_sheet_url && !p.cad_bim_3d_url && !files.downloads.has(p.id)) out.push("archivo descargable");
     }
     return out;
   }
@@ -428,17 +431,23 @@
     $("pd-catalog-own").hidden = true;
   }
 
-  function renderProducts(profile, products, prices, categoryNames){
+  /* completeness: { files, trashed: Set } o null si no se pudo leer
+     (archivos aprobados o ciclo de vida): entonces no se calcula, «—». Los
+     productos en la papelera no cuentan como productos por completar. */
+  function renderProducts(profile, products, prices, categoryNames, completeness){
     const published = products.filter(p => p.publication_status === "published");
     const priced = products.filter(p => prices.get(p.id) && prices.get(p.id).price_status === "published");
-    const incomplete = products.filter(p => missingData(p).length > 0);
+    const incomplete = completeness
+      ? products.filter(p => !completeness.trashed.has(p.id) && missingData(p, completeness.files).length > 0)
+      : null;
 
     $("pd-summary-empty").hidden = true;
     $("pd-figures").hidden = false;
     $("pd-fig-published").textContent = String(published.length);
     $("pd-fig-unpublished").textContent = String(products.length - published.length);
     $("pd-fig-priced").textContent = products.length ? `${priced.length} de ${products.length}` : "0";
-    $("pd-fig-incomplete").textContent = String(incomplete.length);
+    $("pd-fig-incomplete").textContent = incomplete ? String(incomplete.length) : "—";
+    $("pd-fig-incomplete").title = incomplete ? "Productos fuera de la papelera con algún dato por completar." : "No pudimos comprobarlo ahora. Recarga la página.";
 
     const last = products.map(p => p.updated_at || p.created_at).filter(Boolean).sort().pop();
     $("pd-last-update").hidden = !last;
@@ -469,14 +478,16 @@
       const publication = PUBLICATION[p.publication_status] || { label: "Sin estado", kind: "neutral" };
       const price = prices.get(p.id);
       const priceLabel = price ? (PRICE_LABELS[price.price_status] || "Sin precio") : "Sin precio";
-      const missing = missingData(p);
+      const dataCell = !completeness ? "No disponible"
+        : completeness.trashed.has(p.id) ? "En la papelera"
+        : (missing => missing.length ? missing.join(", ") : "Completos")(missingData(p, completeness.files));
       const category = categoryNames.get(p.category_id) || "";
       return `
         <tr>
           <td data-label="Producto"><span class="pd-product-name">${escapeHtml(p.name)}</span>${category ? `<span class="pd-meta">${escapeHtml(category)}</span>` : ""}</td>
           <td data-label="Estado"><span class="pd-chip pd-chip--${publication.kind}">${escapeHtml(publication.label)}</span></td>
           <td data-label="Precio">${escapeHtml(priceLabel)}</td>
-          <td data-label="Datos por completar">${missing.length ? escapeHtml(missing.join(", ")) : "Completos"}</td>
+          <td data-label="Datos por completar">${escapeHtml(dataCell)}</td>
         </tr>`;
     }).join("");
   }
@@ -515,7 +526,7 @@
 
     const { data: products, error: productsError } = await supabaseClient
       .from("products")
-      .select("id, name, category_id, publication_status, image_url, measurements, finishes, technical_sheet_url, cad_bim_3d_url, created_at, updated_at")
+      .select("id, name, category_id, publication_status, image_url, cover_asset_id, measurements, finishes, technical_sheet_url, cad_bim_3d_url, created_at, updated_at")
       .eq("distributor_id", profile.distributor_id);
     if (productsError){
       $("pd-error-detail").textContent = productsError.message || "No pudimos cargar tus productos. Intenta de nuevo.";
@@ -525,16 +536,31 @@
 
     const prices = new Map();
     const categoryNames = new Map();
+    let completeness = { files: { photos: new Set(), downloads: new Set() }, trashed: new Set() };
     if (products.length){
-      const [{ data: priceRows }, { data: categories }] = await Promise.all([
-        supabaseClient.from("product_prices").select("product_id, price_status").in("product_id", products.map(p => p.id)),
-        supabaseClient.from("categories").select("id, name")
+      const ids = products.map(p => p.id);
+      const [{ data: priceRows }, { data: categories }, assetsRes, lifecycleRes] = await Promise.all([
+        supabaseClient.from("product_prices").select("product_id, price_status").in("product_id", ids),
+        supabaseClient.from("categories").select("id, name"),
+        supabaseClient.from("product_assets").select("product_id, kind").eq("status", "aprobado").in("product_id", ids),
+        supabaseClient.rpc("my_products_lifecycle")
       ]);
       (priceRows || []).forEach(r => prices.set(r.product_id, r));
       (categories || []).forEach(c => categoryNames.set(c.id, c.name));
+      /* Punto 45: si falla la lectura de archivos o del ciclo de vida, no se
+         confunde con datos ausentes. */
+      if (assetsRes.error || !Array.isArray(assetsRes.data) || lifecycleRes.error || !Array.isArray(lifecycleRes.data)){
+        completeness = null;
+      } else {
+        assetsRes.data.forEach(a => {
+          if (a.kind === "foto") completeness.files.photos.add(a.product_id);
+          else if (a.kind !== "video") completeness.files.downloads.add(a.product_id);
+        });
+        lifecycleRes.data.forEach(r => { if (r.lifecycle_state === "trashed") completeness.trashed.add(r.id); });
+      }
     }
 
-    renderProducts(profile, products, prices, categoryNames);
+    renderProducts(profile, products, prices, categoryNames, completeness);
     showState("pd-content");
   }
 
