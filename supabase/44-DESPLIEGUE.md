@@ -238,4 +238,12 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
   - Migración: `migrations/20261026120000_45_02_codigo_comercial_acabado.sql`, MD5 `849ceacf…`.
   - Recuperación: `rollback/…rollback.sql`, MD5 `a87ab024…` (no ejecutada).
   - Copió `code` → `reference_code` en los 22 acabados aprobados. Claves, fotos, líneas, productos, propuestas, permisos y políticas sin cambios.
-- **Pendiente del punto 45:** limpieza de las dos «lampara de pie» y prueba real de restauración y republicación.
+- **Acciones de grupo en Mis productos** (2026-10-22): mover a papelera, preparar cambios, descartar borradores, solicitar republicación y restaurar para revisar.
+  - Una llamada por elemento, con las funciones existentes; no hay envío masivo ni eliminación definitiva masiva.
+- **45-03 aplicada y registrada** (`20261027120000 · 45_03_purga_lampara_prueba`, 45 migraciones).
+  - Migración: `migrations/…45_03…sql`, MD5 `88718ac4…`.
+  - Respaldo: `rollback/…rollback.sql`, MD5 `58d8b2ed…` (no ejecutado).
+  - Purgó solo `spectro-a7a2cfba` y su precio. Auditoría: `actor_kind` mobau, `actor_id` nulo, `meta.via` sql_admin.
+- **Pendiente del punto 45:**
+  - `spectro-02988ada`: bloqueada por la línea `899b0af5…` de un proyecto de otra cuenta; la quitará su propietario.
+  - Revisión real de las acciones de grupo y prueba real de restauración y republicación.
