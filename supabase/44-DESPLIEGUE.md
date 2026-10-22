@@ -231,3 +231,11 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
 - **Interfaz:**
   - Resumen: datos por completar con portada, fotos y descargables aprobados; sin papelera.
   - Mis productos: pestañas, filas compactas, búsqueda por código y selección en memoria.
+- **Acabados sin código comercial:** nombre obligatorio y código comercial opcional (2026-10-22).
+  - `product_finishes.code` es la clave técnica: estable y oculta, generada por el editor en los acabados nuevos.
+  - `reference_code` es el «Código del acabado», opcional.
+- **45-02 aplicada y registrada** (`20261026120000 · 45_02_codigo_comercial_acabado`, 44 migraciones).
+  - Migración: `migrations/20261026120000_45_02_codigo_comercial_acabado.sql`, MD5 `849ceacf…`.
+  - Recuperación: `rollback/…rollback.sql`, MD5 `a87ab024…` (no ejecutada).
+  - Copió `code` → `reference_code` en los 22 acabados aprobados. Claves, fotos, líneas, productos, propuestas, permisos y políticas sin cambios.
+- **Pendiente del punto 45:** limpieza de las dos «lampara de pie» y prueba real de restauración y republicación.
