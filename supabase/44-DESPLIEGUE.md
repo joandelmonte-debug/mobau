@@ -244,6 +244,8 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
   - Migración: `migrations/…45_03…sql`, MD5 `88718ac4…`.
   - Respaldo: `rollback/…rollback.sql`, MD5 `58d8b2ed…` (no ejecutado).
   - Purgó solo `spectro-a7a2cfba` y su precio. Auditoría: `actor_kind` mobau, `actor_id` nulo, `meta.via` sql_admin.
-- **Pendiente del punto 45:**
-  - `spectro-02988ada`: bloqueada por la línea `899b0af5…` de un proyecto de otra cuenta; la quitará su propietario.
-  - Revisión real de las acciones de grupo y prueba real de restauración y republicación.
+- **Segunda lámpara (2026-10-23):**
+  - La línea `899b0af5…` del proyecto de prueba `a33bb396…` se quitó con autorización. El proyecto sigue activo con 5 líneas. Script ya ejecutado: `limpieza/45_04a_quitar_linea_899b0af5.EJECUTADA.sql`.
+  - **45-04 aplicada y registrada** (`20261028120000 · 45_04_purga_lampara_prueba_2`, 46 migraciones). Purgó `spectro-02988ada` y su precio, con la misma auditoría que 45-03 más `meta.project_line_removed`.
+  - Migración MD5 `9735593d…`; respaldo MD5 `c0632508…`, no ejecutado.
+- **Pendiente del punto 45:** revisión real de las acciones de grupo y prueba real de restauración y republicación.
