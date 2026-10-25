@@ -379,6 +379,7 @@
             <div>
               <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
               <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
+              ${configLinesHtml(row, false)}
             </div>
           </div>
         </td>
@@ -387,6 +388,27 @@
         <td class="ps-num">${displayQty} ${unit}</td>
         <td class="ps-num">${priceCell}</td>
       </tr>`;
+  }
+
+  /* Punto 46 · bloque 4: estado actual de las líneas (Map por id, o null si
+     no se pudo comprobar); no se consulta cuando se muestra la copia de una RFQ. */
+  let lineStates = null;
+
+  /* Configuración de una fila: la copia enviada (sin recalcular) o el estado
+     actual; en un archivado sin copia se indica que es información actual. */
+  function lineConfigFor(row, isArchived){
+    if (row.requested) return MobauLineConfig.sent(row.requested);
+    const result = MobauLineConfig.current(row.configuration, lineStates ? lineStates.get(row.id) : null);
+    if (isArchived && result.lines.length) result.lines.unshift("Información actual del proyecto (no es la copia de lo enviado):");
+    return result;
+  }
+
+  /* Líneas de configuración bajo el nombre (texto escapado), con el precio del principal y el aviso de cotización. */
+  function configLinesHtml(row, isArchived){
+    const config = lineConfigFor(row, isArchived);
+    return config.lines.map(text => `<div class="ps-product-sub">${escapeHtml(text)}</div>`).join("")
+      + (row.configuration && !isArchived ? `<div class="ps-product-sub">El precio indicado es el del producto principal, no el del conjunto.</div>` : "")
+      + (config.needsQuote ? `<div class="ps-product-sub">El importe final de esta configuración requiere cotización.</div>` : "");
   }
 
   /* Mismo cálculo que buildProjectPriceSummaryHtml() de
@@ -425,6 +447,14 @@
     }
     if (hasDemoPublished){
       parts.push(`<p class="ps-meta-line" style="font-style:italic;">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
+    }
+    /* 46: de una línea configurada solo cuenta el precio del producto principal. */
+    const configured = rows.filter(row => row.configuration);
+    if (configured.length){
+      parts.push(`<p class="ps-meta-line">En las líneas configuradas solo cuenta el precio del producto principal, no el del conjunto.${configured.some(row => lineConfigFor(row, false).needsQuote) ? " Su importe final requiere cotización." : ""}</p>`);
+    }
+    if (rows.some(row => lineConfigFor(row, false).status === "pendiente")){
+      parts.push(`<p class="ps-meta-line">Hay líneas con la configuración pendiente de revisar.</p>`);
     }
     el.innerHTML = parts.join("");
   }
@@ -477,6 +507,8 @@
 
     document.title = `Resumen preliminar — ${project.name} — Mobau`;
     const isArchived = project.status === "archived";
+    /* 46: con copia de una RFQ solo se muestra lo enviado; si no, el estado actual. */
+    lineStates = rows.some(row => row.requested) ? null : await MobauProjects.listLineStates(project.id);
     const dateStr = new Date().toLocaleDateString("es-DO", { year: "numeric", month: "long", day: "numeric" });
 
     document.getElementById("ps-project-line").innerHTML =
@@ -531,6 +563,7 @@
                 <div>
                   <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
                   <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
+                  ${configLinesHtml(row, true)}
                 </div>
               </div>
             </td>

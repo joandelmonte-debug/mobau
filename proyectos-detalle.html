@@ -487,6 +487,36 @@
      nunca dispara una consulta nueva a Supabase. */
   let currentRows = [];
   let categoryFilter = new Set();
+  /* Punto 46 · bloque 4: estado actual de las líneas (Map por id de línea, o
+     null si no se pudo comprobar) de la última carga; cada carga lleva su
+     número y una respuesta de una carga anterior se descarta. */
+  let lineStates = null;
+  let lineStatesLoad = 0;
+
+  /* Configuración de una fila: la copia enviada si la fila viene de la copia
+     de una RFQ (sin recalcular); si no, el estado actual. En un proyecto
+     archivado sin copia se indica que es información actual, no lo enviado. */
+  function lineConfigFor(row){
+    if (row.requested) return MobauLineConfig.sent(row.requested);
+    const result = MobauLineConfig.current(row.configuration, lineStates ? lineStates.get(row.id) : null);
+    if (project.status === "archived" && result.lines.length){
+      result.lines.unshift("Información actual del proyecto (no es la copia de lo enviado):");
+    }
+    return result;
+  }
+
+  /* Nota de precio de las líneas configuradas (solo el principal; nunca un total del conjunto). */
+  function configuredPriceNoteHtml(rows){
+    const configured = rows.filter(row => row.configuration);
+    const parts = [];
+    if (configured.length){
+      parts.push(`<p class="price-summary-warning">En las líneas configuradas solo cuenta el precio del producto principal, no el del conjunto.${configured.some(row => lineConfigFor(row).needsQuote) ? " Su importe final requiere cotización." : ""}</p>`);
+    }
+    if (rows.some(row => lineConfigFor(row).status === "pendiente")){
+      parts.push(`<p class="price-summary-warning">Hay líneas con la configuración pendiente: revísalas antes de solicitar la cotización.</p>`);
+    }
+    return parts.join("");
+  }
 
   async function renderProject(){
     const isActive = project.status === "active";
@@ -800,6 +830,7 @@
     if (hasDemoPublished){
       parts.push(`<p class="price-summary-line price-demo-note">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
     }
+    parts.push(configuredPriceNoteHtml(rows));
     return parts.join("");
   }
 
@@ -854,6 +885,7 @@
     if (hasDemoPublished){
       parts.push(`<p class="price-summary-line price-demo-note">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
     }
+    parts.push(configuredPriceNoteHtml(visibleRows));
     return parts.join("");
   }
 
@@ -1072,11 +1104,16 @@
   }
 
   async function loadSavedProducts(){
+    const load = ++lineStatesLoad;
     /* Archivado: lo que se solicitó (copia de la RFQ si existe, 46-04). */
     const rows = project.status === "archived"
       ? await MobauProjects.listRequestedLines(project.id)
       : await MobauProjects.listProductsInProject(project.id);
     if (!(await whenProductsReady(rows.map(row => row.product_id), { status: "#project-products-list" }))) return;
+    /* 46: con copia de una RFQ solo se muestra lo enviado; si no, el estado actual. */
+    const states = rows.some(row => row.requested) ? null : await MobauProjects.listLineStates(project.id);
+    if (load !== lineStatesLoad) return;
+    lineStates = states;
     currentRows = rows;
     const counterEl = document.getElementById("products-counter");
     const isArchived = project.status === "archived";
@@ -1175,6 +1212,12 @@
       : (isUnit ? 1 : 1);
     const displayValue = isUnit ? String(Math.round(currentQuantity)) : String(Math.round(currentQuantity * 100) / 100);
     const inputId = `dp-qty-${row.id}`;
+    /* 46: configuración de la línea (actual o enviada), precio del principal y aviso de cotización. */
+    const config = lineConfigFor(row);
+    const configHtml = config.lines.map(text => `<div class="sp-meta">${escapeHtml(text)}</div>`).join("")
+      + (row.configuration && !row.requested && !isArchived ? `<div class="sp-meta">Para cambiar la configuración, quita esta línea y vuelve a configurarla en la ficha.</div>` : "")
+      + (row.configuration && !isArchived ? `<div class="sp-meta">El precio indicado es el del producto principal, no el del conjunto.</div>` : "")
+      + (config.needsQuote ? `<div class="sp-meta">El importe final de esta configuración requiere cotización.</div>` : "");
     return `
       <div class="saved-project saved-project--detail">
         <div class="saved-project__top">
@@ -1183,6 +1226,7 @@
             <div style="min-width:0;">
               <div class="sp-name">${escapeHtml(p.nombre)}</div>
               ${lineDetailText(p, row.finish_code) ? `<div class="sp-meta">${escapeHtml(lineDetailText(p, row.finish_code))}</div>` : ""}
+              ${configHtml}
               <div class="sp-meta">${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(dist.nombre)} · ${p.status === "archived" ? "No disponible actualmente" : escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
             </div>
           </div>

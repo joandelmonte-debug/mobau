@@ -386,6 +386,57 @@
   }
   const availableProductRows = () => productRows.filter(row => isProductAvailable(row.product_id));
 
+  /* Punto 46 · bloque 4: estado actual de la configuración de cada fila.
+     Filas del proyecto: project_line_states (Map por id de línea, o null si
+     no se pudo comprobar). Filas de la selección: line_configuration_resolve
+     (Map por producto + configuración). Informativo: el servidor decide al
+     enviar. configBlocked solo es true si el estado CONFIRMA líneas pendientes. */
+  let projectLineStates = null;
+  let selectionConfigStates = new Map();
+  let configBlocked = false;
+  /* Bloqueo general del envío (operación en curso, setButtonsDisabled). */
+  let sendBusy = false;
+
+  /* Único punto que decide si «Enviar solicitud» está desactivado: cada causa
+     se guarda por separado y el botón se habilita solo sin ninguna. */
+  function applySendButtonState(){
+    const sendBtn = document.getElementById("send-request-btn");
+    if (sendBtn) sendBtn.disabled = sendBusy || configBlocked;
+  }
+
+  function rowConfig(row){
+    if (row.id) return MobauLineConfig.current(row.configuration, projectLineStates ? projectLineStates.get(row.id) : null);
+    const key = row.product_id + "\u0000" + selectionConfigurationKey(row.configuration);
+    return MobauLineConfig.current(row.configuration, row.configuration ? selectionConfigStates.get(key) : null);
+  }
+
+  /* Aviso bajo la lista de «Enviar solicitud»: líneas pendientes (bloquea el
+     envío) o configuraciones que no se pudieron comprobar (solo informa). */
+  function renderSendConfigNotice(){
+    const listEl = document.getElementById("send-products-list");
+    let el = document.getElementById("send-config-notice");
+    if (!el){
+      el = document.createElement("div");
+      el.id = "send-config-notice";
+      listEl.after(el);
+    }
+    const rows = availableProductRows().map(row => ({ row, config: rowConfig(row) }));
+    const pending = rows.filter(r => r.config.status === "pendiente");
+    const unchecked = rows.filter(r => r.row.configuration && r.config.status === "sin_comprobar");
+    configBlocked = pending.length > 0;
+    applySendButtonState();
+    const nameOf = row => { const p = PRODUCTS.find(pp => pp.id === row.product_id); return p ? p.nombre : row.product_id; };
+    const parts = [];
+    if (pending.length){
+      parts.push(`<p class="card-meta" role="alert" style="margin:12px 0 4px; color:var(--danger);">No se puede enviar todavía: estas líneas tienen la configuración pendiente.</p>`);
+      pending.forEach(r => parts.push(`<p class="card-meta" style="margin:0 0 4px;">${escapeHtml(nameOf(r.row))}: ${escapeHtml(r.config.reasons.join(" ") || "revisa la configuración")}</p>`));
+    }
+    if (unchecked.length){
+      parts.push(`<p class="card-meta" style="margin:12px 0 4px;">No pudimos comprobar la configuración de ${unchecked.length === 1 ? "una línea" : `${unchecked.length} líneas`}; se comprobará al enviar la solicitud.</p>`);
+    }
+    el.innerHTML = parts.join("");
+  }
+
   function renderPiecesList(containerId, countId){
     const listEl = document.getElementById(containerId);
     listEl.innerHTML = productRows.map(row => {
@@ -400,7 +451,11 @@
       const unit = row.unit || getProductUnit(p);
       const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
       const detail = lineDetailText(p, row.finish_code);
-      return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)}${detail ? ` — ${escapeHtml(detail)}` : ""} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>`;
+      /* 46: configuración de la línea (estado actual), escapada. */
+      const config = rowConfig(row);
+      const configHtml = config.lines.map(text => `<p class="card-meta" style="margin:-2px 0 6px;">${escapeHtml(text)}</p>`).join("")
+        + (config.needsQuote ? `<p class="card-meta" style="margin:-2px 0 6px;">El importe final de esta configuración requiere cotización.</p>` : "");
+      return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)}${detail ? ` — ${escapeHtml(detail)}` : ""} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>${configHtml}`;
     }).join("");
     const pieceCount = getCommercialPieceCount(availableProductRows());
     document.getElementById(countId).textContent =
@@ -419,9 +474,10 @@
 
   function setButtonsDisabled(disabled){
     const saveBtn = document.getElementById("save-project-btn");
-    const sendBtn = document.getElementById("send-request-btn");
     if (saveBtn) saveBtn.disabled = disabled;
-    if (sendBtn) sendBtn.disabled = disabled;
+    /* 46: un bloqueo por configuración pendiente confirmada se mantiene. */
+    sendBusy = disabled;
+    applySendButtonState();
   }
 
   /* Punto 13 (Paso B/C) — solo lectura de client_name/description/
@@ -824,6 +880,7 @@
       if (!projectRows) return;
       productRows = projectRows;
       if (!productRows.length){ document.getElementById("no-products").style.display = "block"; return; }
+      projectLineStates = await MobauProjects.listLineStates(project.id);
 
       document.getElementById("bc-project").textContent = project.name;
       document.getElementById("send-name-field").style.display = "none";
@@ -859,9 +916,11 @@
         if (activeProjects.length) project = activeProjects[0];
       }
 
-      const selectionRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, finish_code: item.finish || null, quantity: item.quantity, unit: item.unit })));
+      /* 46: cada fila conserva su configuración (la transferencia usa la selección tal cual). */
+      const selectionRows = await loadRowProducts(selectionItems.map(item => ({ product_id: item.productId, finish_code: item.finish || null, configuration: item.configuration || null, quantity: item.quantity, unit: item.unit })));
       if (!selectionRows) return;
       productRows = selectionRows;
+      selectionConfigStates = await MobauProjects.resolveSelectionConfigurations(selectionItems);
 
       if (project){
         const nameField = mode === "save" ? "save-name-field" : "send-name-field";
@@ -902,6 +961,7 @@
       document.getElementById("page-title").textContent = "Solicitud de cotización";
       document.getElementById("page-subtitle").textContent = project ? `Para el proyecto "${project.name}".` : "";
       renderPiecesList("send-products-list", "send-products-count");
+      renderSendConfigNotice();
       renderSummarySidebar();
 
       /* Nunca a seleccion.html: mobau_seleccion puede estar vacía aquí

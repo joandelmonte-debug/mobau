@@ -1,0 +1,348 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 46 · proyecto y cotización (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:900px;height:620px;border:1px solid #ccc;margin-top:12px}</style>
+<h1>Punto 46 · bloque 4 · lectura en proyecto y cotización (mocks)</h1>
+<p>Sin red ni Supabase; servir la raíz del repositorio. Abre las páginas reales
+  (<code>proyectos-detalle.html</code>, <code>proyectos-resumen.html</code>, <code>proyectos-cotizacion.html</code>)
+  a través de <code>sw-paginas-46.js</code>, que solo sustituye en cada página la etiqueta de supabase-js por el
+  cliente simulado de CC1 (<code>supabase/tests/43/interfaz/mock-supabase-cc1.js</code>) y añade
+  <code>mock-proyecto-46.js</code> después de <code>supabase-client.js</code>.</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<iframe id="f"></iframe>
+<script>
+const UID = "aaaaaaaa-0000-4000-8000-00000000000a", KEY = "mobau_seleccion:" + UID;
+const QS = "rol=individual&pro=1&uid=a";
+const P = n => `0000000${n}-1111-4111-8111-111111111111`;
+const COMPLETAS = "Elecciones completas según el catálogo actual; se vuelven a comprobar al enviar la solicitud.";
+const SIN_COMPROBAR = "No pudimos comprobar la configuración con el catálogo actual. Se conserva lo guardado.";
+const COTIZACION = "El importe final de esta configuración requiere cotización.";
+const PRECIO = "El precio indicado es el del producto principal, no el del conjunto.";
+const CAMBIAR = "Para cambiar la configuración, quita esta línea y vuelve a configurarla en la ficha.";
+const NOTA = "En las líneas configuradas solo cuenta el precio del producto principal, no el del conjunto.";
+const CFG_A_ORDEN = { choices: [{ options: ["comp"], group: "fuente" }] };
+const CFG_B = { choices: [{ group: "fuente", options: ["calida"], path: [] }] };
+const CFG_X = { choices: [{ group: "fuente", options: ["zzz"] }] };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const frame = document.getElementById("f");
+let ok = 0, ko = 0, n = 0;
+
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}"></td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  tr.children[3].textContent = pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected);
+  document.getElementById("t").appendChild(tr);
+}
+
+const READY = {
+  "proyectos-detalle.html": d => d.querySelectorAll("#project-products-list .saved-project").length > 0,
+  "proyectos-resumen.html": d => (d.getElementById("summary-content") || {}).style?.display === "block",
+  "proyectos-cotizacion.html": d => (d.getElementById("view-send") || {}).style?.display === "grid"
+};
+/* Abre una página real (servida por el service worker) y espera a que esté pintada. */
+async function open(page, query, conf = {}, { wait = 9000, width = "" } = {}){
+  sessionStorage.setItem("__proyecto46", JSON.stringify(conf));
+  sessionStorage.removeItem("__mockqs");
+  frame.style.width = width || ""; frame.style.height = width ? "2400px" : "";
+  await new Promise(res => { frame.onload = res; frame.src = `pagina/${page}?${query ? query + "&" : ""}${QS}`; });
+  const t0 = Date.now();
+  while (Date.now() - t0 < wait){
+    await sleep(60);
+    const d = frame.contentDocument;
+    if (d && READY[page](d)) { await sleep(120); break; }
+  }
+  /* Sin los dos simuladores no se continúa: nunca con el cliente real. */
+  const fw = frame.contentWindow;
+  if (!fw || !fw.__mock || !fw.__escrituras46) throw new Error(`${page} no cargó el simulador: ensayo detenido`);
+  return READY[page](frame.contentDocument) ? fw : null;
+}
+const d = () => frame.contentDocument;
+const w = () => frame.contentWindow;
+const metasOf = rowId => {
+  const btn = d().querySelector(`.remove-product-btn[data-row-id="${rowId}"]`);
+  return btn ? [...btn.closest(".saved-project").querySelectorAll(".sp-meta")].map(m => m.textContent.trim()) : null;
+};
+const rowIds = () => [...d().querySelectorAll("#project-products-list .remove-product-btn")].map(b => b.dataset.rowId);
+const qty = rowId => (d().getElementById(`dp-qty-${rowId}`) || {}).value;
+const summaryText = () => d().getElementById("products-price-summary").innerText;
+const click = async (el, ms = 400) => { el.click(); await sleep(ms); };
+const noConfig = metas => !!metas && !metas.some(t => /Configuración|precio indicado|cotización|Revisar|Elegido/.test(t));
+const writes = () => w().__escrituras46.map(e => [e.tabla, e.op, e.ids || null, e.cambios || e.fila]);
+const noOverflow = () => {
+  const de = d().documentElement;
+  const out = [...d().querySelectorAll("button, input, .sp-meta, .ps-product-sub, .card-meta, p")].filter(el => el.getBoundingClientRect().right > de.clientWidth + 0.5).length;
+  return [de.scrollWidth <= de.clientWidth, out];
+};
+
+const total = () => { const m = summaryText().match(/Total preliminar: (US\$ [\d.,]+)/); return m ? m[1] : null; };
+
+(async () => {
+  let reg;
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Solo en un origen local de pruebas");
+    /* Arranque limpio: sin registros de ejecuciones anteriores. */
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    reg = await navigator.serviceWorker.register("sw-paginas-46.js");
+    while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await sleep(50);
+    localStorage.removeItem(KEY);
+
+    /* ===== Detalle · proyecto activo ===== */
+    await open("proyectos-detalle.html", `id=${P(1)}`);
+    const ma = metasOf("l-a"), mb = metasOf("l-b");
+    check("D1a mismo producto y acabado: tres líneas separadas por su id, más demo-cot", rowIds(), ["l-sin", "l-a", "l-b", "l-cot"]);
+    check("D1b A: resumen, componente por unidad, estado, cómo cambiarla, precio del principal y aviso de cotización",
+      ["Configuración: Fuente: Módulo LED (consulta 1)", "Módulo LED: aparte · 1 por unidad", COMPLETAS, CAMBIAR, PRECIO, COTIZACION].every(t => ma.includes(t)), true);
+    check("D1c B (solo ajuste): su propio resumen y estado, sin aviso de cotización",
+      [mb.includes("Configuración: Fuente: Cálida (consulta 1)"), mb.includes(COMPLETAS), mb.includes(COTIZACION)], [true, true, false]);
+    check("D1d líneas sin configuración: sin textos nuevos", [noConfig(metasOf("l-sin")), noConfig(metasOf("l-cot"))], [true, true]);
+    check("D1e resumen de precios: total del principal (6 × 120), nota del principal y cotización; una consulta de estado; sin errores sin capturar",
+      [total(), summaryText().includes(`${NOTA} Su importe final requiere cotización.`), w().__estadosCalls, w().__sinCapturar], ["US$ 720.00", true, 1, []]);
+
+    await click(d().querySelector('.dp-qty-increment[data-row-id="l-b"]'), 600);
+    check("D2 «+» en B: solo se actualiza B; total actualizado; se vuelve a consultar el estado; las demás cantidades no cambian",
+      [writes().filter(x => x[0] === "project_products"), [qty("l-sin"), qty("l-a"), qty("l-b")], total(), metasOf("l-a")[0]],
+      [[["project_products", "update", ["l-b"], { quantity: 2 }]], ["2", "3", "2"], "US$ 840.00", "Configuración: Fuente: Módulo LED (consulta 2)"]);
+
+    await click(d().querySelector('.remove-product-btn[data-row-id="l-a"]'), 600);
+    const notaD3 = [...d().querySelectorAll("#products-price-summary .price-summary-warning")].map(p => p.textContent);
+    check("D3 quitar A: quedan las demás; total actualizado; la nota ya no avisa de cotización (B no tiene componentes aparte)",
+      [writes().slice(-1)[0], rowIds(), total(), notaD3.includes(NOTA)], [["project_products", "delete", ["l-a"], null], ["l-sin", "l-b", "l-cot"], "US$ 480.00", true]);
+
+    /* Respuesta de una carga anterior que llega después de otra más reciente */
+    await open("proyectos-detalle.html", `id=${P(1)}`, { retrasos: [0, 1500, 0] });
+    d().querySelector('.dp-qty-increment[data-row-id="l-b"]').click();
+    await sleep(150);
+    d().querySelector('.dp-qty-increment[data-row-id="l-sin"]').click();
+    await sleep(2600);
+    check("D4 una respuesta de una carga anterior no sobrescribe la más reciente",
+      [metasOf("l-a")[0], [qty("l-sin"), qty("l-b")], w().__estadosCalls], ["Configuración: Fuente: Módulo LED (consulta 3)", ["3", "2"], 3]);
+
+    for (const [modo, nombre] of [["error", "D5 error"], ["rechazo", "D6 rechazo"]]){
+      await open("proyectos-detalle.html", `id=${P(1)}`, { estados: modo });
+      const m = metasOf("l-a");
+      check(`${nombre}: lo guardado y «no pudimos comprobarla», con aviso de cotización; nunca «completas»; sin errores sin capturar`,
+        [m.includes("Configuración: fuente: comp"), m.includes(SIN_COMPROBAR), m.includes(COTIZACION),
+         [...d().querySelectorAll(".sp-meta")].some(e => e.textContent === COMPLETAS), noConfig(metasOf("l-sin")), w().__sinCapturar],
+        [true, true, true, false, true, []]);
+    }
+
+    let t0 = Date.now();
+    await open("proyectos-detalle.html", `id=${P(1)}`, { estados: "colgada" });
+    const espera = Date.now() - t0;
+    check("D7a consulta sin respuesta: se pinta al cumplirse el límite (4 s), con A sin comprobar",
+      [espera >= 3500 && espera < 8000, metasOf("l-a").includes(SIN_COMPROBAR)], [true, true]);
+    await click(d().querySelector('.dp-qty-increment[data-row-id="l-b"]'), 5000);
+    check("D7b después se puede cambiar la cantidad (solo B)", [writes().filter(x => x[0] === "project_products"), qty("l-b")],
+      [[["project_products", "update", ["l-b"], { quantity: 2 }]], "2"]);
+
+    await open("proyectos-detalle.html", `id=${P(1)}`, { estados: "tardia" });
+    await sleep(2500);
+    check("D8 respuesta después del límite: llega, pero no cambia ningún estado ni produce errores sin capturar",
+      [w().__respuestasTardias, metasOf("l-a").includes(SIN_COMPROBAR), [...d().querySelectorAll(".sp-meta")].some(e => /consulta 1/.test(e.textContent)), w().__sinCapturar],
+      [["consulta 1"], true, false, []]);
+
+    for (const [modo, nombre] of [["ausente", "D9a estado ausente"], ["desconocido", "D9b estado desconocido"]]){
+      await open("proyectos-detalle.html", `id=${P(1)}`, { estados: modo });
+      check(`${nombre}: A sin comprobar (nunca «completas»); B con su estado`,
+        [metasOf("l-a").includes(SIN_COMPROBAR), metasOf("l-a").includes(COMPLETAS), metasOf("l-b").includes(COMPLETAS)], [true, false, true]);
+    }
+
+    await open("proyectos-detalle.html", `id=${P(1)}`, { conPendiente: true });
+    check("D10 pendiente: lo elegido y el motivo; el resumen de precios lo señala",
+      [metasOf("l-x").includes("Elegido: fuente: zzz"), metasOf("l-x").includes("Revisar: Una opción elegida en «Fuente» ya no está disponible."),
+       summaryText().includes("Hay líneas con la configuración pendiente: revísalas antes de solicitar la cotización.")], [true, true, true]);
+    await click(d().querySelector('.remove-product-btn[data-row-id="l-x"]'), 600);
+    check("D10b quitar la línea pendiente: desaparece el aviso de pendiente",
+      [rowIds().includes("l-x"), summaryText().includes("Hay líneas con la configuración pendiente")], [false, false]);
+
+    const MOTIVO_SIN_CFG = "Este producto ahora requiere elegir «Fuente».";
+    await open("proyectos-detalle.html", `id=${P(1)}`, { sinConfigPendiente: true });
+    check("D11 línea sin configuración que el servidor devuelve pendiente: muestra el motivo y el resumen lo señala",
+      [metasOf("l-cot").includes(`Revisar: ${MOTIVO_SIN_CFG}`), metasOf("l-cot").includes(CAMBIAR),
+       summaryText().includes("Hay líneas con la configuración pendiente: revísalas antes de solicitar la cotización.")], [true, false, true]);
+
+    /* ===== Archivados ===== */
+    await open("proyectos-detalle.html", `id=${P(2)}`);
+    const m2 = metasOf("l-p2");
+    check("A1 archivado sin copia: información actual identificada como tal, sin «cómo cambiarla» ni precio",
+      [m2[0], m2[1], m2.includes(CAMBIAR), m2.includes(PRECIO), w().__estadosCalls],
+      ["Información actual del proyecto (no es la copia de lo enviado):", "Configuración: Fuente: Módulo LED (consulta 1)", false, false, 1]);
+
+    await open("proyectos-detalle.html", `id=${P(3)}`);
+    const m3 = metasOf("l-p3");
+    check("A2 archivado con copia: solo lo enviado (copia distinta de la línea actual), sin consultar el estado",
+      [m3[0], m3[1], m3.includes(COTIZACION), qty("l-p3"), w().__estadosCalls, writes()],
+      ["Configuración enviada: Fuente: Módulo LED (enviado)", "Módulo LED: aparte · 4 ud. en total", true, "4", 0, []]);
+
+    /* ===== Resumen ===== */
+    await open("proyectos-resumen.html", `id=${P(1)}`);
+    const subs = [...d().querySelectorAll("#ps-table-body tr")].map(tr => [...tr.querySelectorAll(".ps-product-sub")].map(s => s.textContent.trim()));
+    check("R1a resumen activo: A y B con su configuración; las líneas sin configuración como antes",
+      [subs.length, subs[0].length, subs[1].includes("Configuración: Fuente: Módulo LED (consulta 1)"), subs[1].includes(PRECIO), subs[1].includes(COTIZACION),
+       subs[2].includes("Configuración: Fuente: Cálida (consulta 1)"), subs[3].length],
+      [4, 1, true, true, true, true, 1]);
+    check("R1b total: nota del principal y de cotización", d().getElementById("ps-totals").innerText.includes(`${NOTA} Su importe final requiere cotización.`), true);
+
+    await open("proyectos-resumen.html", `id=${P(3)}`);
+    const tr3 = d().querySelector("#ps-table-body tr");
+    check("R2 resumen archivado con copia: lo enviado y su cantidad (4), sin consultar el estado",
+      [[...tr3.querySelectorAll(".ps-product-sub")].map(s => s.textContent.trim()).slice(1, 3), tr3.querySelector(".ps-num").textContent.trim(), w().__estadosCalls, writes()],
+      [["Configuración enviada: Fuente: Módulo LED (enviado)", "Módulo LED: aparte · 4 ud. en total"], "4 ud.", 0, []]);
+
+    const css = await (await fetch("../../../../styles.css", { cache: "no-store" })).text();
+    const printBlocks = css.split("@media print").slice(1).map(s => s.slice(0, 6000));
+    check("R3 vista imprimible: ninguna regla de impresión oculta las líneas de producto (.ps-product-sub)",
+      printBlocks.some(b => /\.ps-product-sub[^{]*\{[^}]*display\s*:\s*none/.test(b)), false);
+
+    /* ===== Cotización ===== */
+    await open("proyectos-cotizacion.html", `id=${P(1)}`);
+    let list = d().getElementById("send-products-list").innerText;
+    check("C1 desde el proyecto: configuración de cada línea; envío habilitado; sin aviso",
+      [list.includes("Configuración: Fuente: Módulo LED (consulta 1)"), list.includes("Configuración: Fuente: Cálida (consulta 1)"),
+       d().getElementById("send-request-btn").disabled, d().getElementById("send-config-notice").innerText.trim()], [true, true, false, ""]);
+
+    await open("proyectos-cotizacion.html", `id=${P(1)}`, { conPendiente: true });
+    const btn = d().getElementById("send-request-btn");
+    const notice = d().getElementById("send-config-notice").innerText;
+    w().setButtonsDisabled(false);
+    check("C2 línea pendiente confirmada: envío desactivado con la línea y el motivo; no se reactiva al reactivar los botones",
+      [btn.disabled, notice.includes("No se puede enviar todavía"), notice.includes("Publicado: Una opción elegida en «Fuente» ya no está disponible.")],
+      [true, true, true]);
+
+    await open("proyectos-cotizacion.html", `id=${P(1)}`, { estados: "error" });
+    check("C3 estado no disponible: aviso, sin bloqueo nuevo (decide el servidor)",
+      [d().getElementById("send-request-btn").disabled, d().getElementById("send-config-notice").innerText.trim()],
+      [false, "No pudimos comprobar la configuración de 2 líneas; se comprobará al enviar la solicitud."]);
+
+    await open("proyectos-cotizacion.html", `id=${P(1)}`, { estados: "desconocido" });
+    check("C4 estado desconocido: no cuenta como completa ni como pendiente",
+      [d().getElementById("send-request-btn").disabled, d().getElementById("send-config-notice").innerText.trim()],
+      [false, "No pudimos comprobar la configuración de una línea; se comprobará al enviar la solicitud."]);
+
+    await open("proyectos-cotizacion.html", `id=${P(1)}`, { sinConfigPendiente: true });
+    check("C2b línea sin configuración que el servidor devuelve pendiente: motivo en la línea y en el aviso; envío desactivado",
+      [d().getElementById("send-products-list").innerText.includes(`Revisar: ${MOTIVO_SIN_CFG}`),
+       d().getElementById("send-config-notice").innerText.includes(`Bajo cotización: ${MOTIVO_SIN_CFG}`), d().getElementById("send-request-btn").disabled],
+      [true, true, true]);
+
+    /* Bloqueos del envío: el general (operación en curso) y el de configuración se componen; ninguno borra al otro. */
+    await open("proyectos-cotizacion.html", `id=${P(1)}`);
+    const sendOff = () => d().getElementById("send-request-btn").disabled;
+    const noticeText = () => d().getElementById("send-config-notice").innerText.trim();
+    const estadosB = w().eval("projectLineStates");
+    const completaA = estadosB.get("l-a");
+    const pendienteA = Object.assign({}, completaA, { status: "pendiente", review: "revisar", reasons: [{ message: "Una opción elegida en «Fuente» ya no está disponible." }] });
+    const b0 = sendOff();
+    w().setButtonsDisabled(true);
+    const b1 = sendOff();
+    w().renderSendConfigNotice();
+    check("B1 bloqueo general activo + configuración completa, también al actualizar el aviso: sigue desactivado", [b0, b1, sendOff(), noticeText()], [false, true, true, ""]);
+    estadosB.set("l-a", pendienteA); w().renderSendConfigNotice();
+    const b2 = [sendOff(), noticeText().includes("No se puede enviar todavía")];
+    w().setButtonsDisabled(false);
+    check("B2 termina el bloqueo general pero queda una línea pendiente: sigue desactivado", [b2, sendOff()], [[true, true], true]);
+    estadosB.set("l-a", completaA); w().renderSendConfigNotice();
+    check("B3 desaparece la última causa (la configuración): se habilita y el aviso se vacía", [sendOff(), noticeText()], [false, ""]);
+    w().setButtonsDisabled(true); estadosB.set("l-a", pendienteA); w().renderSendConfigNotice();
+    estadosB.set("l-a", completaA); w().renderSendConfigNotice();
+    const b4 = sendOff();
+    w().setButtonsDisabled(false);
+    check("B4 desaparece antes la configuración que el bloqueo general: solo se habilita al terminar este", [b4, sendOff()], [true, false]);
+
+    const fillSend = () => {
+      const sel = d().getElementById("send-type"); sel.value = [...sel.options].map(o => o.value).find(Boolean);
+      d().getElementById("send-location").value = "Santo Domingo";
+      d().getElementById("send-contact-name").value = "Ana Demo";
+      d().getElementById("send-contact-email").value = "demo@ejemplo.test";
+      d().getElementById("send-contact-phone").value = "8090000000";
+      d().getElementById("send-consent").checked = true;
+    };
+    /* Con un envío real en curso (transferencia retenida) y después fallido. */
+    localStorage.setItem(KEY, JSON.stringify([{ productId: "demo-pub", quantity: 1, unit: "ud." }, { productId: "demo-pub", quantity: 2, unit: "ud.", configuration: CFG_A_ORDEN }]));
+    await open("proyectos-cotizacion.html", "mode=send");
+    let release = null;
+    w().eval("MobauProjects").transferSelectionToProject = () => new Promise(r => { release = () => r({ failedCount: 1, totalCount: 2 }); });
+    fillSend();
+    const b5a = sendOff();
+    await click(d().getElementById("send-request-btn"), 1000);
+    const b5b = [!!release, sendOff()];
+    w().renderSendConfigNotice();
+    const b5c = sendOff();
+    if (release) release();
+    await sleep(600);
+    check("B5 envío en curso: actualizar el aviso no reactiva el botón; al fallar la operación vuelve a habilitarse y la selección sigue intacta",
+      [b5a, b5b, b5c, sendOff(), JSON.parse(localStorage.getItem(KEY) || "[]").length], [false, [true, true], true, false, 2]);
+
+    /* Desde la selección: la configuración se conserva hasta la transferencia */
+    localStorage.setItem(KEY, JSON.stringify([
+      { productId: "demo-pub", quantity: 1, unit: "ud." },
+      { productId: "demo-pub", quantity: 2, unit: "ud.", configuration: CFG_A_ORDEN },
+      { productId: "demo-pub", quantity: 1, unit: "ud.", configuration: CFG_B }]));
+    await open("proyectos-cotizacion.html", "mode=send");
+    const rowsSel = w().eval("productRows").map(r => [r.product_id, r.configuration ? r.configuration.choices[0].options[0] : null, r.quantity]);
+    list = d().getElementById("send-products-list").innerText;
+    check("C5a desde la selección: tres filas con su configuración, resueltas (2 consultas) y mostradas",
+      [rowsSel, w().__resolveCalls.length, list.includes("Configuración: Fuente: Módulo LED"), list.includes("Configuración: Fuente: Cálida")],
+      [[["demo-pub", null, 1], ["demo-pub", "comp", 2], ["demo-pub", "calida", 1]], 2, true, true]);
+    /* MobauProjects es una constante global de la página (no una propiedad de window). */
+    const MP = w().eval("MobauProjects");
+    const original = MP.transferSelectionToProject;
+    let captured = null;
+    MP.transferSelectionToProject = async (projectId, items, mode) => { captured = { projectId, items: JSON.parse(JSON.stringify(items)), mode }; return { failedCount: items.length, totalCount: items.length }; };
+    fillSend();
+    await click(d().getElementById("send-request-btn"), 1500);
+    check("C5b la transferencia recibe cada línea con su configuración (sin cambiar la regla de suma)",
+      captured && [captured.projectId, captured.mode, captured.items.map(i => [i.productId, i.configuration ? i.configuration.choices[0].options[0] : null, i.quantity]),
+        JSON.parse(localStorage.getItem(KEY) || "[]").length],
+      [P(1), "sum", [["demo-pub", null, 1], ["demo-pub", "comp", 2], ["demo-pub", "calida", 1]], 3]);
+    w().__escrituras46.length = 0;
+    await original.call(MP, P(1), captured.items, "sum");
+    check("C5c con la transferencia real: cada línea suma sobre la suya (la A con otro orden de claves es la misma línea); ninguna inserción",
+      writes(), [["project_products", "update", ["l-sin"], { quantity: 3, unit: "ud." }], ["project_products", "update", ["l-a"], { quantity: 5, unit: "ud." }],
+                 ["project_products", "update", ["l-b"], { quantity: 2, unit: "ud." }]]);
+    w().__escrituras46.length = 0;
+    await original.call(MP, P(1), [{ productId: "demo-pub", quantity: 1, unit: "ud.", configuration: { choices: [{ group: "fuente", options: ["fria"], path: [] }] } }], "sum");
+    const ins = w().__escrituras46.map(e => [e.tabla, e.op, e.fila && e.fila.product_id, e.fila && e.fila.configuration && e.fila.configuration.choices[0].options, e.fila && e.fila.quantity]);
+    check("C5d una configuración distinta y nueva: se inserta como línea aparte, con su configuración",
+      ins, [["project_products", "insert", "demo-pub", ["fria"], 1]]);
+
+    localStorage.setItem(KEY, JSON.stringify([{ productId: "demo-pub", quantity: 1, unit: "ud." }, { productId: "demo-pub", quantity: 1, unit: "ud.", configuration: CFG_X }]));
+    await open("proyectos-cotizacion.html", "mode=send");
+    check("C6 desde la selección con una configuración pendiente: envío desactivado con su motivo",
+      [d().getElementById("send-request-btn").disabled, d().getElementById("send-config-notice").innerText.includes("Una opción elegida en «Fuente» ya no está disponible.")], [true, true]);
+    localStorage.removeItem(KEY);
+
+    /* ===== Móvil (375 px) ===== */
+    for (const [page, q] of [["proyectos-detalle.html", `id=${P(1)}`], ["proyectos-resumen.html", `id=${P(1)}`], ["proyectos-cotizacion.html", `id=${P(1)}`]]){
+      await open(page, q, { conPendiente: true }, { width: "375px" });
+      check(`M ${page} a 375 px: sin desplazamiento horizontal; controles y avisos dentro del ancho`, noOverflow(), [true, 0]);
+    }
+  } catch (e) {
+    check("ABORTO", String(e && e.stack || e), "sin errores");
+  } finally {
+    /* Selección, sesión sintética del simulador CC1 y cachés de catálogo de las páginas. */
+    localStorage.removeItem(KEY); localStorage.removeItem("sb-skcoxtdppdcietgojdal-auth-token");
+    sessionStorage.clear();
+    /* Limpieza: sin registro del service worker, sin cachés y sin interceptar páginas. */
+    try {
+      await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+      const restantes = (await navigator.serviceWorker.getRegistrations()).length;
+      /* Navegación nueva (esta página sigue controlada hasta descargarse): sin service worker, pagina/ no existe. */
+      await new Promise(res => { frame.onload = res; frame.src = `pagina/proyectos-detalle.html?${QS}`; });
+      const sinInterceptar = [!frame.contentWindow.__mock, /404/.test(frame.contentDocument.body.innerText)];
+      await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+      sessionStorage.clear();
+      check("Limpieza: service worker eliminado, sin cachés, pagina/ ya no se sirve (404, sin simulador) y almacenamiento vacío",
+        [restantes, (await caches.keys()).length, sinInterceptar, localStorage.length, sessionStorage.length], [0, 0, [true, true], 0, 0]);
+    } catch (e) { check("Limpieza", String(e), "sin errores"); }
+  }
+  document.getElementById("sum").textContent = `total=${ok + ko} ok=${ok} fallos=${ko}`;
+  document.title = `46 proyecto · ${ok}/${ok + ko}`;
+})();
+</script>

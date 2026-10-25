@@ -278,6 +278,34 @@ const MobauProjects = {
     })));
   },
 
+  /* Punto 46 · bloque 4: estado actual de cada línea del proyecto
+     (project_line_states, con la RLS de project_products): Map por id de
+     línea, o null si no se pudo comprobar. Informativo: el servidor lo
+     vuelve a comprobar al enviar la solicitud. */
+  async listLineStates(projectId) {
+    return informativeConfigurationQuery(async () => {
+      const { data, error } = await runCatalogQuery(supabaseClient.rpc("project_line_states", { p_project_id: projectId }));
+      if (error || !Array.isArray(data)) return null;
+      return new Map(data.map(state => [state.line_id, state]));
+    }, null);
+  },
+
+  /* Lo mismo para las líneas configuradas de la selección que todavía no
+     están en un proyecto (line_configuration_resolve): Map por producto +
+     configuración; sin entrada = no se pudo comprobar. */
+  async resolveSelectionConfigurations(items) {
+    const states = new Map();
+    await Promise.all(items.filter(item => item.configuration).map(async item => {
+      const key = item.productId + "\u0000" + selectionConfigurationKey(item.configuration);
+      const state = await informativeConfigurationQuery(async () => {
+        const { data, error } = await runCatalogQuery(supabaseClient.rpc("line_configuration_resolve", { p_product_id: item.productId, p_configuration: item.configuration }));
+        return error || !data ? null : data;
+      }, null);
+      if (state) states.set(key, state);
+    }));
+    return states;
+  },
+
   /* Trae los productos guardados de VARIOS proyectos en una sola
      consulta (evita pedir uno por proyecto — el N+1 de "Mis
      proyectos") y los agrupa por project_id en memoria. Devuelve un
@@ -487,6 +515,90 @@ const PROJECT_TYPE_LABELS = {
   hospitalidad: "Hospitalidad",
   oficina: "Oficina",
   otro: "Otro"
+};
+
+/* Punto 46 · bloque 4: consulta informativa de configuraciones con el mismo
+   límite que el catálogo (runCatalogQuery y CATALOG_CONFIG.timeoutMs, de
+   script.js) y un plazo de respaldo por si la cancelación no la termina.
+   Nunca falla: ante error, rechazo o límite devuelve fallback; una respuesta
+   posterior se ignora. */
+async function informativeConfigurationQuery(run, fallback){
+  const query = Promise.resolve().then(run).catch(() => fallback);
+  let timer;
+  const limit = new Promise(done => { timer = setTimeout(() => done(fallback), CATALOG_CONFIG.timeoutMs); });
+  const result = await Promise.race([query, limit]);
+  clearTimeout(timer);
+  return result;
+}
+
+/* Punto 46 · bloque 4: textos de la configuración de una línea, para el
+   proyecto, el resumen y la cotización. Devuelven texto plano: quien lo
+   incorpora al HTML lo escapa. Dos orígenes que nunca se mezclan:
+   - current(): estado ACTUAL según el catálogo (project_line_states o
+     line_configuration_resolve). Informativo; sin estado, o con un estado
+     desconocido, «no se pudo comprobar», nunca «completa». Cantidades por
+     unidad de la línea.
+   - sent(): lo ENVIADO en una RFQ, tal como lo guardó el servidor en su
+     copia (rfqs.lines_snapshot); no se recalcula. Cantidades totales.
+   Resultado: { lines, status, reasons, needsQuote }; status es
+   "no_requiere" | "completa" | "pendiente" | "sin_comprobar". */
+const MobauLineConfig = {
+  rawChoices(configuration){
+    const choices = configuration && Array.isArray(configuration.choices) ? configuration.choices : null;
+    if (!choices || !choices.every(c => c && typeof c.group === "string" && Array.isArray(c.options))) return null;
+    return choices.map(c => `${c.group}: ${c.options.join(", ")}`).join(" · ");
+  },
+
+  current(configuration, state){
+    const known = !!state && (state.status === "completa" || state.status === "pendiente" || state.status === "no_requiere");
+    const reasons = known && Array.isArray(state.reasons) ? state.reasons.map(r => r.message) : [];
+    if (!configuration){
+      if (known && state.status === "pendiente") return { lines: [`Revisar: ${reasons.join(" ")}`], status: "pendiente", reasons, needsQuote: false };
+      return { lines: [], status: known ? state.status : "sin_comprobar", reasons: [], needsQuote: false };
+    }
+    const raw = this.rawChoices(configuration);
+    if (raw === null){
+      return { lines: ["Revisar: la configuración guardada no tiene el formato esperado. Se conserva tal cual."], status: "sin_comprobar", reasons: [], needsQuote: true };
+    }
+    if (!known || state.status === "no_requiere"){
+      return { lines: [`Configuración: ${raw}`, "No pudimos comprobar la configuración con el catálogo actual. Se conserva lo guardado."],
+               status: "sin_comprobar", reasons: [], needsQuote: true };
+    }
+    const lines = [];
+    if (state.summary) lines.push(`Configuración: ${state.summary}`);
+    const components = (state.items || []).filter(i => i.kind === "componente");
+    if (components.length){
+      lines.push(components.map(i => `${i.product_name || i.product_id}: ${i.supply === "incluido" ? "incluido" : "aparte"}`
+        + (i.quantity_mode === "a_calcular" ? " · cantidad a calcular" : ` · ${i.quantity} por unidad`)).join(" · "));
+    }
+    if (state.status === "pendiente"){
+      lines.push(`Elegido: ${raw}`, `Revisar: ${reasons.join(" ")}`);
+    } else {
+      if (state.review === "revisar") lines.push("Revisar: el catálogo cambió esta configuración desde que se guardó.");
+      lines.push("Elecciones completas según el catálogo actual; se vuelven a comprobar al enviar la solicitud.");
+    }
+    (state.notices || []).forEach(n => lines.push(n.message));
+    const needsQuote = state.status === "pendiente" || components.some(i => i.supply === "aparte" || i.quantity_mode === "a_calcular");
+    return { lines, status: state.status, reasons, needsQuote };
+  },
+
+  sent(requested){
+    if (!requested || !requested.configuration){
+      return { lines: [], status: (requested && requested.config_status) || "sin_comprobar", reasons: [], needsQuote: false };
+    }
+    const raw = this.rawChoices(requested.configuration);
+    const lines = [`Configuración enviada: ${requested.config_summary || raw || "sin resumen"}`];
+    const components = (requested.items || []).filter(i => i.kind === "componente");
+    if (components.length){
+      lines.push(components.map(i => `${i.product_name || i.product_id}: ${i.supply === "incluido" ? "incluido" : "aparte"}`
+        + (i.quantity_status === "calculada" ? ` · ${i.total_quantity} ${i.unit} en total` : " · cantidad a calcular")).join(" · "));
+    }
+    const reasons = Array.isArray(requested.config_reasons) ? requested.config_reasons.map(r => r.message) : [];
+    if (requested.config_status === "pendiente") lines.push(`Enviada con elecciones por revisar: ${reasons.join(" ")}`);
+    (requested.config_notices || []).forEach(n => lines.push(n.message));
+    return { lines, status: requested.config_status || "sin_comprobar", reasons,
+             needsQuote: components.some(i => i.supply === "aparte" || i.quantity_status !== "calculada") };
+  }
 };
 
 /* true si el plan permite más de un proyecto activo a la vez (Estudio).
