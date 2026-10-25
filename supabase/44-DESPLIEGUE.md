@@ -259,3 +259,17 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
   - Tabla `public.notification_dismissals` con RLS: cada usuario lee, crea y borra solo lo suyo; sin UPDATE y sin acceso para anon.
   - Migración MD5 `72e9ddaf…`; recuperación MD5 `272a2686…` (no ejecutada; perdería los descartes).
   - Prueba real con identidad de prueba y UUID ficticio, como `authenticated`: persistencia, aislamiento entre usuarios, UPDATE denegado y anon denegado. Filas sintéticas eliminadas.
+
+## 7. Punto 46 · componentes y accesorios (bloque 1, base de datos)
+
+- **46-01 aplicada y registrada** (`20261030120000 · 46_01_componentes_base`).
+  - Añade `products.catalog_role` (principal, componente o ambos; todos los existentes, principal).
+  - Crea `product_component_groups` y `product_component_options`, con claves estables, estado activo o retirado e integridad diferida (mismo distribuidor, sin ciclos, como máximo principal → componente → subcomponente).
+  - Crea las vistas públicas `catalog_component_groups` y `catalog_component_options`.
+  - Añade `catalog_role` a `catalog_products`, que conserva sus columnas, filas y permisos.
+  - Lectura con RLS; sin escritura directa para `anon` ni `authenticated`.
+  - Migración MD5 `446faa96…`; recuperación MD5 `5e40e565…`.
+- **46-02 aplicada y registrada** (`20261030130000 · 46_02_corrige_comprobacion_componentes`): corrige el defecto de 46-01 que detectó el ensayo (la comprobación leía `new.kind` en filas de grupos). Migración MD5 `dd5278e8…`; recuperación MD5 `64f9beb3…`.
+- **Ensayo** `tests/46/P46_01_ensayo.sql` (MD5 `5ce196bb…`): 27 correctos, 0 fallos inesperados, todo revertido.
+- **Recuperaciones:** sin ejecutar. Se probarán en un entorno aislado; la de 46-02 restaura la función con el defecto.
+- Mobau organiza las elecciones que declara el distribuidor; no certifica compatibilidad técnica.
