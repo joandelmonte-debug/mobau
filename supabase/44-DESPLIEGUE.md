@@ -273,3 +273,19 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
 - **Ensayo** `tests/46/P46_01_ensayo.sql` (MD5 `5ce196bb…`): 27 correctos, 0 fallos inesperados, todo revertido.
 - **Recuperaciones:** sin ejecutar. Se probarán en un entorno aislado; la de 46-02 restaura la función con el defecto.
 - Mobau organiza las elecciones que declara el distribuidor; no certifica compatibilidad técnica.
+
+### Bloque 2 · componentes en propuestas (46-03)
+
+- **46-03 aplicada y registrada** (`20261031120000 · 46_03_componentes_en_propuestas`).
+  - Añade `product_proposals.proposed_components`: nulo = sin cambios; `{"catalog_role"}` = solo el uso; `{"groups":[…]}` = lista completa; `{"groups":[]}` = retirar todos los grupos.
+  - Triggers 36 (validar), 41 (copia al enviar) y 61 (aplicar al aprobar). Al aprobar: detecta conflictos con la copia, espera a que se apruebe el componente nuevo, aplica por clave estable y retira lo que falta.
+  - La transición no deja a Mobau modificar el manifiesto; un manifiesto igual al estado actual cuenta como «sin cambios».
+  - Migración MD5 `800490ef…`; recuperación MD5 `5e31429f…`. El primer intento (`856d8090…`) falló por sintaxis sin aplicar nada y no se versiona.
+- **Ensayos** (todos revertidos):
+  - `tests/46/P46_03_ensayo.sql` (`2ebc3a4e…`): 30 correctos y 0 fallos.
+  - `tests/46/P46_03_distribuidor.sql` (`ec3053ca…`): 12 correctos y 0 fallos, con el distribuidor de prueba como `authenticated`.
+  - `tests/46/P46_03_moderacion.sql` (`38e0027b…`): 6 correctos y 0 fallos.
+    - Usa el admin como `authenticated` con aal2 y prepara los datos con administración; no prueba el envío del distribuidor.
+    - Comprobado: bloqueo con el componente pendiente sin cambios parciales, y aprobación del padre enlazando el componente creado sin duplicarlo.
+    - El bloqueo de Mobau sobre el manifiesto se comprobó por RLS; la rama del trigger que lo impide no se alcanzó.
+- **Pendiente:** probar la recuperación en un entorno aislado y la interfaz de moderación.
