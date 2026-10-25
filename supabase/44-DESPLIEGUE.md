@@ -249,3 +249,13 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
   - **45-04 aplicada y registrada** (`20261028120000 · 45_04_purga_lampara_prueba_2`, 46 migraciones). Purgó `spectro-02988ada` y su precio, con la misma auditoría que 45-03 más `meta.project_line_removed`.
   - Migración MD5 `9735593d…`; respaldo MD5 `c0632508…`, no ejecutado.
 - **Pendiente del punto 45:** revisión real de las acciones de grupo y prueba real de restauración y republicación.
+
+## 6. Punto 45.1 (nota breve)
+
+- **Quitar notificaciones en Mis productos** (2026-10-25): botón «Quitar» en «Avisos de Mobau» y «Decisiones recientes».
+  - Cada sección muestra 3 como máximo; el resto queda bajo «Ver más avisos (N)» / «Ver más decisiones (N)».
+  - El descarte es por usuario y solo oculta la notificación: no borra auditoría, propuestas ni motivos.
+- **45.1-01 aplicada y registrada** (`20261029120000 · 45_1_01_descartes_notificaciones`, 47 migraciones).
+  - Tabla `public.notification_dismissals` con RLS: cada usuario lee, crea y borra solo lo suyo; sin UPDATE y sin acceso para anon.
+  - Migración MD5 `72e9ddaf…`; recuperación MD5 `272a2686…` (no ejecutada; perdería los descartes).
+  - Prueba real con identidad de prueba y UUID ficticio, como `authenticated`: persistencia, aislamiento entre usuarios, UPDATE denegado y anon denegado. Filas sintéticas eliminadas.
