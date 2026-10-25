@@ -567,7 +567,9 @@ runWithCatalog(async function renderProductPage(){
     const grid = document.getElementById("related-grid");
     grid.innerHTML = relatedProducts.map(renderProductCard).join("");
     injectIconSprite();
-    bindAddButtons(grid, renderRelated);
+    /* Sin callback: bindAddButtons ya actualiza el botón y el contador; volver
+       a pintar los relacionados hacía parpadear el resto de tarjetas. */
+    bindAddButtons(grid);
     propagateCartLinks();
   }
 

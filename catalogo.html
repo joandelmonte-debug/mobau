@@ -997,7 +997,9 @@ runWithCatalog(() => {
       filtered.length === 1 ? "1 producto" : `${filtered.length} productos`;
     injectIconSprite();
     patchCardActionsForActiveProject(grid);
-    bindAddButtons(grid, render);
+    /* Sin callback: bindAddButtons ya actualiza el botón y el contador de la
+       tarjeta; volver a pintar toda la cuadrícula hacía parpadear el resto. */
+    bindAddButtons(grid);
     bindAddToProjectButtons(grid);
     propagateCartLinks();
   }
