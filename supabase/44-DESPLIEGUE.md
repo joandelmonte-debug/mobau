@@ -303,9 +303,12 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
   - `tests/46/P46_04_ensayo.sql` (`f85dbdf4…`), tras aplicar: 33 correctos y 0 fallos.
   - Fase A: 46-04 sola. Fase B: el estado de 46-05, con el índice antiguo retirado solo dentro del ensayo.
   - De las recuperaciones solo se comprobaron sus protecciones previas.
-- **Índice antiguo** (producto + acabado): se mantiene hasta 46-05, que se aplicará después de publicar la web compatible.
+- **Web compatible** publicada (`2032b76`): busca la línea por producto, acabado y configuración, y lee lo solicitado desde la copia de la RFQ.
+- **46-05 aplicada y registrada** (`20261101130000 · 46_05_retira_indice_linea_antiguo`): retira el índice antiguo (producto + acabado); queda solo el de 46-04, con `config_key`.
+  - Migración MD5 `0ad0534b…`; recuperación MD5 `40b48e81…`, que se detiene si hay líneas que impedirían restaurar el índice antiguo.
+  - Ensayo `tests/46/P46_05_ensayo.sql` (`9ebc9ab1…`): casos B1–B3, 5 correctos y 0 fallos, revertido.
 - **Pendiente:**
-  - 46-05 y la web compatible.
+  - Controles de `seleccion.html` (quitar y cambiar cantidad) para líneas configuradas.
   - Configurador y formulario.
   - Ver la copia de una RFQ concreta (también con el proyecto activo) y las solicitudes anteriores.
   - Prueba de las recuperaciones en un entorno aislado.
