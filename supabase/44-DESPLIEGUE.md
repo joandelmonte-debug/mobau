@@ -289,3 +289,24 @@ Cada paso necesita su propia autorización. Si algo falla, se para, no se reinte
     - Comprobado: bloqueo con el componente pendiente sin cambios parciales, y aprobación del padre enlazando el componente creado sin duplicarlo.
     - El bloqueo de Mobau sobre el manifiesto se comprobó por RLS; la rama del trigger que lo impide no se alcanzó.
 - **Pendiente:** probar la recuperación en un entorno aislado y la interfaz de moderación.
+
+### Bloque 3 · configuraciones en proyecto y copia de RFQ (46-04)
+
+- **46-04 aplicada y registrada** (`20261101120000 · 46_04_configuraciones_y_rfq`). Es aditiva: la web actual sigue igual.
+  - `project_products`: `configuration` (elecciones por ruta, normalizadas en el servidor), `config_key` (identidad) y `config_snapshot` (resumen conservado). Las líneas existentes quedan sin configuración.
+  - Estado de cada línea: no requiere configuración, completa o pendiente, con motivos; los cambios del catálogo se clasifican como informativos o como cambios que requieren revisar las elecciones.
+  - `rfqs.lines_snapshot`: copia inmutable que genera el servidor, separada por distribuidor; bloquea configuraciones pendientes y admite cantidades «a calcular». Las RFQ anteriores quedan sin copia.
+  - Configuraciones y copias cuentan como referencias para la purga.
+  - Migración MD5 `4a04d9f0…`; recuperación MD5 `a42d712b…`.
+- **Ensayos** (todos revertidos):
+  - `tests/46/P46_04_ensayo_previo.sql` (`10878918…`), antes de aplicar: 33 correctos y 0 fallos.
+  - `tests/46/P46_04_ensayo.sql` (`f85dbdf4…`), tras aplicar: 33 correctos y 0 fallos.
+  - Fase A: 46-04 sola. Fase B: el estado de 46-05, con el índice antiguo retirado solo dentro del ensayo.
+  - De las recuperaciones solo se comprobaron sus protecciones previas.
+- **Índice antiguo** (producto + acabado): se mantiene hasta 46-05, que se aplicará después de publicar la web compatible.
+- **Pendiente:**
+  - 46-05 y la web compatible.
+  - Configurador y formulario.
+  - Ver la copia de una RFQ concreta (también con el proyecto activo) y las solicitudes anteriores.
+  - Prueba de las recuperaciones en un entorno aislado.
+  - No se aprueban configuraciones ni grupos reales hasta comprobar el configurador.
