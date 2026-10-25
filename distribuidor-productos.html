@@ -41,6 +41,10 @@
   .pl-decision .pl-note--ok{ border-left-color: var(--accent); }
   .pl-decision .pl-decision-meta{ margin:4px 0 0; font-size:13px; color: var(--ink-soft); }
   .pl-decision .pd-link{ display:inline-block; margin-top:8px; }
+  /* Quitar y «Ver más» (45.1). */
+  .pl-decision-head .pl-dismiss{ margin-left:auto; min-height:44px; padding:0 4px; }
+  .pl-decision .pl-dismiss-msg{ margin:6px 0 0; color: var(--danger); font-size:13px; }
+  .pl-more{ margin-top:10px; min-height:44px; }
   /* Ciclo de vida (41, D2): solo se usan con MobauAccess.LIFECYCLE_UI_ENABLED. */
   .lc-line{ margin-top:8px; font-size:13px; color: var(--ink-soft); overflow-wrap:anywhere; }
   .lc-actions{ display:flex; flex-wrap:wrap; gap:8px 12px; margin-top:10px; }
@@ -1167,10 +1171,7 @@
   function renderNotices(){
     const since = Date.now() - NOTICE_DAYS * 24 * 3600 * 1000;
     const notices = lcEvents.filter(ev => ev.actor_kind === "mobau" && NOTICE[ev.action] && new Date(ev.created_at).getTime() >= since);
-    $("pl-notices").hidden = notices.length === 0;
-    renderNotificationsState();
-    if (!notices.length) return;
-    $("pl-notices-list").replaceChildren(...notices.map(ev => {
+    sectionState.notices.items = notices.map(ev => {
       const row = document.createElement("div");
       row.className = "pl-decision";
       const head = document.createElement("div");
@@ -1190,8 +1191,96 @@
         const target = tabOf(product);
         row.append(viewLink(`Ver en ${TAB_NAMES[target]}`, target));
       }
-      return row;
-    }));
+      const item = { key: noticeKey(ev), node: row };
+      attachDismiss("notices", item, `el aviso de ${ev.product_name || ev.product_id}`);
+      return item;
+    });
+    renderSection("notices");
+  }
+
+  /* ---------- Quitar avisos (45.1) ----------
+     notification_dismissals (por usuario, RLS): quitar solo oculta la
+     notificación para este usuario; no borra el hecho que la originó. La
+     clave lleva la fecha original del servidor (sin formatear): un evento
+     nuevo del mismo producto vuelve a avisar. Cada sección muestra 3 como
+     máximo y el resto bajo «Ver más». Si no se pueden leer los descartes, se
+     muestra todo sin filtrar. */
+  const SECTION_LIMIT = 3;
+  let dismissed = new Set();
+  const sectionState = {
+    notices:   { items: [], expanded: false, list: "pl-notices-list", section: "pl-notices", more: "avisos" },
+    decisions: { items: [], expanded: false, list: "pl-decisions-list", section: "pl-decisions", more: "decisiones" }
+  };
+  const noticeKey = (ev) => `lc:${ev.product_id}:${ev.action}:${ev.created_at}`;
+  const decisionKey = (d) => `dec:${d.id}:${d.status}:${d.reviewed_at}`;
+
+  async function loadDismissed(){
+    try {
+      const { data, error } = await supabaseClient.from("notification_dismissals").select("notice_key");
+      if (error || !Array.isArray(data)) throw error || new Error("respuesta no válida");
+      dismissed = new Set(data.map(r => r.notice_key));
+    } catch (e) {
+      dismissed = new Set();
+    }
+  }
+
+  function renderSection(name){
+    const s = sectionState[name];
+    const visible = s.items.filter(it => !dismissed.has(it.key));
+    $(s.section).hidden = visible.length === 0;
+    const nodes = (s.expanded ? visible : visible.slice(0, SECTION_LIMIT)).map(it => it.node);
+    if (visible.length > SECTION_LIMIT){
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "pl-toggle pl-more";
+      more.setAttribute("aria-expanded", String(s.expanded));
+      more.textContent = s.expanded ? "Ver menos" : `Ver más ${s.more} (${visible.length - SECTION_LIMIT})`;
+      more.addEventListener("click", () => {
+        s.expanded = !s.expanded;
+        renderSection(name);
+        $(s.list).querySelector(".pl-more").focus();
+      });
+      nodes.push(more);
+    } else {
+      s.expanded = false;
+    }
+    $(s.list).replaceChildren(...nodes);
+    if (name === "decisions") newDecisions = visible.filter(it => it.isNew).length;
+    renderNotificationsState();
+  }
+
+  function attachDismiss(name, item, label){
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pl-toggle pl-dismiss";
+    button.textContent = "Quitar";
+    button.setAttribute("aria-label", `Quitar ${label}`);
+    const msg = document.createElement("p");
+    msg.className = "pl-dismiss-msg";
+    msg.setAttribute("role", "alert");
+    msg.hidden = true;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      msg.hidden = true;
+      let error = null;
+      try {
+        ({ error } = await supabaseClient.from("notification_dismissals").insert({ notice_key: item.key }));
+      } catch (e) {
+        error = e || {};
+      }
+      /* 23505: ya estaba quitado (por ejemplo, en otra pestaña). */
+      if (error && error.code !== "23505"){
+        button.disabled = false;
+        msg.textContent = "No pudimos quitar este aviso. Inténtalo de nuevo.";
+        msg.hidden = false;
+        return;
+      }
+      dismissed.add(item.key);
+      renderSection(name);
+    });
+    const head = item.node.querySelector(".pl-decision-head");
+    head.append(button);
+    head.after(msg);
   }
 
   /* Productos eliminados (41-07): todo el historial, sin límite de fecha. */
@@ -1296,7 +1385,8 @@
         .order("reviewed_at", { ascending: false });
       if (error) throw error;
       if (!decided.length){
-        $("pl-decisions").hidden = true;
+        sectionState.decisions.items = [];
+        renderSection("decisions");
         decisionsLoaded = true;
         renderNotificationsState();
         return;
@@ -1314,15 +1404,18 @@
       });
       const seen = readSeen();
       const seenSet = new Set(seen || []);
-      $("pl-decisions-list").replaceChildren(...decided.map(d => {
+      sectionState.decisions.items = decided.map(d => {
         const ev = latest.get(d.id);
-        return buildDecisionRow(d, ev && ev.to_status === d.status ? ev : null, !!seen && !seenSet.has(d.id));
-      }));
-      $("pl-decisions").hidden = false;
-      newDecisions = seen ? decided.filter(d => !seenSet.has(d.id)).length : 0;
+        const isNew = !!seen && !seenSet.has(d.id);
+        const item = { key: decisionKey(d), isNew, node: buildDecisionRow(d, ev && ev.to_status === d.status ? ev : null, isNew) };
+        attachDismiss("decisions", item, `la decisión sobre ${item.node.querySelector(".c-name").textContent}`);
+        return item;
+      });
+      renderSection("decisions");
       rememberSeen(seen, decided.map(d => d.id));
     } catch (error){
-      $("pl-decisions").hidden = true;
+      sectionState.decisions.items = [];
+      renderSection("decisions");
     }
     decisionsLoaded = true;
     renderNotificationsState();
@@ -1807,7 +1900,7 @@
 
       /* Ciclo de vida (D2): solo con el interruptor encendido; un fallo no
          impide ver la página, pero deja la página sin acciones de ciclo de vida. */
-      await loadLifecycle();
+      await Promise.all([loadLifecycle(), loadDismissed()]);
 
       /* Al volver del formulario: aviso (?aviso=…) y, si procede, la
          propuesta en revisión a mostrar desplegada (?ver=ID). Las vueltas
