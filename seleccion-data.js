@@ -59,9 +59,40 @@ function normalizeFinish(finish){
   return code && code.length <= 20 ? code : null;
 }
 
-/* Clave de una línea: producto + acabado. */
-function selectionLineKey(productId, finish){
-  return productId + "\u0000" + (normalizeFinish(finish) || "");
+/* Punto 46-04: configuración elegida ({choices: [{path, group, options}]},
+   elecciones por ruta). Forma normal para comparar líneas: el orden de los
+   clics o de las claves no cuenta; null (o {}) = sin configuración. No la
+   valida contra el catálogo (lo hace el servidor al guardarla en el
+   proyecto) ni descarta nada: no quita repetidos (el servidor los rechaza)
+   y, si la forma no es la esperada, la conserva tal cual. */
+function normalizeSelectionConfiguration(configuration){
+  if (configuration === null || configuration === undefined) return null;
+  if (typeof configuration === "object" && !Array.isArray(configuration) && Object.keys(configuration).length === 0) return null;
+  const choices = configuration && Array.isArray(configuration.choices) ? configuration.choices : null;
+  const valid = choices && choices.every(c => c && typeof c.group === "string" && Array.isArray(c.options)
+    && c.options.every(o => typeof o === "string")
+    && (c.path === undefined || (Array.isArray(c.path) && c.path.every(s => s && typeof s.group === "string" && typeof s.option === "string"))));
+  if (!valid) return configuration;
+  if (!choices.length) return null;
+  const normalized = choices.map(c => ({
+    path: (c.path || []).map(s => ({ group: s.group, option: s.option })),
+    group: c.group,
+    options: [...c.options].sort()
+  }));
+  const keyOf = c => JSON.stringify([c.path.map(s => [s.group, s.option]), c.group]);
+  normalized.sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : keyOf(a) > keyOf(b) ? 1 : 0));
+  return { choices: normalized };
+}
+
+/* Clave comparable de una configuración ("" = sin configuración). */
+function selectionConfigurationKey(configuration){
+  const normalized = normalizeSelectionConfiguration(configuration);
+  return normalized ? JSON.stringify(normalized) : "";
+}
+
+/* Clave de una línea: producto + acabado + configuración (46-04). */
+function selectionLineKey(productId, finish, configuration){
+  return productId + "\u0000" + (normalizeFinish(finish) || "") + "\u0000" + selectionConfigurationKey(configuration);
 }
 
 /* Normaliza un único elemento, sea del formato antiguo (string) o
@@ -84,6 +115,8 @@ function normalizeSelectionItem(item){
     const normalized = { productId: item.productId, quantity, unit };
     const finish = normalizeFinish(item.finish);
     if (finish) normalized.finish = finish;
+    const configuration = normalizeSelectionConfiguration(item.configuration);
+    if (configuration) normalized.configuration = configuration;
     if (!item.unit && !product) normalized[PENDING_RAW] = item;
     return normalized;
   }
@@ -107,7 +140,7 @@ function normalizeSelection(raw){
   raw.forEach(rawItem => {
     const item = normalizeSelectionItem(rawItem);
     if (!item) return;
-    const key = selectionLineKey(item.productId, item.finish);
+    const key = selectionLineKey(item.productId, item.finish, item.configuration);
     if (seen.has(key)) return;
     seen.add(key);
     normalized.push(item);
@@ -154,7 +187,7 @@ function saveSelection(items){
    cantidad, unidad y acabado iniciales. No duplica: si ese producto con
    ese acabado ya estaba, devuelve alreadyExists: true sin tocar la
    cantidad que ya tuviera. */
-function addToSelection(productId, initialQuantity, initialUnit, finish){
+function addToSelection(productId, initialQuantity, initialUnit, finish, configuration){
   /* Punto 38-A: una cuenta de distribuidor (rol confirmado, nunca la pista
      estética) no usa la selección. No borra nada de lo que ya hubiera. */
   if (typeof MobauAccess !== "undefined" && MobauAccess.confirmedKind === "supplier") {
@@ -168,8 +201,8 @@ function addToSelection(productId, initialQuantity, initialUnit, finish){
     return { success: false, error: "Este producto ya no está disponible." };
   }
   const items = getSelection();
-  const key = selectionLineKey(productId, finish);
-  if (items.some(item => selectionLineKey(item.productId, item.finish) === key)) {
+  const key = selectionLineKey(productId, finish, configuration);
+  if (items.some(item => selectionLineKey(item.productId, item.finish, item.configuration) === key)) {
     return { success: true, alreadyExists: true };
   }
   const product = (typeof PRODUCTS !== "undefined") ? PRODUCTS.find(p => p.id === productId) : null;
@@ -179,30 +212,31 @@ function addToSelection(productId, initialQuantity, initialUnit, finish){
     : (unit === "ud." ? 1 : 0);
   const line = { productId, quantity, unit };
   if (normalizeFinish(finish)) line.finish = normalizeFinish(finish);
+  if (normalizeSelectionConfiguration(configuration)) line.configuration = normalizeSelectionConfiguration(configuration);
   items.push(line);
   const result = saveSelection(items);
   return { ...result, alreadyExists: false };
 }
 
-function removeFromSelection(productId, finish){
-  const key = selectionLineKey(productId, finish);
-  const items = getSelection().filter(item => selectionLineKey(item.productId, item.finish) !== key);
+function removeFromSelection(productId, finish, configuration){
+  const key = selectionLineKey(productId, finish, configuration);
+  const items = getSelection().filter(item => selectionLineKey(item.productId, item.finish, item.configuration) !== key);
   return saveSelection(items);
 }
 
-function inSelection(productId, finish){
-  const key = selectionLineKey(productId, finish);
-  return getSelection().some(item => selectionLineKey(item.productId, item.finish) === key);
+function inSelection(productId, finish, configuration){
+  const key = selectionLineKey(productId, finish, configuration);
+  return getSelection().some(item => selectionLineKey(item.productId, item.finish, item.configuration) === key);
 }
 
 /* Actualiza la cantidad de una línea (producto + acabado) de la selección.
    Redondea a 2 decimales (misma precisión que numeric(10,2) en la
    base de datos), nunca permite negativos, y nunca permite bajar de
    1 en productos medidos en "ud." mientras sigan seleccionados. */
-function updateSelectionQuantity(productId, quantity, finish){
+function updateSelectionQuantity(productId, quantity, finish, configuration){
   const items = getSelection();
-  const key = selectionLineKey(productId, finish);
-  const item = items.find(i => selectionLineKey(i.productId, i.finish) === key);
+  const key = selectionLineKey(productId, finish, configuration);
+  const item = items.find(i => selectionLineKey(i.productId, i.finish, i.configuration) === key);
   if (!item) {
     return { success: false, error: "Este producto ya no está en tu selección." };
   }

@@ -130,19 +130,28 @@ const MobauProjects = {
   /* ---------- Bloque B: productos guardados dentro de un proyecto ---------- */
 
   /* Guarda un producto real del catálogo dentro de un proyecto, con su
-     acabado (punto 44: una línea por producto y acabado; finish null =
-     sin acabado). Si esa línea ya estaba guardada, nunca la duplica:
+     acabado (punto 44; finish null = sin acabado) y su configuración
+     (46-04; null = sin configuración): una línea por producto, acabado y
+     configuración. Si esa línea ya estaba guardada, nunca la duplica:
      - mode "replace" (por defecto): reemplaza quantity/unit con el valor recibido.
      - mode "sum": newQuantity = existingQuantity + quantity, y actualiza unit. */
-  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace", finish = null) {
+  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace", finish = null, configuration = null) {
     const finishCode = (typeof finish === "string" && finish.trim()) ? finish.trim() : null;
+    /* Puede haber varias líneas del mismo producto y acabado con
+       configuraciones distintas: se elige la de la misma configuración
+       (forma normal, seleccion-data.js), nunca la primera que aparezca. */
+    const configKey = selectionConfigurationKey(configuration);
     let lookup = supabaseClient
       .from("project_products")
-      .select("id, quantity, unit")
+      .select("id, quantity, unit, configuration")
       .eq("project_id", projectId)
       .eq("product_id", productId);
     lookup = finishCode ? lookup.eq("finish_code", finishCode) : lookup.is("finish_code", null);
-    const { data: existing } = await lookup.maybeSingle();
+    const { data: candidates, error: lookupError } = await lookup;
+    if (lookupError) {
+      return { data: null, error: lookupError, alreadyExists: false };
+    }
+    const existing = (candidates || []).find(row => selectionConfigurationKey(row.configuration) === configKey) || null;
 
     if (existing) {
       const updateRow = {};
@@ -172,6 +181,7 @@ const MobauProjects = {
 
     const insertRow = { project_id: projectId, product_id: productId };
     if (finishCode) insertRow.finish_code = finishCode;
+    if (configKey) insertRow.configuration = normalizeSelectionConfiguration(configuration);
     if (typeof quantity === "number" && Number.isFinite(quantity)) insertRow.quantity = quantity;
     if (typeof unit === "string" && unit) insertRow.unit = unit;
 
@@ -214,14 +224,14 @@ const MobauProjects = {
      esta consulta solo trae qué productos están guardados y con
      qué id de fila, para poder quitarlos. */
   async listProductsInProject(projectId) {
-    /* id, product_id, finish_code, quantity, unit son los únicos campos que lee
+    /* id, product_id, finish_code, configuration, quantity, unit son los únicos campos que lee
        cualquier página (proyectos.html, proyectos-detalle.html,
        cuenta.html, proyectos-cotizacion.html) del resultado de esta
        función — order_position y created_at solo se usan para
        ordenar, no hace falta traerlos de vuelta. */
     const { data, error } = await supabaseClient
       .from("project_products")
-      .select("id, product_id, finish_code, quantity, unit")
+      .select("id, product_id, finish_code, configuration, quantity, unit")
       .eq("project_id", projectId)
       .order("order_position", { ascending: true })
       .order("created_at", { ascending: true });
@@ -230,6 +240,42 @@ const MobauProjects = {
       return [];
     }
     return data;
+  },
+
+  /* Punto 46-04: lo solicitado en una RFQ del proyecto (la indicada o, sin
+     rfqId, la más reciente con copia), desde su copia generada en el
+     servidor (rfqs.lines_snapshot), con la misma forma de fila que
+     listProductsInProject() (+ requested: la línea copiada). Cada RFQ
+     conserva su propia copia. Las RFQ anteriores a 46-04 no tienen copia:
+     se devuelven las líneas actuales del proyecto, como hasta ahora (no se
+     inventa una copia). */
+  async listRequestedLines(projectId, rfqId = null) {
+    let query = supabaseClient
+      .from("rfqs")
+      .select("lines_snapshot")
+      .eq("project_id", projectId);
+    if (rfqId) query = query.eq("id", rfqId);
+    const { data, error } = await query
+      .not("lines_snapshot", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      console.error("Error leyendo la copia de la solicitud:", error);
+    }
+    const snapshot = data && data.lines_snapshot;
+    if (!snapshot || !Array.isArray(snapshot.distributors)) {
+      return this.listProductsInProject(projectId);
+    }
+    return snapshot.distributors.flatMap(group => (group.lines || []).map(line => ({
+      id: line.line_id,
+      product_id: line.product_id,
+      finish_code: line.finish_code || null,
+      configuration: line.configuration || null,
+      quantity: line.quantity,
+      unit: line.unit,
+      requested: line
+    })));
   },
 
   /* Trae los productos guardados de VARIOS proyectos en una sola
@@ -244,7 +290,7 @@ const MobauProjects = {
     if (!projectIds.length) return new Map();
     const { data, error } = await supabaseClient
       .from("project_products")
-      .select("id, project_id, product_id, finish_code, quantity, unit")
+      .select("id, project_id, product_id, finish_code, configuration, quantity, unit")
       .in("project_id", projectIds);
     if (error) {
       console.error("Error listando productos de varios proyectos:", error);
@@ -334,7 +380,7 @@ const MobauProjects = {
   async transferSelectionToProject(projectId, selectionItems, mode = "replace") {
     let failedCount = 0;
     for (const item of selectionItems) {
-      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode, item.finish || null);
+      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode, item.finish || null, item.configuration || null);
       if (error) failedCount++;
     }
     if (selectionItems.length - failedCount > 0) {

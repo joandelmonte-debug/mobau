@@ -465,7 +465,10 @@
     document.getElementById("ps-back-link").href = backLink;
     document.getElementById("no-products-back-link").href = backLink;
 
-    const rows = await MobauProjects.listProductsInProject(project.id);
+    /* Archivado: lo que se solicitó (copia de la RFQ si existe, 46-04). */
+    const rows = project.status === "archived"
+      ? await MobauProjects.listRequestedLines(project.id)
+      : await MobauProjects.listProductsInProject(project.id);
     if (!(await whenProductsReady(rows.map(row => row.product_id)))) return;
     if (!rows.length){
       document.getElementById("no-products").style.display = "block";

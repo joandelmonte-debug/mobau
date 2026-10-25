@@ -18,7 +18,8 @@ function mockRespond(q){
     return { data: { id: `00000000-0000-4044-8000-${String(++MOCK.n).padStart(12, "0")}`, status: "pendiente", product_id: null, label: null, sort_order: 0, ...row }, error: null };
   }
   if (q.table === "product_assets" && op("delete")) return { data: null, error: null };
-  if (q.table === "project_products" && op("maybeSingle")) return { data: MOCK.existing, error: null };
+  /* 46-04: la búsqueda de la línea trae las candidatas (producto + acabado) y elige por configuración. */
+  if (q.table === "project_products" && op("select") && !op("insert") && !op("update")) return { data: MOCK.existing ? [MOCK.existing] : [], error: null };
   if (q.table === "project_products" && op("insert")) return { data: { id: "fila-nueva", ...op("insert")[1] }, error: null };
   if (q.table === "project_products" && op("update")) return { data: { id: "fila-existente", ...op("update")[1] }, error: null };
   if (q.table === "projects") return { data: { id: "proyecto" }, error: null };
@@ -97,8 +98,10 @@ const DAMA = {
   check("C03 acabados mapeados (foto de tarjeta o, si falta, la grande)", p.acabadosOpciones.map(f => [f.codigo, f.nombre, f.porDefecto, f.imagen.split("/").pop()]), [["25", "Beige D1", true, "a-card.jpg"], ["11", "Black", false, "b.jpg"]]);
   check("C04 sin portada: enlace antiguo image_url", mapProductRow({ ...DAMA, cover_path: null, cover_card_path: null, image_url: "https://ejemplo.test/x.jpg" }).imagen, "https://ejemplo.test/x.jpg");
   check("C05 acabado por defecto / primero / ninguno", [defaultFinishCode(p), defaultFinishCode(mapProductRow({ ...DAMA, finish_options: [{ code: "9", name: "Gris" }] })), defaultFinishCode(mapProductRow({ ...DAMA, finish_options: [] }))], ["25", "9", null]);
-  check("C06 texto de línea", [finishLabel(p, "25"), lineDetailText(p, "11"), lineDetailText(p, null), finishLabel(null, "7")], ["25 · Beige D1", "Ref. 3225 · Acabado: 11 · Black", "Ref. 3225", "Acabado 7"]);
-  check("C07 columnas del catálogo (25, las 4 nuevas al final)", PRODUCT_COLUMNS.split(", ").slice(-4).concat(PRODUCT_COLUMNS.split(", ").length), ["reference_code", "cover_path", "cover_card_path", "finish_options", 25]);
+  /* 5191497: se muestra el código comercial del acabado; un acabado desconocido no muestra su clave técnica. */
+  check("C06 texto de línea", [finishLabel(p, "25"), lineDetailText(p, "11"), lineDetailText(p, null), finishLabel(null, "7")], ["3225-25 · Beige D1", "Ref. 3225 · Acabado: 3225-11 · Black", "Ref. 3225", "acabado no disponible"]);
+  /* Columnas que pide la web (PRODUCT_COLUMNS), no las de catalog_products: catalog_role (46-01) no se pide. */
+  check("C07 columnas del catálogo que pide la web (29, las 4 de iluminación al final)", PRODUCT_COLUMNS.split(", ").slice(-4).concat(PRODUCT_COLUMNS.split(", ").length), ["environment", "light_source", "electrical_connection", "color_temperature", 29]);
   PRODUCTS.push(p, { id: "pared-1", nombre: "Pared", categoria: "revestimientos", distribuidor: "spectro", marca: "x", disponibilidad: "en-stock", status: "active", acabadosOpciones: [] });
   const card = document.createElement("div");
   card.innerHTML = renderProductCard(p);
@@ -139,7 +142,7 @@ const DAMA = {
   check("P05 transferir conserva el acabado de cada línea", MOCK.calls.filter(c => c.table === "project_products" && c.ops.some(o => o[0] === "insert")).map(c => c.ops.find(o => o[0] === "insert")[1].finish_code || null), ["11", null]);
   MOCK.calls.length = 0;
   await MobauProjects.listProductsInProject("proy");
-  check("P06 listar trae finish_code", MOCK.calls[0].ops.find(o => o[0] === "select")[1], "id, product_id, finish_code, quantity, unit");
+  check("P06 listar trae finish_code y configuration", MOCK.calls[0].ops.find(o => o[0] === "select")[1], "id, product_id, finish_code, configuration, quantity, unit");
 
   /* ---------- archivos ---------- */
   const A = MobauArchivos;

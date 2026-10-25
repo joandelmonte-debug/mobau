@@ -1072,7 +1072,10 @@
   }
 
   async function loadSavedProducts(){
-    const rows = await MobauProjects.listProductsInProject(project.id);
+    /* Archivado: lo que se solicitó (copia de la RFQ si existe, 46-04). */
+    const rows = project.status === "archived"
+      ? await MobauProjects.listRequestedLines(project.id)
+      : await MobauProjects.listProductsInProject(project.id);
     if (!(await whenProductsReady(rows.map(row => row.product_id), { status: "#project-products-list" }))) return;
     currentRows = rows;
     const counterEl = document.getElementById("products-counter");
