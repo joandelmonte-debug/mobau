@@ -242,23 +242,94 @@
     if (quoteCount > 0){
       parts.push(`<p class="price-summary-warning">Este total incluye únicamente los productos con precio publicado. Los productos restantes requieren cotización.</p>`);
     }
+    /* 46: de una línea configurada solo se suma el precio del producto principal. */
+    if (items.some(item => item.configuration)){
+      parts.push(`<p class="price-summary-warning">En las líneas configuradas solo cuenta el precio del producto principal, no el del conjunto.${items.some(configurationNeedsQuote) ? " Su importe final requiere cotización." : ""}</p>`);
+    }
     if (hasDemoPublished){
       parts.push(`<p class="price-summary-line price-demo-note">Los precios mostrados son orientativos y deben confirmarse con el distribuidor.</p>`);
     }
     el.innerHTML = parts.join("");
   }
 
+  /* Punto 46 · bloque 4: configuración elegida en cada línea. El estado se
+     consulta al catálogo actual (line_configuration_resolve, con los permisos
+     de la sesión) solo para las líneas configuradas; es informativo: la
+     selección es local y el servidor la vuelve a comprobar al guardarla en el
+     proyecto. Nada de lo elegido se descarta ni se sustituye aquí. */
+  const configStates = new Map();
+  const configStateKey = item => item.productId + "\u0000" + selectionConfigurationKey(item.configuration);
+  /* normalizeSelectionConfiguration devuelve la misma configuración solo si su forma no es la esperada. */
+  const hasValidConfigurationShape = item => normalizeSelectionConfiguration(item.configuration) !== item.configuration;
+
+  /* Una consulta que falla, se rechaza o no responde a tiempo deja su línea
+     como «no se pudo comprobar» y no impide pintar la selección. Mismo límite
+     que el catálogo (runCatalogQuery, CATALOG_CONFIG.timeoutMs); el estado de
+     cada línea se fija una sola vez: una respuesta posterior se ignora. */
+  async function loadConfigurationStates(items){
+    const pending = items.filter(item => item.configuration && hasValidConfigurationShape(item) && !configStates.has(configStateKey(item)));
+    await Promise.all(pending.map(async item => {
+      const query = (async () => {
+        const { data, error } = await runCatalogQuery(supabaseClient.rpc("line_configuration_resolve", { p_product_id: item.productId, p_configuration: item.configuration }));
+        return error || !data ? { error: true } : data;
+      })().catch(() => ({ error: true }));
+      let timer;
+      const limit = new Promise(done => { timer = setTimeout(() => done({ error: true }), CATALOG_CONFIG.timeoutMs); });
+      const state = await Promise.race([query, limit]);
+      clearTimeout(timer);
+      configStates.set(configStateKey(item), state);
+    }));
+  }
+
+  /* Con componentes aparte, cantidades a calcular o sin poder comprobarla, el importe final requiere cotización. */
+  function configurationNeedsQuote(item){
+    if (!item.configuration) return false;
+    const state = hasValidConfigurationShape(item) ? configStates.get(configStateKey(item)) : null;
+    if (!state || state.error) return true;
+    return (state.items || []).some(i => i.kind === "componente" && (i.supply === "aparte" || i.quantity_mode === "a_calcular"));
+  }
+
+  function configurationHtml(item){
+    if (!item.configuration) return "";
+    const meta = text => `<div class="selection-item__meta">${escapeHtml(text)}</div>`;
+    const howToChange = meta("Para cambiar la configuración, quita esta línea y vuelve a configurarla en la ficha.");
+    if (!hasValidConfigurationShape(item)){
+      return meta("Revisar: la configuración guardada no tiene el formato esperado. Se conserva tal cual.") + howToChange;
+    }
+    const state = configStates.get(configStateKey(item));
+    const raw = item.configuration.choices.map(c => `${c.group}: ${c.options.join(", ")}`).join(" · ");
+    if (!state || state.error){
+      return meta(`Configuración: ${raw}`) + meta("No pudimos comprobarla con el catálogo actual. Se conserva lo elegido.") + howToChange;
+    }
+    const parts = [];
+    if (state.summary) parts.push(meta(`Configuración: ${state.summary}`));
+    const components = (state.items || []).filter(i => i.kind === "componente");
+    if (components.length){
+      parts.push(meta(components.map(i => `${i.product_name || i.product_id}: ${i.supply === "incluido" ? "incluido" : "aparte"}`
+        + (i.quantity_mode === "a_calcular" ? " · cantidad a calcular" : ` · ${i.quantity} por unidad`)).join(" · ")));
+    }
+    if (state.status === "pendiente"){
+      parts.push(meta(`Elegido: ${raw}`));
+      parts.push(meta(`Revisar: ${(state.reasons || []).map(r => r.message).join(" ")}`));
+    } else {
+      parts.push(meta("Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto."));
+    }
+    (state.notices || []).forEach(n => parts.push(meta(n.message)));
+    return parts.join("") + howToChange;
+  }
+
   /* Producto archivado o desconocido: se ve, pero no se puede cotizar ni transferir; solo quitar. */
-  function renderUnavailableRow(item, p){
+  function renderUnavailableRow(item, p, index){
     return `
         <div class="selection-item">
           <div class="selection-item__thumb">${p ? productMediaMarkup(p, 26) : ""}</div>
           <div class="selection-item__content">
             <div class="sp-name">${p ? escapeHtml(p.nombre) : "Producto no disponible"}</div>
             <div class="selection-item__meta">No disponible actualmente${p ? "" : ` · ID: ${escapeHtml(item.productId)}`}${item.finish ? ` · ${escapeHtml(finishLabel(p, item.finish))}` : ""}</div>
+            ${item.configuration ? `<div class="selection-item__meta">Con una configuración guardada: se conserva hasta que la quites.</div>` : ""}
           </div>
           <div class="selection-item__actions">
-            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(item.productId)}" data-finish="${escapeHtml(item.finish || "")}" aria-label="Quitar de la selección" title="Quitar de la selección">
+            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-line="${index}" data-id="${escapeHtml(item.productId)}" data-finish="${escapeHtml(item.finish || "")}" aria-label="Quitar de la selección" title="Quitar de la selección">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             </button>
           </div>
@@ -290,9 +361,9 @@
     const listEl = document.getElementById("selection-list");
     const distributorIds = new Set();
 
-    listEl.innerHTML = items.map(item => {
+    listEl.innerHTML = items.map((item, index) => {
       const p = PRODUCTS.find(pp => pp.id === item.productId);
-      if (!p || p.status === "archived") return renderUnavailableRow(item, p);
+      if (!p || p.status === "archived") return renderUnavailableRow(item, p, index);
       distributorIds.add(p.distribuidor);
       const dist = DISTRIBUTORS[p.distribuidor];
       const isUnit = item.unit === "ud.";
@@ -302,7 +373,8 @@
       const productIdAttr = escapeHtml(item.productId);
       /* Punto 44: una línea por producto y acabado. */
       const finishAttr = escapeHtml(item.finish || "");
-      const inputId = `quantity-${productIdAttr}${item.finish ? `-${escapeHtml(item.finish.replace(/[^A-Za-z0-9_-]/g, "_"))}` : ""}`;
+      /* 46: varias configuraciones del mismo producto y acabado necesitan id propio. */
+      const inputId = `quantity-${productIdAttr}${item.finish ? `-${escapeHtml(item.finish.replace(/[^A-Za-z0-9_-]/g, "_"))}` : ""}${item.configuration ? `-cfg${index}` : ""}`;
       const finishOption = item.finish ? (p.acabadosOpciones || []).find(f => f.codigo === item.finish) : null;
       const finishText = item.finish ? finishLabel(p, item.finish) : "";
       return `
@@ -312,16 +384,19 @@
           <div class="selection-item__content">
             <div class="sp-name">${escapeHtml(p.nombre)}${p.referencia ? ` <span class="selection-item__meta">· Ref. ${escapeHtml(p.referencia)}</span>` : ""}</div>
             ${finishText ? `<div class="selection-item__meta">Acabado: ${escapeHtml(finishText)}</div>` : ""}
+            ${configurationHtml(item)}
             <div class="selection-item__meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
+            ${item.configuration ? `<div class="selection-item__meta">Precio del producto principal (no es el total del conjunto):</div>` : ""}
             <div class="selection-item__price">${cardPriceLineHtml(p.id)}</div>
+            ${configurationNeedsQuote(item) ? `<div class="selection-item__meta">El importe final de esta configuración requiere cotización.</div>` : ""}
           </div>
 
           <div class="selection-item__quantity">
             <label for="${inputId}" class="selection-item__qty-label">Cantidad</label>
             <div class="quantity-control">
-              <button type="button" class="quantity-control__button qty-decrement" data-id="${productIdAttr}" data-finish="${finishAttr}" aria-label="Disminuir cantidad" ${decrementDisabled}>−</button>
-              <button type="button" class="quantity-control__button qty-increment" data-id="${productIdAttr}" data-finish="${finishAttr}" aria-label="Aumentar cantidad">+</button>
-              <input id="${inputId}" class="quantity-control__input qty-input" type="number" data-id="${productIdAttr}" data-finish="${finishAttr}" value="${displayValue}" min="${min}" step="0.01" inputmode="decimal" aria-label="Cantidad de ${escapeHtml(p.nombre)}">
+              <button type="button" class="quantity-control__button qty-decrement" data-line="${index}" data-id="${productIdAttr}" data-finish="${finishAttr}" aria-label="Disminuir cantidad" ${decrementDisabled}>−</button>
+              <button type="button" class="quantity-control__button qty-increment" data-line="${index}" data-id="${productIdAttr}" data-finish="${finishAttr}" aria-label="Aumentar cantidad">+</button>
+              <input id="${inputId}" class="quantity-control__input qty-input" type="number" data-line="${index}" data-id="${productIdAttr}" data-finish="${finishAttr}" value="${displayValue}" min="${min}" step="0.01" inputmode="decimal" aria-label="Cantidad de ${escapeHtml(p.nombre)}">
               <span class="quantity-control__unit">${escapeHtml(item.unit)}</span>
             </div>
           </div>
@@ -330,7 +405,7 @@
             <a href="producto.html?id=${escapeHtml(encodeURIComponent(p.id))}" class="selection-item__icon-button" aria-label="Ver ficha" title="Ver ficha">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </a>
-            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-id="${escapeHtml(p.id)}" data-finish="${finishAttr}" aria-label="Quitar de la selección" title="Quitar de la selección">
+            <button type="button" class="selection-item__icon-button selection-item__icon-button--danger remove-selection-btn" data-line="${index}" data-id="${escapeHtml(p.id)}" data-finish="${finishAttr}" aria-label="Quitar de la selección" title="Quitar de la selección">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             </button>
           </div>
@@ -347,9 +422,15 @@
       `${availableItems.length} ${availableItems.length === 1 ? "producto" : "productos"} · ${distributorIds.size} ${distributorIds.size === 1 ? "distribuidor" : "distribuidores"}` +
       (unavailableCount ? ` · ${unavailableCount} no ${unavailableCount === 1 ? "disponible" : "disponibles"}` : "");
 
+    /* 46: cada control identifica la línea completa (producto + acabado +
+       configuración) de las que se pintaron, por su posición en la lista. */
+    const lineOf = el => items[Number(el.dataset.line)];
+    const currentLine = line => getSelection().find(i => selectionLineKey(i.productId, i.finish, i.configuration) === selectionLineKey(line.productId, line.finish, line.configuration));
+
     listEl.querySelectorAll(".remove-selection-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        removeFromSelection(btn.dataset.id, btn.dataset.finish || null);
+        const line = lineOf(btn);
+        removeFromSelection(line.productId, line.finish || null, line.configuration || null);
         updateSelectionBadge();
         showToast("Producto quitado de la selección.");
         renderSelection();
@@ -358,7 +439,8 @@
 
     listEl.querySelectorAll(".qty-input").forEach(input => {
       input.addEventListener("change", () => {
-        const result = updateSelectionQuantity(input.dataset.id, input.value, input.dataset.finish || null);
+        const line = lineOf(input);
+        const result = updateSelectionQuantity(line.productId, input.value, line.finish || null, line.configuration || null);
         if (!result.success) alert(result.error);
         renderSelection();
       });
@@ -366,20 +448,22 @@
 
     listEl.querySelectorAll(".qty-decrement").forEach(btn => {
       btn.addEventListener("click", () => {
-        const current = getSelection().find(i => i.productId === btn.dataset.id && (i.finish || "") === btn.dataset.finish);
+        const line = lineOf(btn);
+        const current = currentLine(line);
         if (!current) return;
         const min = current.unit === "ud." ? 1 : 0;
         const next = Math.max(min, current.quantity - 1);
-        updateSelectionQuantity(btn.dataset.id, next, btn.dataset.finish || null);
+        updateSelectionQuantity(line.productId, next, line.finish || null, line.configuration || null);
         renderSelection();
       });
     });
 
     listEl.querySelectorAll(".qty-increment").forEach(btn => {
       btn.addEventListener("click", () => {
-        const current = getSelection().find(i => i.productId === btn.dataset.id && (i.finish || "") === btn.dataset.finish);
+        const line = lineOf(btn);
+        const current = currentLine(line);
         if (!current) return;
-        updateSelectionQuantity(btn.dataset.id, current.quantity + 1, btn.dataset.finish || null);
+        updateSelectionQuantity(line.productId, current.quantity + 1, line.finish || null, line.configuration || null);
         renderSelection();
       });
     });
@@ -430,6 +514,7 @@
     if (!(await whenProductsReady(getSelection().map(i => i.productId)))) return;
     await loadPriceState(getSelection().map(i => i.productId));
     if (!MobauAccess.hasProfessionalTools()) return showPlanGate();
+    await loadConfigurationStates(getSelection());
     renderSelection();
     initActiveProjectState();
   })();

@@ -1,0 +1,201 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 46 · selección (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:820px;height:520px;border:1px solid #ccc;margin-top:12px}</style>
+<h1>Punto 46 · bloque 4 · selección con configuraciones (mocks)</h1>
+<p>Sin red ni Supabase; servir la raíz del repositorio. Ejecuta el <code>seleccion.html</code> real, leído tal cual. Únicas sustituciones, para cambiar la conexión de datos:
+  la etiqueta de supabase-js pasa a ser el cliente simulado de CC1 (<code>supabase/tests/43/interfaz/mock-supabase-cc1.js</code>);
+  después de <code>supabase-client.js</code> se añade <code>supabase/tests/46/interfaz/mock-resolucion-46.js</code>;
+  y se añade <code>&lt;base&gt;</code> para resolver las rutas. Se carga con srcdoc (su <code>pathname</code> es «srcdoc»).</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<div id="marco"></div>
+<script>
+const UID = "aaaaaaaa-0000-4000-8000-00000000000a", KEY = "mobau_seleccion:" + UID;
+const CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>';
+const CLIENT = '<script src="supabase-client.js"><\/script>';
+const CFG_A = { choices: [{ group: "fuente", options: ["comp"] }] };
+const CFG_A_ORDEN = { choices: [{ options: ["comp"], group: "fuente", path: [] }] };
+const CFG_B = { choices: [{ group: "fuente", options: ["calida"] }] };
+const CFG_X = { choices: [{ group: "fuente", options: ["zzz"] }] };
+const CFG_MAL = { choices: "x" };
+const L = (quantity, configuration, productId = "demo-pub") => configuration
+  ? { productId, quantity, unit: "ud.", configuration } : { productId, quantity, unit: "ud." };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const count = (s, a) => s.split(a).length - 1;
+let SOURCE, frame, ok = 0, ko = 0, n = 0;
+
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+
+/* Carga seleccion.html del repositorio en un iframe nuevo. Devuelve su window
+   cuando la lista (o el estado vacío) está pintada, o null si no se pinta. */
+async function open(seed, resolucion = {}, { reseed = true, wait = 4000, painted = true, width = "" } = {}){
+  if (reseed){ if (seed === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, JSON.stringify(seed)); }
+  sessionStorage.setItem("__mockqs", "rol=individual&pro=1&uid=a");
+  sessionStorage.setItem("__resolucion46", JSON.stringify(resolucion));
+  if (!SOURCE){
+    SOURCE = await (await fetch("../../../../seleccion.html", { cache: "no-store" })).text();
+    if (count(SOURCE, CDN) !== 1 || count(SOURCE, CLIENT) !== 1 || count(SOURCE, "<head>") !== 1) throw new Error("seleccion.html no tiene las etiquetas esperadas");
+  }
+  const html = SOURCE.replace("<head>", '<head><base href="../../../../">')
+    .replace(CDN, '<script src="supabase/tests/43/interfaz/mock-supabase-cc1.js"><\/script>')
+    .replace(CLIENT, CLIENT + '\n<script src="supabase/tests/46/interfaz/mock-resolucion-46.js"><\/script>');
+  if (frame) frame.remove();
+  frame = document.createElement("iframe");
+  if (width){ frame.style.width = width; frame.style.height = "2400px"; }
+  document.getElementById("marco").appendChild(frame);
+  frame.srcdoc = html;
+  if (!painted) return frame;
+  const t0 = Date.now();
+  while (Date.now() - t0 < wait){
+    await sleep(50);
+    const d = frame.contentDocument;
+    if (d && d.readyState === "complete" && (d.querySelector("#selection-list .selection-item") || (d.getElementById("selection-empty") || {}).style?.display === "block")) return frame.contentWindow;
+  }
+  return null;
+}
+const doc = () => frame.contentDocument;
+const rows = () => [...doc().querySelectorAll("#selection-list .selection-item")];
+const metas = r => [...r.querySelectorAll(".selection-item__meta")].map(m => m.textContent.replace(/\s+/g, " ").trim());
+const stored = () => (JSON.parse(localStorage.getItem(KEY)) || []).map(i => [i.productId,
+  !i.configuration ? "-" : Array.isArray(i.configuration.choices) ? i.configuration.choices.map(c => c.options.join("+")).join("/") : "formato", i.quantity]);
+const click = async el => { el.click(); await sleep(120); };
+
+(async () => {
+  try {
+    /* S1 Selección antigua sin configuración: se migra, sin consultas nuevas y con los mismos ids */
+    let w = await open(["demo-pub", { productId: "demo-cot", quantity: 3, unit: "ud." }]);
+    check("S1 selección antigua: dos líneas, ids de siempre, sin consultar configuraciones, migrada al formato nuevo",
+      w && [rows().map(r => r.querySelector(".qty-input").id), w.__resolveCalls.length, stored()],
+      [["quantity-demo-pub", "quantity-demo-cot"], 0, [["demo-pub", "-", 1], ["demo-cot", "-", 3]]]);
+
+    /* S2 Mismo producto y acabado: sin configuración, A y B; además una pendiente y una con formato no válido */
+    const SEED = [L(1), L(2, CFG_A), L(3, CFG_B), L(1, CFG_X), L(1, CFG_MAL, "demo-cot")];
+    w = await open(SEED);
+    const m = rows().map(metas);
+    check("S2a línea sin configuración: sin textos nuevos", m[0], ["Spectro Lighting · Demo · En stock habitual"]);
+    check("S2b A: resumen, suministro aparte, estado sin validar y aviso de cotización",
+      [m[1][0], m[1][1], m[1][2], m[1].includes("Precio del producto principal (no es el total del conjunto):"), m[1].includes("El importe final de esta configuración requiere cotización.")],
+      ["Configuración: Fuente: Módulo LED", "Módulo LED: aparte · 1 por unidad", "Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.", true, true]);
+    check("S2c B (solo ajuste): resumen y estado, sin aviso de cotización",
+      [m[2][0], m[2][1], m[2].some(t => /requiere cotización/.test(t))], ["Configuración: Fuente: Cálida", "Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.", false]);
+    check("S2d pendiente: se muestra lo elegido y el motivo, sin «completas»",
+      [m[3][0], m[3][1], m[3].some(t => /completas/.test(t))], ["Elegido: fuente: zzz", "Revisar: Una opción elegida en «Fuente» ya no está disponible.", false]);
+    check("S2e formato no válido: se conserva y se indica revisar", m[4][0], "Revisar: la configuración guardada no tiene el formato esperado. Se conserva tal cual.");
+    const ids = rows().map(r => r.querySelector(".qty-input").id);
+    check("S2f ids de campo únicos; las configuradas con sufijo propio; 3 consultas (no la de formato no válido)",
+      [new Set(ids).size === ids.length, ids, w.__resolveCalls.length],
+      [true, ["quantity-demo-pub", "quantity-demo-pub-cfg1", "quantity-demo-pub-cfg2", "quantity-demo-pub-cfg3", "quantity-demo-cot-cfg4"], 3]);
+
+    /* S3 Quitar la primera, después cambiar cantidad y quitar una de las restantes */
+    await click(rows()[0].querySelector(".remove-selection-btn"));
+    check("S3a quitar la primera (sin configuración): las demás intactas", stored(), [["demo-pub", "comp", 2], ["demo-pub", "calida", 3], ["demo-pub", "zzz", 1], ["demo-cot", "formato", 1]]);
+    await click(rows()[1].querySelector(".qty-increment"));
+    check("S3b después, «+» en B (ahora 2.ª fila): solo B", stored(), [["demo-pub", "comp", 2], ["demo-pub", "calida", 4], ["demo-pub", "zzz", 1], ["demo-cot", "formato", 1]]);
+    const inp = rows()[0].querySelector(".qty-input"); inp.value = "7"; inp.dispatchEvent(new Event("change")); await sleep(120);
+    check("S3c campo de cantidad en A: solo A", stored(), [["demo-pub", "comp", 7], ["demo-pub", "calida", 4], ["demo-pub", "zzz", 1], ["demo-cot", "formato", 1]]);
+    await click(rows()[0].querySelector(".qty-decrement"));
+    check("S3d «−» en A: solo A", stored(), [["demo-pub", "comp", 6], ["demo-pub", "calida", 4], ["demo-pub", "zzz", 1], ["demo-cot", "formato", 1]]);
+    await click(rows()[2].querySelector(".remove-selection-btn"));
+    check("S3e quitar la pendiente: las demás intactas", stored(), [["demo-pub", "comp", 6], ["demo-pub", "calida", 4], ["demo-cot", "formato", 1]]);
+    /* S4 Formato no válido: se quita sin afectar a las demás */
+    await click(rows()[2].querySelector(".remove-selection-btn"));
+    check("S4 quitar la de formato no válido: las demás intactas", stored(), [["demo-pub", "comp", 6], ["demo-pub", "calida", 4]]);
+
+    /* S5 Persistencia tras recargar */
+    w = await open(null, {}, { reseed: false });
+    check("S5 recarga: mismas líneas, cantidades y resúmenes",
+      rows().map(r => [r.querySelector(".qty-input").value, metas(r)[0]]), [["6", "Configuración: Fuente: Módulo LED"], ["4", "Configuración: Fuente: Cálida"]]);
+
+    /* S6 Configuraciones equivalentes con distinto orden de claves: la capa de datos las trata como la misma línea */
+    w = await open([L(2, CFG_A), L(5, CFG_A_ORDEN)]);
+    check("S6a dos equivalentes guardadas: una sola línea (se conserva la primera, como cualquier duplicado de la selección)", [rows().length, stored()], [1, [["demo-pub", "comp", 2]]]);
+    check("S6b misma identidad en la capa de datos: añadir la equivalente no crea otra línea",
+      [w.selectionConfigurationKey(CFG_A) === w.selectionConfigurationKey(CFG_A_ORDEN), w.inSelection("demo-pub", null, CFG_A_ORDEN), w.addToSelection("demo-pub", 1, "ud.", null, CFG_A_ORDEN).alreadyExists, stored().length],
+      [true, true, true, 1]);
+
+    /* S7 Fallo de resolución (respuesta con error): se conserva lo elegido y no se muestra como completo */
+    w = await open([L(1), L(2, CFG_A)], { modo: "error" });
+    const m7 = w && metas(rows()[1]);
+    check("S7 resolución con error: lo elegido, aviso, cotización y nada de «completas»",
+      m7 && [m7[0], m7[1], m7.some(t => /completas/.test(t)), m7.includes("El importe final de esta configuración requiere cotización."), stored()],
+      ["Configuración: fuente: comp", "No pudimos comprobarla con el catálogo actual. Se conserva lo elegido.", false, true, [["demo-pub", "-", 1], ["demo-pub", "comp", 2]]]);
+
+    /* S8 Fallo de resolución (la promesa falla, p. ej. sin red): mismo resultado esperado que S7 */
+    const SIN_COMPROBAR = "No pudimos comprobarla con el catálogo actual. Se conserva lo elegido.";
+    w = await open([L(1), L(2, CFG_A)], { modo: "rechazo" });
+    const m8 = w && metas(rows()[1]);
+    check("S8 resolución que falla (promesa rechazada): se pinta, con lo elegido, sin «completas» y sin errores sin capturar",
+      m8 ? [m8[0], m8[1], m8.some(t => /completas/.test(t)), w.__sinCapturar, stored()] : "la lista no se pintó",
+      ["Configuración: fuente: comp", SIN_COMPROBAR, false, [], [["demo-pub", "-", 1], ["demo-pub", "comp", 2]]]);
+
+    /* S10 Una consulta se rechaza y las demás responden */
+    const SEED3 = [L(1), L(2, CFG_A), L(3, CFG_B)];
+    const COMPLETAS = "Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.";
+    w = await open(SEED3, { porOpcion: { comp: { modo: "rechazo" } } });
+    const m10 = w && rows().map(metas);
+    check("S10 una consulta se rechaza: esa línea sin comprobar; la otra con su estado; sin errores sin capturar",
+      m10 ? [m10[1][0], m10[1][1], m10[2][0], m10[2][1], w.__resolveCalls.length, w.__sinCapturar] : "la lista no se pintó",
+      ["Configuración: fuente: comp", SIN_COMPROBAR, "Configuración: Fuente: Cálida", COMPLETAS, 2, []]);
+
+    /* S11 Una consulta no termina (ni al cancelarla): la selección se pinta al cumplirse el límite y se puede manejar */
+    let t11 = Date.now();
+    w = await open(SEED3, { porOpcion: { comp: { modo: "colgada", ignoraAborto: true } } }, { wait: 9000 });
+    const espera11 = Date.now() - t11;
+    const m11 = w && rows().map(metas);
+    check("S11a consulta que no termina: se pinta al cumplirse el límite de la página, con esa línea sin comprobar",
+      m11 ? [w.eval("CATALOG_CONFIG.timeoutMs"), espera11 >= 3500 && espera11 < 7000, m11[1][1], m11[2][0], m11[2][1]] : "la lista no se pintó",
+      [4000, true, SIN_COMPROBAR, "Configuración: Fuente: Cálida", COMPLETAS]);
+    if (m11){
+      await click(rows()[2].querySelector(".qty-increment"));
+      await click(rows()[1].querySelector(".remove-selection-btn"));
+      check("S11b después se puede cambiar cantidad y quitar: «+» en B y quitar A, sin tocar la otra", stored(), [["demo-pub", "-", 1], ["demo-pub", "calida", 4]]);
+    }
+
+    /* S12 Una respuesta llega después del límite: se ignora */
+    w = await open(SEED3, { porOpcion: { comp: { retraso: 5500, ignoraAborto: true } } }, { wait: 9000 });
+    const antes12 = w && metas(rows()[1])[1];
+    await sleep(2500);
+    if (w) await click(rows()[2].querySelector(".qty-increment"));
+    const m12 = w && rows().map(metas);
+    check("S12 respuesta después del límite: llega, pero no cambia ningún estado (ni al volver a pintar) ni produce errores sin capturar",
+      m12 ? [antes12, w.__respuestasTardias, m12[1][1], m12[1].some(t => /Módulo LED|completas/.test(t)), m12[2][0], stored(), w.__sinCapturar] : "la lista no se pintó",
+      [SIN_COMPROBAR, ["comp"], SIN_COMPROBAR, false, "Configuración: Fuente: Cálida", [["demo-pub", "-", 1], ["demo-pub", "comp", 2], ["demo-pub", "calida", 4]], []]);
+
+    /* S9 Resolución tardía y cambio de la selección durante la espera (p. ej. desde otra pestaña) */
+    await open([L(1), L(2, CFG_A), L(3, CFG_B)], { retraso: 800 }, { painted: false });
+    await sleep(350);
+    const before = doc() ? doc().querySelectorAll("#selection-list .selection-item").length : -1;
+    localStorage.setItem(KEY, JSON.stringify([L(1), L(3, CFG_B)]));
+    const t0 = Date.now(); while (Date.now() - t0 < 4000 && !(doc() && doc().querySelector("#selection-list .selection-item"))) await sleep(50);
+    await sleep(150);
+    const m9 = rows().map(r => [r.querySelector(".qty-input").value, metas(r)[0]]);
+    check("S9 tardía: nada se pinta antes de resolver; después, cada estado en su línea y ninguno ajeno",
+      [before, m9, rows().some(r => /Módulo LED/.test(r.textContent)), frame.contentWindow.__resolveCalls.length],
+      [0, [["1", "Spectro Lighting · Demo · En stock habitual"], ["3", "Configuración: Fuente: Cálida"]], false, 2]);
+
+    /* S13 Vista móvil (375 px): sin desplazamiento horizontal y controles dentro del ancho. Queda a la vista para revisarla. */
+    w = await open([L(1), L(2, CFG_A), L(1, CFG_X), L(1, CFG_MAL, "demo-cot")], {}, { width: "375px" });
+    const de = doc().documentElement;
+    const fuera = rows().flatMap(r => [...r.querySelectorAll(".qty-input, .qty-increment, .qty-decrement, .remove-selection-btn, .selection-item__meta")])
+      .filter(el => el.getBoundingClientRect().right > de.clientWidth + 0.5).length;
+    /* El ancho útil puede ser menor que 375 px si hay barra de desplazamiento vertical. */
+    check("S13 móvil 375 px: sin desplazamiento horizontal; controles, resúmenes y avisos dentro del ancho",
+      [de.clientWidth <= 375, de.scrollWidth <= de.clientWidth, fuera], [true, true, 0]);
+  } catch (e) {
+    check("ABORTO", String(e), "sin errores");
+  } finally {
+    localStorage.removeItem(KEY);
+    sessionStorage.removeItem("__mockqs"); sessionStorage.removeItem("__resolucion46");
+  }
+  document.getElementById("sum").textContent = `total=${ok + ko} ok=${ok} fallos=${ko}`;
+  document.title = `46 · ${ok}/${ok + ko}`;
+})();
+</script>
