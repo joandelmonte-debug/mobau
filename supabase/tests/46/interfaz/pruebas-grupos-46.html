@@ -271,8 +271,8 @@ const sinCapturar = () => W().__sinCapturar;
 
     for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
       w = await open({}, { page: "producto.html", qs }); await sleep(600);
-      check(`P12 relacionados ${nombre}: solo «Ver ficha», sin «Configurar» ni añadir; las tarjetas no consultan nada (la única carga, 2 consultas, es la del panel de solo lectura de la ficha)`,
-        [REL.map(slot), addBtns(), doc().querySelectorAll(".btn-configure").length, views(w)], [Array(3).fill("solo lectura"), 0, 0, 2]);
+      check(`P12 relacionados ${nombre}: solo «Ver ficha», sin «Configurar» ni añadir; las tarjetas no consultan nada (la única carga, 2 consultas, es la del panel de solo lectura de la ficha; Gratis no tiene panel y no consulta nada)`,
+        [REL.map(slot), addBtns(), doc().querySelectorAll(".btn-configure").length, views(w)], [Array(3).fill("solo lectura"), 0, 0, nombre === "Gratis" ? 0 : 2]);
     }
     clearSel();
 
@@ -405,7 +405,7 @@ const sinCapturar = () => W().__sinCapturar;
     check("Q14c quitar el componente intermedio elimina lo que dependía de él (tono) y sigue completa", [checked().sort(), legends().includes("Tono")], [["carcasa:x", "control:dim", "fuente:comp", "tapa:—"], false]);
 
     /* Solo lectura según rol */
-    for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+    for (const [nombre, qs] of [["Visitante", QS_VISITANTE]]){
       clearSel();
       w = await open({ validacion: "ok" }, { page: "producto.html", qs }); await settled();
       check(`Q15 ${nombre}: opciones en solo lectura (sin controles ni botón de añadir), con la condición de «Control» y los grupos del componente; sin comprobaciones`,
@@ -413,6 +413,14 @@ const sinCapturar = () => W().__sinCapturar;
          doc().querySelector("#cfg-body").innerText.includes("Solo aplica si eliges «Bajo cotización» en «Fuente»."), doc().querySelector("#cfg-body .cfg-nested") !== null, vals(w).length, storedLines().length],
         [true, 0, true, ["Fuente", "Carcasa", "Extras", "Sin opciones", "Control"], true, true, 0, 0]);
     }
+
+    /* Gratis: el configurador queda reservado a Individual y Estudio; sin panel, sin opciones, sin consultas ni vía para añadir */
+    clearSel();
+    w = await open({ validacion: "ok" }, { page: "producto.html", qs: QS_GRATIS }); await settled(); await sleep(600);
+    check("Q15g Gratis: la ficha normal sigue, pero sin panel «Configurar», sin grupos ni opciones ni avisos de configuración, sin botón de añadir y sin consultas de configuración",
+      [panel().hidden, doc().querySelectorAll("#cfg-body input").length, doc().getElementById("cfg-body").innerText.trim(), doc().querySelector(".product-selection-actions").hidden,
+       doc().getElementById("product-root") !== null && doc().querySelector("h1") !== null, views(w), vals(w).length, storedLines().length],
+      [true, 0, "", true, true, 0, 0, 0]);
 
     /* Producto sin grupos y carga fallida */
     clearSel();
@@ -453,7 +461,7 @@ const sinCapturar = () => W().__sinCapturar;
     await pick("fuente", "comp");
     await pick("fuente", "calida"); await pick("fuente", "comp");
     check("Q21b al elegirlo, sus grupos usan su nombre y elegir o repintar no vuelve a consultar", [status().includes("«Carcasa» (en Bajo cotización)"), w.__grupos46.productosPorId.length], [true, 1]);
-    w = await open({ validacion: "ok", fuera: ["demo-cot"], acabadoComp: true }, { page: "producto.html", qs: QS_GRATIS }); await sleep(900);
+    w = await open({ validacion: "ok", fuera: ["demo-cot"], acabadoComp: true }, { page: "producto.html", qs: QS_VISITANTE }); await sleep(900);
     check("Q21c solo lectura: también muestra el nombre y el acabado del componente fuera de la lista",
       [doc().getElementById("cfg-body").innerText.includes("Bajo cotización"), doc().getElementById("cfg-body").innerText.includes("Acabado: C-11 · Negro"), doc().getElementById("cfg-body").innerText.replace(/Con este componente:/g, "").includes("este componente")], [true, true, false]);
     w = await open({ validacion: "ok", fuera: ["demo-cot"], errorPorId: true }, FICHA); await until(() => !!doc().getElementById("cfg-retry-load"), 8000); await sleep(200);
@@ -480,6 +488,72 @@ const sinCapturar = () => W().__sinCapturar;
       await pick("fuente", "calida"); await sleep(200);
       check(`Q24b tras el reintento desde ${via === "panel" ? "el panel" : "una tarjeta"} se puede configurar y añadir con normalidad`, [abLabel(), status().startsWith("Configuración completa")], ["Añadir configuración", true]);
     }
+
+    /* ===== Paso 0 · productos «solo componente» ===== */
+    const ROLES = { "demo-pub": "principal", "demo-cot": "componente", "demo-pend": "ambos", "demo-sin": "raro" }; // demo-nodisp: fila sin la columna
+    const idsIn = sel => [...doc().querySelectorAll(`${sel} .product-card`)].map(c => c.dataset.productId).sort();
+    const search = async text => { const i = doc().getElementById("search-input"); i.value = text; i.dispatchEvent(new Event("input", { bubbles: true })); await sleep(600); };
+    clearSel();
+    w = await open({ roles: ROLES, validacion: "ok" }, { qs: QS_IND }); await ready(w);
+    check("R1 catálogo: solo «principal», «ambos» y la fila anterior a 46-01 (sin columna = por defecto); «componente» y un valor desconocido no salen; PRODUCTS los conserva todos",
+      [idsIn("#product-grid"), doc().getElementById("result-count").textContent.trim(), w.eval("PRODUCTS.length"),
+       w.eval("PRODUCTS.map(p => p.id + ':' + productCatalogRole(p)).sort()")],
+      [["demo-nodisp", "demo-pend", "demo-pub"], "3 productos", 5, ["demo-cot:componente", "demo-nodisp:principal", "demo-pend:ambos", "demo-pub:principal", "demo-sin:desconocido"]]);
+    check("R2 el valor del rol: ausente = principal; null o desconocido nunca se toma por principal",
+      w.eval(`[productCatalogRole({}), productCatalogRole({ rol: "principal" }), productCatalogRole({ rol: null }), productCatalogRole({ rol: "otro" }), isCommercialProduct({ rol: null }), isCommercialProduct({ rol: "ambos" })]`),
+      ["principal", "principal", "desconocido", "desconocido", false, true]);
+    await search("Bajo");
+    const sinRes = [idsIn("#product-grid"), doc().getElementById("empty-state").style.display];
+    await search("Sin fila");
+    const sinRes2 = idsIn("#product-grid");
+    await search("Publicado");
+    check("R3 la búsqueda comercial no devuelve un componente ni un rol desconocido, y sí un principal", [sinRes, sinRes2, idsIn("#product-grid")], [[[], "block"], [], ["demo-pub"]]);
+    await search("");
+    const mk = mark("#product-grid");
+    card("demo-nodisp").querySelector(".btn-add-selection").click(); await sleep(700);
+    check("R4 añadir un producto habitual sigue actualizando botón y contador sin reconstruir la cuadrícula",
+      [stored(), badge(), labels("demo-nodisp")[0], mk.replaced(), mk.mut], [["demo-nodisp||1"], "Mi selección (1)", "En mi selección", 0, 0]);
+    clearSel();
+
+    w = await open({ roles: ROLES }, { page: "distribuidores.html", qs: QS_IND, cards: false });
+    await until(() => doc().querySelectorAll(".provider-count, td").length > 0, 6000); await sleep(300);
+    const cuentas = [...doc().querySelectorAll(".provider-count")].map(e => e.textContent.trim()).sort();
+    check("R5 listado comercial por distribuidor: no cuenta componentes ni roles desconocidos (spectro 1: demo-pub; altritempi 2: demo-pend y demo-nodisp)", cuentas, ["1 producto activo", "2 productos activos"]);
+
+    for (const [id, texto] of [["demo-cot", "Componente: se ofrece dentro de la configuración"], ["demo-sin", "Este producto no se ofrece por separado."]]){
+      clearSel();
+      w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id }); await sleep(1200);
+      const r = w.addToSelection(id, 1, "ud.", null);
+      check(`R6 ficha directa de ${id} (${id === "demo-cot" ? "componente" : "rol desconocido"}): accesible, identificada, sin cantidad ni añadir, sin invitación a la selección y sin vías de añadir por separado`,
+        [doc().getElementById("p-component-note") && doc().getElementById("p-component-note").textContent.startsWith(texto), doc().querySelector(".product-selection-actions").hidden,
+         doc().getElementById("p-price-actions").innerText.includes("Añádelo"), r.success, r.error, storedLines().length],
+        [true, true, false, false, "Este producto solo se ofrece como componente.", 0]);
+    }
+    clearSel();
+    w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1200);
+    check("R7 la ficha de un componente muestra sus opciones en solo lectura, identificadas como del componente, sin controles ni consultas", 
+      [!panel().hidden, doc().querySelectorAll("#cfg-body input").length, doc().getElementById("cfg-body").innerText.includes("opciones de configuración de este componente"), vals(w).length],
+      [true, 0, true, 0]);
+    w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-pend" }); await sleep(1500);
+    check("R8 un producto con rol «ambos» mantiene el uso normal en la ficha (cantidad y botón visibles, sin nota de componente)",
+      [doc().querySelector(".product-selection-actions").hidden, !!doc().getElementById("p-component-note")], [false, false]);
+
+    clearSel();
+    w = await open({ roles: ROLES, validacion: "ok" }, FICHA); await settled();
+    check("R9 el configurador del producto principal sigue mostrando el componente «solo componente» con su nombre",
+      [textoComp().includes("Bajo cotización"), w.eval("PRODUCTS.some(p => p.id === 'demo-cot')")], [true, true]);
+    await pick("fuente", "calida"); await sleep(200);
+    ab().click(); await sleep(800);
+    check("R10 se puede añadir la configuración del principal (el componente solo va dentro de ella)", [storedLines().map(l => l.productId), abLabel()], [["demo-pub"], "En mi selección (off)"]);
+    const leido = await w.loadProductsByIds(["demo-cot", "demo-sin"]);
+    check("R11 la lectura por identificadores no filtra por rol (componente y rol desconocido se leen)", leido.map(p => p.id).sort(), ["demo-cot", "demo-sin"]);
+
+    localStorage.setItem("mobau_seleccion:aaaaaaaa-0000-4000-8000-00000000000a", JSON.stringify([{ productId: "demo-cot", quantity: 2, unit: "ud." }]));
+    w = await open({ roles: ROLES }, { page: "seleccion.html", qs: QS_IND, cards: false });
+    await until(() => doc().querySelectorAll("#selection-list .selection-item").length > 0, 6000); await sleep(300);
+    check("R12 una línea existente que referencia un componente se sigue leyendo y mostrando (Mi selección)",
+      [doc().querySelectorAll("#selection-list .selection-item").length, doc().getElementById("selection-list").innerText.includes("Bajo cotización")], [1, true]);
+    clearSel();
 
     /* ===== Contrato de construcción (filas sintéticas) ===== */
     w = await open();

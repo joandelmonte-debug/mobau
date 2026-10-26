@@ -23,6 +23,8 @@
      fuera: ["demo-cot", …] → esos productos no salen en la lista del catálogo (solo se leen «por identificadores»),
             como un producto que solo existe para usarse de componente
      acabadoComp: true → la opción «comp» lleva el acabado «11» de demo-cot (C-11 · Negro)
+     roles: { id: valor, … } → catalog_role de esos productos (el resto de filas no trae la columna, como antes de 46-01);
+            valor puede ser "principal" | "componente" | "ambos" | un valor desconocido | null
      errorPorId: true → la lectura por identificadores falla; ausenteSiempre: true → tampoco devuelve los de «fuera»
      profundo: true → demo-cot con el grupo opcional «tapa» (t1 = componente demo-nodisp, aparte, 2 por unidad)
                  y demo-nodisp con el grupo necesario «tono» (warm, cool): un componente dentro de un componente
@@ -113,6 +115,7 @@
     if (!res || !Array.isArray(res.data)) return res;
     let rows = res.data;
     if (conf.fuera && (!st.filtered || (st.ids && conf.ausenteSiempre))) rows = rows.filter(r => !conf.fuera.includes(r.id));
+    if (conf.roles) rows = rows.map(r => (Object.prototype.hasOwnProperty.call(conf.roles, r.id) ? Object.assign({}, r, { catalog_role: conf.roles[r.id] }) : r));
     rows = rows.map(r => (r.id === "demo-pub" && conf.acabados ? Object.assign({}, r, { finish_options: FINISHES })
       : r.id === "demo-cot" && conf.acabadoComp ? Object.assign({}, r, { finish_options: [{ code: "11", name: "Negro", reference_code: "C-11", is_default: true }] }) : r));
     return Object.assign({}, res, { data: rows });
@@ -128,7 +131,7 @@
   } });
   const originalFrom = supabaseClient.from.bind(supabaseClient);
   supabaseClient.from = (name) => (name === "catalog_component_groups" || name === "catalog_component_options") ? query(name)
-    : (name === "catalog_products" && (conf.acabados || conf.fuera || conf.acabadoComp || conf.errorPorId)) ? productsProxy(originalFrom(name)) : originalFrom(name);
+    : (name === "catalog_products" && (conf.acabados || conf.fuera || conf.acabadoComp || conf.errorPorId || conf.roles)) ? productsProxy(originalFrom(name)) : originalFrom(name);
 
   /* line_configuration_resolve controlable (cancelable como en supabase-js). */
   const originalRpc = supabaseClient.rpc.bind(supabaseClient);

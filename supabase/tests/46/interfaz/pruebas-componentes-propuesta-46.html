@@ -1,0 +1,223 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 46 · módulo de componentes en propuestas</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#a00;font-weight:600}</style>
+<h1>Punto 46 · bloque 4 · módulo componentes-propuesta.js (lógica y editor, sin red)</h1>
+<p>Sin Supabase ni red. Servir la raíz del repositorio en un origen local: <code>/supabase/tests/46/interfaz/pruebas-componentes-propuesta-46.html</code>.</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<div id="host" style="margin-top:16px;max-width:760px"></div>
+<script src="../../../../componentes-propuesta.js"></script>
+<script>
+let ok = 0, ko = 0, n = 0;
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+const M = MobauComponentes;
+const ctx = {
+  selfProductId: "p-padre",
+  products: [
+    { id: "p-padre", name: "Padre", catalog_role: "principal" },
+    { id: "p-mod", name: "Módulo de luz", catalog_role: "componente" },
+    { id: "p-drv", name: "Driver", catalog_role: "ambos" },
+    { id: "p-otro", name: "Otro principal", catalog_role: "principal" }
+  ],
+  finishesByProduct: new Map([["p-mod", [{ code: "n1", name: "Negro" }]]]),
+  proposals: [{ id: "00000000-0000-0000-0000-0000000000aa", name: "Lente nueva" }]
+};
+M.setContext(ctx);
+
+/* Atajos para construir modelos */
+function grupo(label, extra){ return Object.assign(M.emptyGroup(), { label }, extra || {}); }
+function comp(productId, extra){ return Object.assign(M.emptyOption(), { component: { product_id: productId } }, extra || {}); }
+function ajuste(label, extra){ return Object.assign(M.emptyOption(), { kind: "ajuste", setting_label: label, supply: "", quantity_mode: "", quantity: "" }, extra || {}); }
+const modelo = (...groups) => ({ role: "principal", groups });
+const v = (m, submit) => M.validate(m, ctx, { submit: !!submit });
+
+/* ---------- claves ---------- */
+check("slug: acentos, espacios y símbolos", M.slug("Fuente de Luz (12 W)!", "x"), "fuente-de-luz-12-w");
+check("slug: vacío usa el valor por defecto", M.slug("¡¡", "grupo"), "grupo");
+check("slug: máximo 40 caracteres y sin guion final", M.slug("a".repeat(39) + " b", "x").length <= 40, true);
+check("uniqueCode: sin colisión", M.uniqueCode("lente", ["fuente"]), "lente");
+check("uniqueCode: colisión sin distinguir mayúsculas", M.uniqueCode("lente", ["LENTE"]), "lente-2");
+check("uniqueCode: respeta 40 caracteres", M.uniqueCode("x".repeat(40), ["x".repeat(40)]).length <= 40, true);
+
+/* ---------- estructura actual → modelo ---------- */
+const filas = {
+  groups: [
+    { id: "g2", code: "lente", label: "Lente", requirement: "opcional", choice: "varias", depends_on_option_id: "o1", status: "activo", sort_order: 2 },
+    { id: "g1", code: "fuente", label: "Fuente", requirement: "necesario", choice: "una", depends_on_option_id: null, status: "activo", sort_order: 1 },
+    { id: "g3", code: "viejo", label: "Viejo", requirement: "opcional", choice: "una", depends_on_option_id: null, status: "retirado", sort_order: 3 }
+  ],
+  options: [
+    { id: "o2", group_id: "g1", code: "calida", kind: "ajuste", component_product_id: null, setting_label: "Cálida", sort_order: 2, status: "activo", attributes: [{ label: "K", value: "2700" }] },
+    { id: "o1", group_id: "g1", code: "mod", kind: "componente", component_product_id: "p-mod", component_finish_code: "n1", supply: "aparte", quantity: "1.000", quantity_mode: "fija", sort_order: 1, status: "activo", attributes: [] },
+    { id: "o3", group_id: "g2", code: "perfil", kind: "componente", component_product_id: "p-drv", supply: "incluido", quantity: null, quantity_mode: "a_calcular", sort_order: 1, status: "activo", attributes: [] },
+    { id: "o4", group_id: "g3", code: "x", kind: "ajuste", setting_label: "X", sort_order: 1, status: "activo", attributes: [] },
+    { id: "o5", group_id: "g1", code: "retirada", kind: "ajuste", setting_label: "R", sort_order: 3, status: "retirado", attributes: [] }
+  ]
+};
+const actual = M.fromStructure(filas, "principal");
+check("fromStructure: orden por sort_order y se ignoran retirados", actual.groups.map(g => g.code), ["fuente", "lente"]);
+check("fromStructure: opciones ordenadas y sin retiradas", actual.groups[0].options.map(o => o.code), ["mod", "calida"]);
+check("fromStructure: la condición pasa de id a claves", actual.groups[1].dependsOn, { group: "fuente", option: "mod" });
+check("fromStructure: cantidad numérica normalizada", actual.groups[0].options[0].quantity, "1");
+const base = { role: "principal", manifest: M.toManifest(actual) };
+check("toManifest: ida y vuelta con la estructura actual", Object.keys(base.manifest), ["groups"]);
+check("toManifest: opción de componente completa", base.manifest.groups[0].options[0], { code: "mod", kind: "componente", component: { product_id: "p-mod" }, finish_code: "n1", supply: "aparte", quantity_mode: "fija", quantity: 1 });
+check("toManifest: a calcular no lleva cantidad", base.manifest.groups[1].options[0], { code: "perfil", kind: "componente", component: { product_id: "p-drv" }, supply: "incluido", quantity_mode: "a_calcular" });
+check("toManifest: ajuste solo con nombre y características", base.manifest.groups[0].options[1], { code: "calida", kind: "ajuste", setting_label: "Cálida", attributes: [{ label: "K", value: "2700" }] });
+check("toManifest: condición con claves", base.manifest.groups[1].depends_on, { group: "fuente", option: "mod" });
+
+/* ---------- qué se guarda (null = sin cambios) ---------- */
+check("producto nuevo principal sin grupos -> null", M.buildProposed(M.emptyModel(), null, ctx), null);
+check("producto nuevo componente -> solo uso", M.buildProposed({ role: "componente", groups: [] }, null, ctx), { catalog_role: "componente" });
+const nuevoConGrupo = modelo(grupo("Fuente de luz", { options: [comp("p-mod")] }));
+const prop = M.buildProposed(nuevoConGrupo, null, ctx);
+check("producto nuevo con grupo: uso y grupos, claves generadas", [prop.catalog_role, prop.groups[0].code, prop.groups[0].options[0].code], ["principal", "fuente-de-luz", "modulo-de-luz"]);
+check("cambio sin tocar nada -> null", M.buildProposed(M.fromStructure(filas, "principal"), base, ctx), null);
+const m2 = M.fromStructure(filas, "principal"); m2.groups.reverse(); m2.groups[1].options.reverse();
+check("cambio solo de orden de edición -> null (se compara por clave)", M.buildProposed(m2, base, ctx), null);
+const m3 = M.fromStructure(filas, "principal"); m3.groups[0].label = "Fuente de luz";
+check("cambio de un nombre -> lista completa de grupos", M.buildProposed(m3, base, ctx).groups.map(g => g.label), ["Fuente de luz", "Lente"]);
+const m4 = M.fromStructure(filas, "principal"); m4.role = "ambos";
+check("cambio solo de uso -> solo catalog_role", M.buildProposed(m4, base, ctx), { catalog_role: "ambos" });
+const m5 = M.fromStructure(filas, "principal"); m5.groups = [];
+check("retirar todos los grupos -> groups vacío explícito", M.buildProposed(m5, base, ctx), { groups: [] });
+check("la clave de un grupo ya existente no cambia al editar su nombre", (() => { const m = M.fromStructure(filas, "principal"); m.groups[0].label = "Otro nombre"; return M.toManifest(m).groups[0].code; })(), "fuente");
+check("fromManifest ⇄ toManifest conserva el manifiesto", M.canonical(M.toManifest(M.fromManifest(base.manifest, "principal"))), M.canonical(base.manifest));
+
+/* ---------- validación ---------- */
+check("válido: modelo actual", v(M.fromStructure(filas, "principal"), true), null);
+check("nombre de grupo vacío", v(modelo(grupo("  ")), false), "Revisa el nombre (1–80 caracteres) de cada grupo de componentes.");
+check("nombre de grupo de 81 caracteres", v(modelo(grupo("a".repeat(81))), false), "Revisa el nombre (1–80 caracteres) de cada grupo de componentes.");
+check("grupo necesario sin opciones: borrador sí, envío no", [v(modelo(grupo("G", { requirement: "necesario" })), false), v(modelo(grupo("G", { requirement: "necesario" })), true)], [null, "El grupo necesario «G» no tiene opciones."]);
+check("opción de componente sin artículo", v(modelo(grupo("G", { options: [M.emptyOption()] })), false), "Indica el artículo de cada opción de componente del grupo «G».");
+check("un producto no es componente de sí mismo", v(modelo(grupo("G", { options: [comp("p-padre")] })), false), "Un producto no puede ser componente de sí mismo (grupo «G»).");
+check("suministro sin indicar", v(modelo(grupo("G", { options: [comp("p-mod", { supply: "" })] })), false), "Indica si cada componente del grupo «G» va incluido o se solicita aparte.");
+check("cantidad sin modo", v(modelo(grupo("G", { options: [comp("p-mod", { quantity_mode: "" })] })), false), "Indica la cantidad (fija o a calcular) de cada componente del grupo «G».");
+const MSG_QTY = "La cantidad por unidad de cada componente debe ser mayor que 0 (hasta 3 decimales).";
+check("cantidad 0, negativa, texto, 4 decimales o vacía", ["0", "-1", "abc", "1.2345", ""].map(q => v(modelo(grupo("G", { options: [comp("p-mod", { quantity: q })] })), false)), Array(5).fill(MSG_QTY));
+check("cantidad 1,5 con coma y 0.001 son válidas", ["1,5", "0.001"].map(q => v(modelo(grupo("G", { options: [comp("p-mod", { quantity: q })] })), false)), [null, null]);
+check("a calcular no exige número", v(modelo(grupo("G", { options: [comp("p-mod", { quantity_mode: "a_calcular", quantity: "" })] })), true), null);
+check("ajuste sin nombre", v(modelo(grupo("G", { options: [ajuste("")] })), false), "Indica el nombre (1–80 caracteres) de cada ajuste del grupo «G».");
+check("más de 8 características", v(modelo(grupo("G", { options: [ajuste("A", { attributes: Array.from({ length: 9 }, (_, i) => ({ label: "k" + i, value: "v" })) })] })), false), "Las características de una opción no son válidas (máximo 8).");
+check("característica incompleta", v(modelo(grupo("G", { options: [ajuste("A", { attributes: [{ label: "Potencia", value: "" }] })] })), false), "Cada característica necesita un nombre (hasta 60 caracteres) y un valor (hasta 120).");
+check("característica totalmente vacía se ignora", v(modelo(grupo("G", { options: [ajuste("A", { attributes: [{ label: "", value: "" }] })] })), false), null);
+const g1 = grupo("Fuente", { code: "fuente", options: [Object.assign(comp("p-mod"), { code: "mod" })] });
+const g2 = grupo("Lente", { code: "lente", options: [Object.assign(comp("p-drv"), { code: "len" })] });
+g2.dependsOn = { group: "fuente", option: "mod" };
+check("condición válida", v(modelo(g1, g2), true), null);
+g1.dependsOn = { group: "lente", option: "len" };
+check("condiciones en círculo", v(modelo(g1, g2), false), "Las condiciones de los grupos forman un círculo.");
+g1.dependsOn = null; g2.dependsOn = { group: "lente", option: "len" };
+check("condición sobre su propio grupo", v(modelo(g1, g2), false), "La condición del grupo «Lente» no es válida: elige una opción de otro grupo.");
+g2.dependsOn = { group: "fuente", option: "inexistente" };
+check("condición sobre una opción que no existe", v(modelo(g1, g2), false), "La condición del grupo «Lente» no es válida: elige una opción de otro grupo.");
+check("dos grupos con la misma clave", v(modelo(grupo("A", { code: "x" }), grupo("B", { code: "X" })), false), "Hay dos grupos de componentes con la misma clave.");
+check("más de 30 grupos", v(modelo(...Array.from({ length: 31 }, (_, i) => grupo("G" + i))), false), "Máximo 30 grupos de componentes.");
+
+/* ---------- resumen ---------- */
+check("resumen de un manifiesto", M.summary({ catalog_role: "componente", groups: base.manifest.groups }), ["Uso en el catálogo: Solo componente o accesorio", "Fuente (necesario, una): 2 opciones", "Lente (opcional, varias): 1 opción, con condición"]);
+check("resumen: retirar todos los grupos", M.summary({ groups: [] }), ["Grupos de componentes: se retiran todos"]);
+check("resumen: sin manifiesto con uso conocido", M.summary(null, "ambos"), ["Uso en el catálogo: Principal y también componente"]);
+
+/* ---------- editor (DOM) ---------- */
+const host = document.getElementById("host");
+const wrap = (m, hooks) => { M.render(host, m, ctx, hooks || {}); };
+const q = (s) => host.querySelector(s);
+const qa = (s) => [...host.querySelectorAll(s)];
+const botones = () => qa("button").map(b => b.textContent);
+let cambios = 0;
+const mm = M.emptyModel();
+wrap(mm, { onChange(){ cambios++; } });
+check("editor vacío: mensaje y botón de añadir grupo", [!!q(".pc-empty"), botones()], [true, ["Añadir grupo de componentes"]]);
+qa("button")[0].click();
+check("añadir grupo pinta el grupo (y no repinta con texto)", [mm.groups.length, qa(".pc-group").length], [1, 1]);
+const gIn = q(".pc-group-head input");
+gIn.value = "<img src=x onerror=window.__xss=1>Fuente de luz"; gIn.dispatchEvent(new Event("input"));
+check("el nombre se guarda como texto", mm.groups[0].label.startsWith("<img"), true);
+wrap(mm, {});
+check("el nombre con HTML no crea elementos (textContent/value)", [host.querySelectorAll("img").length, window.__xss === undefined], [0, true]);
+mm.groups[0].label = "Fuente de luz";
+wrap(mm, { onCreateComponent(){} });
+check("con hook, aparece «Crear componente nuevo…»", botones().includes("Crear componente nuevo…"), true);
+qa("button").find(b => b.textContent === "Añadir opción").click();
+check("añadir opción: tipo componente por defecto con cantidad fija", [mm.groups[0].options.length, mm.groups[0].options[0].kind, mm.groups[0].options[0].quantity_mode], [1, "componente", "fija"]);
+const selects = () => qa(".pc-option select");
+const artSel = selects().find(s => [...s.options].some(o => o.value === "p:p-mod"));
+check("el selector de artículos ofrece solo componentes o ambos, sin el propio producto, y las altas nuevas", [...artSel.options].map(o => o.value), ["", "p:p-mod", "p:p-drv", "n:00000000-0000-0000-0000-0000000000aa"]);
+artSel.value = "p:p-mod"; artSel.dispatchEvent(new Event("change"));
+check("elegir artículo fija el componente y pinta los acabados del artículo", [mm.groups[0].options[0].component, !!selects().find(s => [...s.options].some(o => o.value === "n1"))], [{ product_id: "p-mod" }, true]);
+const modeSel = selects().find(s => [...s.options].some(o => o.value === "a_calcular"));
+modeSel.value = "a_calcular"; modeSel.dispatchEvent(new Event("change"));
+check("a calcular oculta el campo de cantidad", qa(".pc-option .pc-field").some(f => f.textContent.startsWith("Cantidad por unidad")), false);
+const kindSel = selects().find(s => [...s.options].some(o => o.value === "ajuste"));
+kindSel.value = "ajuste"; kindSel.dispatchEvent(new Event("change"));
+check("tipo ajuste: aparece el nombre del ajuste y desaparece el artículo", [qa(".pc-option .pc-field").some(f => f.textContent.startsWith("Nombre del ajuste")), qa(".pc-option select").some(s => [...s.options].some(o => o.value === "p:p-mod"))], [true, false]);
+qa("button").find(b => b.textContent === "Añadir característica").click();
+check("añadir característica", mm.groups[0].options[0].attributes.length, 1);
+/* Condiciones: dos grupos, el segundo depende de una opción con nombre del primero */
+const mc = M.emptyModel();
+mc.groups.push(grupo("Fuente", { options: [comp("p-mod")] }), grupo("Lente", { options: [comp("p-drv")] }));
+wrap(mc, {});
+const condSel = qa(".pc-group")[1].querySelectorAll(".pc-grid")[0].querySelectorAll("select")[2];
+check("la condición ofrece solo opciones con nombre de OTROS grupos", [...condSel.options].map(o => o.textContent), ["Siempre se muestra", "Solo si se elige «Fuente» → «Módulo de luz»"]);
+condSel.value = condSel.options[1].value; condSel.dispatchEvent(new Event("change"));
+check("elegir condición fija las claves estables de destino", mc.groups[1].dependsOn, { group: "fuente", option: "modulo-de-luz" });
+qa(".pc-group")[0].querySelectorAll("button").forEach(b => { if (b.textContent === "Quitar grupo") b.click(); });
+check("quitar el grupo condicionante elimina la condición", [mc.groups.length, mc.groups[0].dependsOn], [1, null]);
+
+/* ---------- cambiar el artículo de una opción existente = opción nueva ---------- */
+const ctxBase = Object.assign({}, ctx, { baseline: base.manifest });
+const me = M.fromStructure(filas, "principal");
+M.render(host, me, ctxBase, {});
+let art = qa(".pc-group")[0].querySelectorAll(".pc-option")[0].querySelectorAll("select")[1];
+check("el selector del artículo existente parte del artículo actual", art.value, "p:p-mod");
+art.value = "p:p-drv"; art.dispatchEvent(new Event("change"));
+check("cambiar el artículo de una opción existente libera su clave (opción nueva)", me.groups[0].options[0].code, "");
+check("y elimina las condiciones que dependían de la opción antigua", me.groups[1].dependsOn, null);
+check("la clave nueva se genera a partir del nuevo artículo", (() => { const mf = M.toManifest(me); return mf.groups[0].options[0].code; })(), "driver");
+const me2 = M.fromStructure(filas, "principal");
+M.render(host, me2, ctxBase, {});
+let sel2 = qa(".pc-group")[0].querySelectorAll(".pc-option")[0].querySelectorAll("select")[0];
+sel2.value = "ajuste"; sel2.dispatchEvent(new Event("change"));
+check("cambiar el tipo de una opción existente también libera su clave", me2.groups[0].options[0].code, "");
+const me3 = M.fromStructure(filas, "principal");
+M.render(host, me3, ctxBase, {});
+art = qa(".pc-group")[0].querySelectorAll(".pc-option")[0].querySelectorAll("select")[1];
+art.value = "p:p-mod"; art.dispatchEvent(new Event("change"));
+check("volver a elegir el mismo artículo conserva la clave", me3.groups[0].options[0].code, "mod");
+const nuevaOpc = M.fromStructure(filas, "principal");
+nuevaOpc.groups[0].options.push(Object.assign(M.emptyOption(), { component: { product_id: "p-drv" } }));
+M.toManifest(nuevaOpc);
+const codigoNueva = nuevaOpc.groups[0].options[2].code;
+M.render(host, nuevaOpc, ctxBase, {});
+art = qa(".pc-group")[0].querySelectorAll(".pc-option")[2].querySelectorAll("select")[1];
+art.value = "p:p-mod"; art.dispatchEvent(new Event("change"));
+check("una opción nueva (que no está en la línea base) conserva su clave aunque cambie de artículo", nuevaOpc.groups[0].options[2].code, codigoNueva);
+
+/* ---------- diferencias y texto ---------- */
+const propuesta = JSON.parse(JSON.stringify(base.manifest));
+propuesta.groups[0].label = "Fuente de luz";                      // cambia
+propuesta.groups.push({ code: "nuevo", label: "Soporte", requirement: "opcional", choice: "una", options: [{ code: "pared", kind: "ajuste", setting_label: "Pared" }] }); // nuevo
+propuesta.groups = propuesta.groups.filter(g => g.code !== "lente"); // retirado
+check("diff: nuevo, cambia y retirado por clave", M.diff(base.manifest, propuesta).map(d => `${d.code}:${d.status}`), ["fuente:cambia", "nuevo:nuevo", "lente:retirado"]);
+check("diff: sin cambios", M.diff(base.manifest, base.manifest).map(d => d.status), ["igual", "igual"]);
+check("diff: sin manifiesto actual todo es nuevo", M.diff(null, base.manifest).map(d => d.status), ["nuevo", "nuevo"]);
+const nombres = { product: id => ({ "p-mod": "Módulo de luz", "p-drv": "Driver" })[id], proposal: id => id === "pr1" ? { name: "Lente nueva", status: "submitted" } : null };
+check("describeOption: componente con acabado, suministro y cantidad", M.describeOption(base.manifest.groups[0].options[0], nombres), "Componente «Módulo de luz» · acabado n1 · se solicita aparte · 1 por unidad");
+check("describeOption: cantidad a calcular", M.describeOption(base.manifest.groups[1].options[0], nombres), "Componente «Driver» · incluido · cantidad a calcular");
+check("describeOption: ajuste con características", M.describeOption(base.manifest.groups[0].options[1], nombres), "Ajuste «Cálida» · K: 2700");
+check("describeOption: componente nuevo sin aprobar", M.describeOption({ kind: "componente", component: { proposal_id: "pr1" }, supply: "aparte", quantity_mode: "fija", quantity: 2 }, nombres), "Componente nuevo «Lente nueva» (propuesta sin aprobar) · se solicita aparte · 2 por unidad");
+check("describeGroupRules: condición legible", M.describeGroupRules(base.manifest.groups[1], base.manifest.groups), "opcional, varias opciones, solo si se elige «Fuente» → «mod»");
+check("describeGroupRules: con nombres, el artículo y su suministro en lugar de la clave", M.describeGroupRules(base.manifest.groups[1], base.manifest.groups, nombres), "opcional, varias opciones, solo si se elige «Fuente» → «Módulo de luz (se solicita aparte)»");
+
+document.getElementById("sum").textContent = `Resultado: ${ok} correctos, ${ko} fallos`;
+document.getElementById("sum").className = ko ? "ko" : "ok";
+</script>

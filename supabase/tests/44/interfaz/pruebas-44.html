@@ -100,8 +100,8 @@ const DAMA = {
   check("C05 acabado por defecto / primero / ninguno", [defaultFinishCode(p), defaultFinishCode(mapProductRow({ ...DAMA, finish_options: [{ code: "9", name: "Gris" }] })), defaultFinishCode(mapProductRow({ ...DAMA, finish_options: [] }))], ["25", "9", null]);
   /* 5191497: se muestra el código comercial del acabado; un acabado desconocido no muestra su clave técnica. */
   check("C06 texto de línea", [finishLabel(p, "25"), lineDetailText(p, "11"), lineDetailText(p, null), finishLabel(null, "7")], ["3225-25 · Beige D1", "Ref. 3225 · Acabado: 3225-11 · Black", "Ref. 3225", "acabado no disponible"]);
-  /* Columnas que pide la web (PRODUCT_COLUMNS), no las de catalog_products: catalog_role (46-01) no se pide. */
-  check("C07 columnas del catálogo que pide la web (29, las 4 de iluminación al final)", PRODUCT_COLUMNS.split(", ").slice(-4).concat(PRODUCT_COLUMNS.split(", ").length), ["environment", "light_source", "electrical_connection", "color_temperature", 29]);
+  /* Columnas que pide la web (PRODUCT_COLUMNS): las 30 de catalog_products, con catalog_role (46-01) al final. */
+  check("C07 columnas del catálogo que pide la web (30: las 4 de iluminación y, al final, catalog_role de 46-01)", PRODUCT_COLUMNS.split(", ").slice(-5).concat(PRODUCT_COLUMNS.split(", ").length), ["environment", "light_source", "electrical_connection", "color_temperature", "catalog_role", 30]);
   PRODUCTS.push(p, { id: "pared-1", nombre: "Pared", categoria: "revestimientos", distribuidor: "spectro", marca: "x", disponibilidad: "en-stock", status: "active", acabadosOpciones: [] });
   /* 46: una tarjeta con herramientas profesionales solo ofrece añadir cuando se sabe que el producto no
      necesita configuración. Preparación: configuración cargada correctamente y sin grupos (carga real, catálogo estático). */

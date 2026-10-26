@@ -51,6 +51,8 @@
     line("l-p2", 2, "demo-pub", 1, A, 1),
     line("l-p3", 3, "demo-pub", 9, A, 1)
   ];
+  /* conNota: nota técnica en la línea viva l-sin y en la línea de la copia de la RFQ (con HTML y salto de línea). */
+  if (conf.conNota) lines.find(l => l.id === "l-sin").notes = "Montar a 2,40 m <b>no negrita</b>\nsegunda línea";
   if (conf.conPendiente) lines.push(line("l-x", 1, "demo-pub", 1, X, 5));
   const rfqs = [{ id: "rfq-p3", project_id: P(3), requester_user_id: UID, requester_company: "Estudio", status: "submitted", created_at: now,
     lines_snapshot: { version: 1, taken_at: now, project_id: P(3), distributors: [{ distributor_id: "spectro", distributor_name: "Spectro Lighting", lines: [{
@@ -59,6 +61,7 @@
       config_reasons: [], config_notices: [],
       items: [{ kind: "componente", group: "fuente", option: "comp", product_id: "demo-cot", product_name: "Módulo LED",
                 supply: "aparte", quantity: 1, quantity_mode: "fija", factor: 1, unit: "ud.", total_quantity: 4, quantity_status: "calculada" }] }] }] } }];
+  if (conf.conNota) rfqs[0].lines_snapshot.distributors[0].lines[0].notes = "Nota enviada <i>x</i>\nlínea 2";
 
   /* Resolución sintética (mismo criterio que mock-resolucion-46.js). n = número de consulta. */
   function resolve(configuration, n){
@@ -154,6 +157,11 @@
     }
     const hits = store.filter(row => matches(row, st));
     if (st.op === "update"){
+      /* errorNota: «line_note_archived» o «line_note_too_long» (como el trigger de 46-06): rechaza los UPDATE de notes. */
+      if (conf.errorNota && "notes" in st.payload){
+        window.__escrituras46.push({ tabla: name, op: "update-rechazado", ids: hits.map(r => r.id), cambios: JSON.parse(JSON.stringify(st.payload)) });
+        return { data: null, error: { code: conf.errorNota === "line_note_archived" ? "42501" : "23514", message: "rechazo del servidor", hint: conf.errorNota } };
+      }
       hits.forEach(row => Object.assign(row, st.payload));
       window.__escrituras46.push({ tabla: name, op: "update", ids: hits.map(r => r.id), cambios: JSON.parse(JSON.stringify(st.payload)) });
       return result(hits, st);

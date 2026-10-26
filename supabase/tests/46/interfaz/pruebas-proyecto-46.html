@@ -178,6 +178,49 @@ const total = () => { const m = summaryText().match(/Total preliminar: (US\$ [\d
       [m3[0], m3[1], m3.includes(COTIZACION), qty("l-p3"), w().__estadosCalls, writes()],
       ["Configuración enviada: Fuente: Módulo LED (enviado)", "Módulo LED: aparte · 4 ud. en total", true, "4", 0, []]);
 
+    /* ===== Nota técnica (texto libre opcional por línea) ===== */
+    await open("proyectos-detalle.html", `id=${P(1)}`, { conNota: true });
+    const noteIn = id => d().querySelector(`.dp-note-input[data-row-id="${id}"]`);
+    const noteBtn = id => d().querySelector(`.dp-note-save[data-row-id="${id}"]`);
+    const noteSt = id => d().getElementById(`dp-note-status-${id}`).textContent;
+    check("N1 proyecto activo: cada línea tiene su campo «Nota técnica (opcional)», con la nota guardada como texto (sin interpretar HTML) y el guardado desactivado mientras no haya cambios",
+      [rowIds().every(id => noteIn(id)), noteIn("l-sin").value, noteIn("l-a").value, noteBtn("l-sin").disabled, d().querySelector(".dp-note b"), d().querySelector(".dp-note__label").textContent],
+      [true, "Montar a 2,40 m <b>no negrita</b>\nsegunda línea", "", true, null, "Nota técnica (opcional)"]);
+    check("N1b la nota se distingue del resumen automático (bloque propio, no es una de sus líneas)",
+      [noteIn("l-sin").closest(".dp-note") !== null, noteIn("l-sin").closest(".sp-meta")], [true, null]);
+    noteIn("l-b").value = "Pedir muestra del acabado";
+    noteIn("l-b").dispatchEvent(new Event("input", { bubbles: true }));
+    check("N2 al escribir se activa «Guardar nota» solo en esa línea", [noteBtn("l-b").disabled, noteBtn("l-sin").disabled], [false, true]);
+    await click(noteBtn("l-b"), 600);
+    check("N3 guardar: un único UPDATE de esa fila que solo cambia notes (nunca cantidad, unidad ni configuración); estado «Nota guardada.»; el valor se conserva",
+      [writes().filter(x => x[0] === "project_products"), noteSt("l-b"), noteIn("l-b").value, noteBtn("l-b").disabled, qty("l-b")],
+      [[["project_products", "update", ["l-b"], { notes: "Pedir muestra del acabado" }]], "Nota guardada.", "Pedir muestra del acabado", true, "1"]);
+    noteIn("l-b").value = "   ";
+    noteIn("l-b").dispatchEvent(new Event("input", { bubbles: true }));
+    await click(noteBtn("l-b"), 600);
+    check("N4 vaciar la nota la elimina (notes = null) y lo comunica",
+      [writes().slice(-1)[0], noteSt("l-b"), noteIn("l-b").value], [["project_products", "update", ["l-b"], { notes: null }], "Nota eliminada.", ""]);
+    await click(d().querySelector('.dp-qty-increment[data-row-id="l-sin"]'), 600);
+    check("N5 cambiar la cantidad no borra la nota de la línea", [noteIn("l-sin").value, qty("l-sin")], ["Montar a 2,40 m <b>no negrita</b>\nsegunda línea", "3"]);
+
+    for (const [hint, texto] of [["line_note_archived", "Este proyecto está archivado: la nota ya no se puede modificar."], ["line_note_too_long", "La nota admite como máximo 1000 caracteres."]]){
+      await open("proyectos-detalle.html", `id=${P(1)}`, { errorNota: hint });
+      noteIn("l-b").value = "otra nota";
+      noteIn("l-b").dispatchEvent(new Event("input", { bubbles: true }));
+      await click(noteBtn("l-b"), 600);
+      check(`N5b rechazo del servidor (${hint}): mensaje claro, el campo conserva lo escrito y se puede reintentar; no se pierde ni se cambia nada más`,
+        [noteSt("l-b"), noteIn("l-b").value, noteBtn("l-b").disabled, writes().map(x => x[1])], [texto, "otra nota", false, ["update-rechazado"]]);
+    }
+
+    await open("proyectos-detalle.html", `id=${P(3)}`, { conNota: true });
+    check("N6 archivado con copia: la nota enviada solo se lee (sin campo ni botón), como texto y rotulada «Nota del profesional»",
+      [d().querySelectorAll(".dp-note-input, .dp-note-save").length, d().querySelector(".dp-note--ro .dp-note__label").textContent, d().querySelector(".dp-note--ro .dp-note__text").textContent, d().querySelector(".dp-note--ro i"), writes()],
+      [0, "Nota del profesional", "Nota enviada <i>x</i>\nlínea 2", null, []]);
+    const verSol = d().querySelector(".dp-rfq__toggle");
+    await click(verSol, 400);
+    check("N7 «Ver lo solicitado»: la copia de la RFQ muestra la nota como texto, sin interpretar HTML",
+      [d().querySelector(".dp-rfq__body .dp-note__text").textContent, d().querySelector(".dp-rfq__body .dp-note i")], ["Nota enviada <i>x</i>\nlínea 2", null]);
+
     /* ===== Resumen ===== */
     await open("proyectos-resumen.html", `id=${P(1)}`);
     const subs = [...d().querySelectorAll("#ps-table-body tr")].map(tr => [...tr.querySelectorAll(".ps-product-sub")].map(s => s.textContent.trim()));
