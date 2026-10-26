@@ -1,6 +1,6 @@
 # Punto 46 · Componentes y accesorios: decisiones y estado de entrega
 
-Documento vivo de entrega. Sin commit hasta que se autorice. Pruebas solo en `mobau-pruebas` con datos sintéticos; nada de esto se ha aplicado en Production.
+Documento vivo de entrega. Versionado en local; el push está pendiente de autorización. Las pruebas se hicieron solo en `mobau-pruebas` con datos sintéticos. En Production están aplicadas y registradas las migraciones 46-01 a 46-06; la web de esta entrega aún no está publicada.
 
 ## Decisiones de producto
 
@@ -31,13 +31,18 @@ Documento vivo de entrega. Sin commit hasta que se autorice. Pruebas solo en `mo
 - Corregido: la clave de una opción cuyo artículo es un componente nuevo salía de la etiqueta «(nuevo, pendiente de aprobación)».
 - Corregido: la condición de un grupo mostraba la clave técnica de la opción; ahora el nombre del artículo o del ajuste con su suministro.
 
-## Migración 46-06 · protección servidor de la nota (aplicada solo en mobau-pruebas, NO en Production)
+## Migración 46-06 · protección servidor de la nota (aplicada y registrada en Production el 2026-10-26)
 
 - Archivos: `supabase/migrations/20261101140000_46_06_nota_linea.sql` (MD5 `dafce2250e03bdcc7258dcb78ab876f5`), recuperación `supabase/rollback/20261101140000_46_06_nota_linea.rollback.sql` (MD5 `c8a4e05856a45af4e82433042a5ecc4a`), ensayo `supabase/tests/P46_06_ensayo.sql` (rollback-only).
 - Qué hace: un trigger `BEFORE UPDATE OF notes` en `project_products` con función nueva `project_products_note_guard()`. Solo actúa si `notes` cambia: rechaza el cambio si el proyecto está archivado (42501, `line_note_archived`) y rechaza un valor nuevo de más de 1000 caracteres (23514, `line_note_too_long`). No toca políticas, columnas ni otros triggers.
 - Impacto: ninguna otra operación. Insert, delete, cantidad, envío de solicitudes y reactivar un proyecto no escriben `notes`. Una nota antigua más larga de 1000 caracteres no se trunca ni se borra, y actualizar otras columnas de su línea sigue funcionando (el ensayo lo prueba con una nota simulada de 1500).
 - Ensayo en mobau-pruebas: OK=11, FALLO=0 (guardar en activo; rechazo en archivado; límite 1000/1001; notas antiguas largas; copias de las dos RFQ y estado idénticos al final). Revertido por diseño; verificado después con lectura independiente. Mocks de interfaz: mensajes claros en los dos rechazos.
 - La migración no incluye el registro en `schema_migrations`: va aparte, tras confirmar su COMMIT.
+- **Production (`mobau-pilot`, `skcoxtdppdcietgojdal`), aprobado por separado:**
+  - Aplicada sin modificaciones (SHA-256 `7b2175df94bdfc9ff15ea647693b7261ca674d2880819142e40b5b7c8530d7ee`), en una sola transacción, como `postgres`, sin errores.
+  - Verificado por lectura: trigger `trg_project_products_20_note` presente y habilitado junto al trigger de configuración; función `project_products_note_guard()` presente, sin `SECURITY DEFINER` y con `search_path` vacío; sin permiso de ejecución para `public`, `anon` ni `authenticated`; datos sin cambios (0 notas, 18 líneas, 8 proyectos, 2 RFQ, 21 propuestas, 31 productos).
+  - Registrada después, aparte (`20261101140000 · 46_06_nota_linea`, solo versión y nombre, como 46-05): 53 entradas, la versión aparece una sola vez y es la última. Esquema y registro coinciden.
+  - No se ha creado ni editado ninguna nota real en Production.
 
 ## Incidencias abiertas
 
@@ -68,18 +73,46 @@ La comprobación visual del bloqueo de «Solicitar cotización» por línea pend
 - Qué demuestra: que cada script, ejecutado desde el estado que deja la migración siguiente, restaura el estado anterior, y que la cadena completa vuelve al estado previo a 46-01. No demuestra cada script aislado desde un estado arbitrario, ni la pérdida de datos propia de revertir (se ejecuta con datos sintéticos, no con los de Production).
 - Antes de crearlo hay que confirmar el coste con la plataforma y comprobar el límite de proyectos del plan gratuito (la organización ya tiene dos).
 
-## Propuesta de entrega (sin ejecutar)
+## Respaldo previo a la publicación: PARCIAL (declaración de alcance)
 
-**Commit sugerido (por orden, un mensaje de una línea cada uno):**
-1. Producto: `feat(componentes): formulario de distribuidor y moderación de propuestas con componentes, vista de solicitudes enviadas, nota técnica de línea y configurador reservado a Individual y Estudio` — `catalogo.html`, `componentes-propuesta.js`, `distribuidor-productos.html`, `distribuidor-propuestas.html`, `distribuidores.html`, `moderacion-acceso.js`, `moderacion-propuesta.html`, `moderacion.html`, `producto.html`, `proyectos-data.js`, `proyectos-detalle.html`, `script.js`, `scripts/pages-manifest.txt`, `seleccion-data.js`.
-2. Pruebas: `test(componentes): ensayos de interfaz de componentes, nota técnica y Gratis` — `supabase/tests/44/interfaz/pruebas-44.html`, `supabase/tests/46/interfaz/*`, `supabase/tests/P46_06_ensayo.sql`.
-3. Base y documentación: `chore(supabase): versionar 46-06 nota técnica con su recuperación y la documentación de entrega` — `supabase/migrations/20261101140000_46_06_nota_linea.sql`, `supabase/rollback/20261101140000_46_06_nota_linea.rollback.sql`, `supabase/46-DESPLIEGUE.md`.
+- Es una salvaguarda puntual para esta publicación, lo mejor disponible hoy. **No es una copia completa del proyecto ni un plan de continuidad suficiente a medio plazo.**
+- Procedimiento: `~/mobau-respaldo-produccion/respaldo.sh` (fuera del repositorio), un volcado consistente de solo lectura de `public`, `auth`, `storage` (solo metadatos), `mobau_private` y `supabase_migrations`, con estructura, datos y permisos de objetos.
+- **Excluye:** los archivos binarios de Storage (133 objetos, unos 102 MB en `productos-imagenes` y `productos-archivos`), definiciones y contraseñas de roles, los esquemas gestionados por la plataforma, los ajustes de Auth y del proyecto, y la configuración de Cloudflare.
+- **Estado de restauración: no restaurado y no probado.** Hasta que se restaure en un entorno aislado, solo acredita que el volcado se generó y es legible (lista de contenido y recuento de filas por tabla), no que sirva para reconstruir el servicio.
+- Contiene datos reales de Auth (correos y hashes de contraseña): no se versiona, no se comparte y queda con permisos solo del propietario.
+- Verificación en vivo de Production antes de aplicar 46-06 (2026-10-26, solo lectura): 52 migraciones registradas con 46-01 a 46-05 y sin 46-06; la columna `notes` existía, el trigger y la función no; 0 líneas con nota.
+- **Respaldo generado y comprobado, sin restauración probada.** Carpeta local `~/mobau-respaldo-produccion/2026-10-26_2245` (fuera del repositorio y de la web; archivos con permisos solo del propietario).
+  - Archivos: `produccion_completo.dump` (748 471 bytes, SHA-256 `b50a1d801d618362c3eadafae9477db2224d7035d179b00cf58c65b44e0f2cd0`; «completo» es solo el nombre del archivo, **su alcance sigue siendo parcial**, como se detalla arriba; el nombre y el contenido no se han modificado), `produccion_estructura.sql`, `contenido_del_volcado.txt`, `filas_por_tabla_en_el_volcado.tsv` y `MANIFIESTO.txt`.
+  - Comprobado: las huellas coinciden con el manifiesto; el volcado se lista con `pg_restore --list` (961 entradas, 62 tablas con datos); los conteos de las 38 tablas con filas coinciden con Production, contrastados por lectura. Las 24 tablas vacías del volcado no se contrastaron. Los conteos comparan cantidades, no el contenido de las filas.
+  - Se tomó antes de aplicar 46-06 (no contiene su trigger ni su función). Cada conexión propia fue de solo lectura y no se intentó ninguna escritura.
+  - **No restaurado y no probado:** no se ha cargado en ningún entorno.
+- Pendiente tras la publicación (no bloquea esta): plan de madurez operativa, con copias recurrentes de base y Storage, restauración del servicio completo probada en un entorno aislado, documentación de la configuración crítica (Supabase, Cloudflare, variables, accesos, reversión) y calendario de comprobaciones de restauración.
 
-**Fuera del commit:** `.claude/`, `MOBAU_CONTEXT.md`, `images/acceso/alternativa-crear/`, `supabase/registro_septiembre/` (artefactos locales). Todo lo de `~/mobau-pruebas-estructura/` y `~/mobau-copia-pruebas/` queda fuera del repositorio.
+## Estado de entrega y publicación (2026-10-26)
 
-**Despliegue en Production (cuando se decida):**
-1. La web solo necesita 46-06 si se quiere la protección de la nota; la interfaz funciona sin ella, y muestra el motivo si el servidor rechaza.
-2. Orden: aplicar 46-06 completa (como `postgres`, una transacción), confirmar el COMMIT por lectura (trigger y función presentes) y registrar la migración en una llamada aparte; después publicar la web (`pages-build.sh`, 52 archivos).
-3. Comprobar en la web publicada: guardar una nota en un proyecto activo y ver el rechazo en uno archivado.
+**Commits locales, sin push (tres por delante de `origin/master`):**
+1. `4701fea` · producto: formulario y moderación de componentes, solicitudes enviadas, nota técnica de línea, productos solo componente y configurador reservado a Individual y Estudio (14 archivos).
+2. `415f129` · pruebas de interfaz y ensayo de 46-06 (7 archivos).
+3. `c21a4d4` · migración y recuperación de 46-06 y este documento.
 
-**Recuperación:** web, volver al despliegue anterior de Pages. Base, `20261101140000_46_06_nota_linea.rollback.sql` (quita trigger y función, no toca datos), registrada como migración nueva. Los scripts inversos 46-01 a 46-06 siguen sin validar en un destino desechable.
+**Production:**
+- Base de datos: 46-06 aplicada y registrada (53 migraciones). 46-01 a 46-05 ya lo estaban.
+- **Web: pendiente de publicar.** Production sirve `19c4d70`. Cloudflare Pages construye con `bash scripts/pages-build.sh` y publica `dist` (52 archivos); la rama de producción es `master` con despliegues automáticos, así que **cada push a `master` publica automáticamente**. Cualquier cambio de este documento que se incluya en el push también dispara el build.
+- Hasta publicar la web, la protección de la nota existe en el servidor pero la interfaz de notas no está disponible. La web anterior no escribe `notes`, así que la combinación es compatible.
+
+**Publicación de la web (cuando se apruebe, aparte):** commit del documento, `git push origin master` y esperar el despliegue en verde en Cloudflare.
+
+**Comprobación posterior sin modificar datos:** despliegue en verde con el commit esperado; el catálogo carga; la ficha con configuración sigue abierta con Individual y Gratis no ve el panel; «Mis proyectos» muestra «Solicitudes enviadas» con las RFQ existentes; por lectura, 53 migraciones, trigger presente y mismos conteos. La prueba de una nota real se hará solo tras acordar proyecto y contenido.
+
+**Reversión:** web, volver en Cloudflare (Deployments) al despliegue `19c4d70`, o `git revert` y push. Base, `20261101140000_46_06_nota_linea.rollback.sql` (quita trigger y función sin tocar datos; sin validar en un destino desechable) o corrección hacia delante, registrando cualquier cambio como migración nueva. Datos: solo existe el respaldo parcial, sin restauración probada.
+
+**Dentro del repositorio, sin seguimiento y excluidos de los commits** (siguen físicamente en la carpeta del proyecto): `.claude/`, `MOBAU_CONTEXT.md`, `images/acceso/alternativa-crear/` y `supabase/registro_septiembre/`.
+
+**Directorios externos al repositorio** (bajo `~/`, nunca en la carpeta del proyecto ni en la web): `~/mobau-pruebas-estructura/`, `~/mobau-copia-pruebas/` y `~/mobau-respaldo-produccion/`.
+
+## Pendientes operativos (no resueltos)
+
+- **Respaldos recurrentes** de base de datos y de archivos de Storage (133 objetos, unos 102 MB, que el respaldo actual no incluye), con una opción de recuperación verificada de verdad en el plan actual de Supabase (hoy se parte de que el plan Free no ofrece copias automáticas; sin comprobar con el proveedor).
+- **Restauración del servicio completo probada desde respaldos**, en un entorno aislado: base de datos, archivos de Storage y la configuración necesaria (Auth, roles, ajustes de Supabase y Cloudflare). Hoy no hay respaldo de Storage ni de configuración y el volcado de la base no se ha restaurado nunca.
+- **Validación de los scripts inversos 46-01 a 46-06 en un destino desechable**, como criterio de aceptación independiente de la restauración anterior y también pendiente (sin destino disponible; no se ejecutó ninguno en ningún entorno). Su resultado no sustituye a la restauración del servicio ni al revés.
+- **Documentación de la configuración crítica** (Supabase, Cloudflare, variables, accesos y reversión) y **calendario de comprobaciones de restauración**, no solo de creación de copias.
