@@ -702,7 +702,7 @@ runWithCatalog(() => {
      subcategorías reales. */
   function getValidSubcategorias(){
     const cats = state.categoria;
-    const relevant = cats.size === 0 ? PRODUCTS : PRODUCTS.filter(p => cats.has(p.categoria));
+    const relevant = cats.size === 0 ? commercialProducts() : commercialProducts().filter(p => cats.has(p.categoria));
     return [...new Set(relevant.map(p => p.subcategoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
   }
 
@@ -758,7 +758,7 @@ runWithCatalog(() => {
   function getGroupOptions(group){
     const seen = new Set();
     const list = [];
-    PRODUCTS.forEach(product => {
+    commercialProducts().forEach(product => {
       const code = product[group];
       if (!seen.has(code)){
         seen.add(code);
@@ -962,7 +962,7 @@ runWithCatalog(() => {
   }
 
   function render(){
-    const { results: searched, fuzzyTerm } = searchProducts(PRODUCTS, state.search);
+    const { results: searched, fuzzyTerm } = searchProducts(commercialProducts(), state.search);
     const hasActiveSearch = normalizeSearchText(state.search).length >= 2;
     const filtered = sortList(searched.filter(matchesFilters), hasActiveSearch);
     /* La opción predeterminada dice el orden que se aplica: relevancia con
@@ -1086,6 +1086,10 @@ runWithCatalog(() => {
           const product = PRODUCTS.find(p => p.id === productId);
           if (!product){
             showToast("No se pudo añadir el producto. Intenta de nuevo.");
+            return;
+          }
+          if (!isCommercialProduct(product)){
+            showToast("Este producto solo se ofrece como componente.");
             return;
           }
           const configState = cardSelectState(product);

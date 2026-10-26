@@ -36,6 +36,7 @@ perfil-distribuidor.html
 perfil-profesional.js
 planes.html
 product-lifecycle.js
+componentes-propuesta.js
 producto-archivos.js
 producto.html
 proyecto.html

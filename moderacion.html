@@ -163,7 +163,8 @@
     const name = isCreate ? (changes.name || "Producto nuevo sin nombre") : (productNames.get(p.product_id) || p.product_id || "Producto");
 
     const title = M.el("div", "mod-row-title");
-    title.append(M.chip(isCreate ? "Producto nuevo" : (isRepublish ? "Republicación" : "Cambio"), isCreate || isRepublish ? "wait" : "neutral"));
+    const isNewComponent = isCreate && p.proposed_components && p.proposed_components.catalog_role === "componente";
+    title.append(M.chip(isNewComponent ? "Componente nuevo" : (isCreate ? "Producto nuevo" : (isRepublish ? "Republicación" : "Cambio")), isCreate || isRepublish ? "wait" : "neutral"));
     if ($("mod-status").value !== "submitted"){
       const st = M.STATUS[p.status] || { label: p.status, kind: "neutral" };
       title.append(M.chip(st.label, st.kind));
@@ -173,7 +174,12 @@
     const fields = Object.keys(changes).length + (p.proposed_new_subcategory ? 1 : 0);
     const parts = [companies.get(p.distributor_id) || p.distributor_id];
     if (fields) parts.push(`${fields} ${fields === 1 ? "campo" : "campos"}`);
-    if (p.proposed_price_status) parts.push(fields ? "incluye precio" : "solo precio");
+    const hasComponents = !!p.proposed_components;
+    if (p.proposed_price_status) parts.push(fields || hasComponents ? "incluye precio" : "solo precio");
+    /* «componentes» solo si declara grupos; si solo declara su uso en el catálogo, no (un componente nuevo ya lo dice su chip). */
+    const hasGroups = hasComponents && Array.isArray(p.proposed_components.groups);
+    if (hasGroups) parts.push(fields || p.proposed_price_status ? "incluye componentes" : "solo componentes");
+    else if (hasComponents && p.proposed_components.catalog_role && !isNewComponent) parts.push(fields || p.proposed_price_status ? "incluye el uso en el catálogo" : "solo el uso en el catálogo");
     parts.push(`versión ${p.version}`);
     if (p.submitted_at) parts.push(`enviada el ${M.formatDate(p.submitted_at)}`);
     if (p.reviewed_at && p.status !== "submitted") parts.push(`revisada el ${M.formatDate(p.reviewed_at)}`);
@@ -218,7 +224,7 @@
     const company = $("mod-company").value;
     try {
       let q = supabaseClient.from("product_proposals")
-        .select("id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, proposed_price_status, proposed_new_subcategory, submitted_at, reviewed_at")
+        .select("id, proposal_kind, product_id, distributor_id, status, version, proposed_changes, proposed_price_status, proposed_new_subcategory, proposed_components, submitted_at, reviewed_at")
         .order("submitted_at", { ascending: true, nullsFirst: false })
         .limit(LIMIT);
       q = status === "todas" ? q.in("status", STATES) : q.eq("status", STATES.includes(status) ? status : "submitted");

@@ -192,6 +192,14 @@
         <p class="pp-media-status" id="pf-media-status" role="status" aria-live="polite"></p>
       </fieldset>
 
+      <fieldset id="pf-components-fields">
+        <legend>Componentes y accesorios <span class="hint">(opcional)</span></legend>
+        <p class="card-meta" style="margin:0 0 12px;">Indica para qué se usa este producto y, si procede, qué piezas, accesorios o ajustes puede elegir el cliente. Mobau organiza lo que declaras; no certifica la compatibilidad técnica.</p>
+        <p class="card-meta" id="pf-components-parent" style="margin:0 0 12px;" hidden></p>
+        <div class="field full"><label for="pf-role">Uso en el catálogo</label><select id="pf-role"></select><span class="pp-current" id="pf-role-help" style="display:block;"></span></div>
+        <div id="pf-components-editor"></div>
+      </fieldset>
+
       <fieldset id="pf-price-fields">
         <legend>Precio</legend>
         <p class="card-meta" id="pf-price-current" style="margin:0 0 12px;"></p>
@@ -265,6 +273,7 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script src="producto-archivos.js"></script>
+<script src="componentes-propuesta.js"></script>
 <script>
 /* Formulario de propuesta de producto (38-C). No es una lista ni un
    historial: solo se llega desde Mis productos (distribuidor-productos.html)
@@ -364,6 +373,14 @@
   let mediaBaseline = null;  // lo que el producto ya tiene (cambio), en el mismo formato
   let assetsById = new Map();
   let uploading = 0;
+  /* Punto 46: componentes y accesorios. */
+  const presetParentId = params.get("padre");      // propuesta que pidió crear este componente nuevo
+  const presetRole = params.get("rol");            // «componente»: alta de un componente desde otra propuesta
+  const presetNewComponent = params.get("componente"); // de vuelta en la propuesta padre, con el componente recién guardado
+  let finishesByProduct = new Map();
+  let compModel = MobauComponentes.emptyModel();
+  let compBaseline = null;  // cambio: { role, manifest } actuales del producto; null en un alta
+  let compCtx = { products: [], finishesByProduct, proposals: [], selfProductId: null };
 
   function showOnly(id){
     ["pp-loading", "pp-load-error", "pp-form-view"].forEach(x => { $(x).hidden = x !== id; });
@@ -856,6 +873,132 @@
     $("pf-category-first").hidden = !needsCategory;
   }
 
+  /* ---------- punto 46: componentes y accesorios ---------- */
+  const ROLE_HELP = {
+    principal: "Se muestra como producto en el catálogo.",
+    componente: "No se muestra como producto por sí solo: solo se ofrece dentro de otro producto, como pieza o accesorio.",
+    ambos: "Se muestra en el catálogo y también puede ofrecerse como pieza o accesorio de otro producto."
+  };
+
+  /* Estructura actual del producto (lectura propia: grupos y opciones activas o no). */
+  async function loadStructure(id){
+    const { data: groups, error: groupsError } = await supabaseClient.from("product_component_groups")
+      .select("id, product_id, code, label, requirement, choice, depends_on_option_id, status, sort_order").eq("product_id", id);
+    if (groupsError) throw groupsError;
+    let options = [];
+    if (groups.length){
+      const { data, error } = await supabaseClient.from("product_component_options")
+        .select("id, group_id, code, kind, component_product_id, component_finish_code, setting_label, supply, quantity, quantity_mode, attributes, status, sort_order")
+        .in("group_id", groups.map(g => g.id));
+      if (error) throw error;
+      options = data;
+    }
+    return { groups, options };
+  }
+
+  function buildComponentsCtx(){
+    compCtx = {
+      selfProductId: mode === "update" ? productId : null,
+      products: products.map(p => ({ id: p.id, name: p.name, catalog_role: p.catalog_role })),
+      finishesByProduct,
+      /* Altas propias de componentes aún sin aprobar (no la propuesta que se está editando). */
+      proposals: proposals
+        .filter(p => kindOf(p) === "create" && (!editing || p.id !== editing.id) && p.proposed_components && ["componente", "ambos"].includes(p.proposed_components.catalog_role))
+        .map(p => ({ id: p.id, name: (p.proposed_changes || {}).name || "" }))
+    };
+    MobauComponentes.setContext(compCtx);
+  }
+
+  function renderComponents(){
+    MobauComponentes.render($("pf-components-editor"), compModel, compCtx, { onCreateComponent: createComponentFlow });
+  }
+
+  /* Modelo del editor: la estructura actual del producto con la propuesta encima (cambio), o la propuesta (alta). */
+  function initComponents(proposal, structure){
+    buildComponentsCtx();
+    const saved = proposal && proposal.proposed_components;
+    if (mode === "update"){
+      const role = productById(productId).catalog_role || "principal";
+      const rows = structure || { groups: [], options: [] };
+      compBaseline = { role, manifest: MobauComponentes.toManifest(MobauComponentes.fromStructure(rows, role)) };
+      compModel = MobauComponentes.fromStructure(rows, role);
+      if (saved && saved.catalog_role) compModel.role = saved.catalog_role;
+      if (saved && Array.isArray(saved.groups)) compModel.groups = MobauComponentes.fromManifest({ groups: saved.groups }).groups;
+    } else {
+      compBaseline = null;
+      compModel = saved ? MobauComponentes.fromManifest(saved, "principal") : MobauComponentes.emptyModel();
+      if (!saved && presetRole === "componente") compModel.role = "componente";
+    }
+    const select = $("pf-role");
+    select.replaceChildren(...MobauComponentes.ROLES.map(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }));
+    select.value = compModel.role;
+    $("pf-role-help").textContent = ROLE_HELP[compModel.role] || "";
+    compCtx.baseline = compBaseline ? compBaseline.manifest : null;
+    const note = $("pf-components-parent");
+    if (mode === "create" && presetParentId){
+      note.textContent = "Estás creando un componente para otra propuesta tuya. Al guardarlo (o enviarlo) volverás a ella para elegirlo en una opción.";
+      note.hidden = false;
+    } else if (presetNewComponent){
+      const created = compCtx.proposals.find(p => p.id === presetNewComponent);
+      note.textContent = created
+        ? `Guardaste el componente nuevo «${created.name || "sin nombre"}». Elígelo en la opción de un grupo; mientras no se apruebe, Mobau no aprobará esta propuesta.`
+        : "";
+      note.hidden = !created;
+    } else {
+      note.hidden = true;
+    }
+    renderComponents();
+  }
+
+  /* Decisión E: el componente nuevo se crea con este mismo formulario (uso «componente»). Antes se guarda
+     como borrador la propuesta actual, para conservarla y volver a ella. */
+  async function createComponentFlow(){
+    const errorEl = $("pf-error");
+    errorEl.style.display = "none";
+    if (uploading){ errorEl.textContent = "Espera a que terminen de subirse los archivos."; errorEl.style.display = "block"; return; }
+    const values = readProposal();
+    const problem = validate(values, { submit: false });
+    if (problem){
+      errorEl.textContent = `Antes de crear el componente, corrige esto: ${problem}`;
+      errorEl.style.display = "block";
+      return;
+    }
+    const buttons = [$("pf-save-btn"), $("pf-submit-btn")];
+    buttons.forEach(b => { b.disabled = true; });
+    const row = await persistDraft(values, (message) => {
+      buttons.forEach(b => { b.disabled = false; });
+      errorEl.textContent = message;
+      errorEl.style.display = "block";
+    });
+    if (!row) return;
+    window.location.assign(`distribuidor-propuestas.html?nueva=1&rol=componente&padre=${encodeURIComponent(row.id)}`);
+  }
+
+  /* Guarda (inserta o actualiza) la propuesta como borrador. Devuelve la fila o null (tras avisar con fail). */
+  async function persistDraft(values, fail){
+    let row = editing;
+    if (!row){
+      const insert = mode === "create"
+        ? { proposal_kind: "create", ...values }
+        : { proposal_kind: "update", product_id: productId, ...values };
+      const { data, error } = await supabaseClient.from("product_proposals").insert(insert).select().single();
+      if (error || !data){ fail(friendlyError(error)); return null; }
+      row = data;
+    } else {
+      const { data, error } = await supabaseClient.from("product_proposals")
+        .update(values).eq("id", row.id).select().single();
+      if (error || !data){ fail(friendlyError(error)); return null; }
+      row = data;
+    }
+    editing = row;
+    return row;
+  }
+
   /* Abre el formulario con el tipo fijo: una propuesta existente (editable)
      o una nueva de producto nuevo o de cambio del producto indicado. */
   async function openForm({ proposal = null, kind, product = null }){
@@ -872,6 +1015,7 @@
     }
     colorTempToUi($("pf-color-temp").value);
     await loadMedia(proposal, mode === "update" ? productById(productId) : null);
+    initComponents(proposal, mode === "update" ? await loadStructure(productId) : null);
     applyTemplate();
     updateWarning();
     showOnly("pp-form-view");
@@ -939,7 +1083,8 @@
       proposed_price_status: priceStatus,
       proposed_price_amount: priceStatus && rawAmount !== "" ? Number(rawAmount) : null,
       internal_note: norm($("pf-note").value),
-      proposed_media: readMedia()
+      proposed_media: readMedia(),
+      proposed_components: MobauComponentes.buildProposed(compModel, compBaseline, compCtx)
     };
   }
 
@@ -997,6 +1142,8 @@
     if (values.proposed_price_status === "published" && values.proposed_price_amount === null){
       return "Para proponer un precio publicado indica el importe en USD.";
     }
+    const componentsProblem = MobauComponentes.validate(compModel, compCtx, { submit });
+    if (componentsProblem) return componentsProblem;
     /* Un cambio solo exige referencia y portada si toca los archivos. */
     return validateMedia(values.proposed_media, { submit: submit && (mode === "create" || !!values.proposed_media) });
   }
@@ -1031,7 +1178,7 @@
     const values = readProposal();
     const problem = validate(values, { submit });
     if (problem) return fail(problem);
-    if (mode === "update" && submit && !Object.keys(values.proposed_changes).length && !values.proposed_new_subcategory && !values.proposed_price_status && !values.proposed_media){
+    if (mode === "update" && submit && !Object.keys(values.proposed_changes).length && !values.proposed_new_subcategory && !values.proposed_price_status && !values.proposed_media && !values.proposed_components){
       return fail("La propuesta no contiene ningún cambio.");
     }
 
@@ -1039,20 +1186,8 @@
     buttons.forEach(b => { b.disabled = true; });
     const done = () => buttons.forEach(b => { b.disabled = false; });
 
-    let row = editing;
-    if (!row){
-      const insert = mode === "create"
-        ? { proposal_kind: "create", ...values }
-        : { proposal_kind: "update", product_id: productId, ...values };
-      const { data, error } = await supabaseClient.from("product_proposals").insert(insert).select().single();
-      if (error || !data){ done(); return fail(friendlyError(error)); }
-      row = data;
-    } else {
-      const { data, error } = await supabaseClient.from("product_proposals")
-        .update(values).eq("id", row.id).select().single();
-      if (error || !data){ done(); return fail(friendlyError(error)); }
-      row = data;
-    }
+    const row = await persistDraft(values, (message) => { done(); fail(message); });
+    if (!row) return;
 
     if (submit){
       const { data, error } = await supabaseClient.from("product_proposals")
@@ -1065,6 +1200,11 @@
       }
     }
 
+    /* Un componente nuevo creado desde otra propuesta: se vuelve a ella para elegirlo en una opción. */
+    if (mode === "create" && presetParentId){
+      window.location.replace(`distribuidor-propuestas.html?propuesta=${encodeURIComponent(presetParentId)}&componente=${encodeURIComponent(row.id)}`);
+      return;
+    }
     backToProducts(submit ? "enviada" : "borrador");
   }
 
@@ -1111,7 +1251,7 @@
 
       const [productsRes, categoriesRes, proposalsRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id, environment, light_source, electrical_connection, color_temperature")
+          .select("id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, reference_code, cover_asset_id, environment, light_source, electrical_connection, color_temperature, catalog_role")
           .eq("distributor_id", distributorId).order("name"),
         supabaseClient.from("categories").select("id, name, subcategories").order("name"),
         supabaseClient.from("product_proposals").select("*").in("status", OPEN).order("updated_at", { ascending: false })
@@ -1129,6 +1269,18 @@
           .from("product_prices").select("product_id, price_amount, price_status").in("product_id", products.map(p => p.id));
         if (priceError) throw priceError;
         prices = new Map(priceRows.map(r => [r.product_id, r]));
+      }
+
+      /* Punto 46: acabados de los productos propios (para elegir el acabado de un componente). */
+      finishesByProduct = new Map();
+      if (products.length){
+        const { data: finishRows, error: finishError } = await supabaseClient
+          .from("product_finishes").select("product_id, code, name, sort_order").in("product_id", products.map(p => p.id)).order("sort_order");
+        if (finishError) throw finishError;
+        finishRows.forEach(f => {
+          if (!finishesByProduct.has(f.product_id)) finishesByProduct.set(f.product_id, []);
+          finishesByProduct.get(f.product_id).push({ code: f.code, name: f.name });
+        });
       }
 
       fillSelect($("pf-category"), categories.map(c => [c.id, c.name]), "Selecciona una categoría");
@@ -1159,6 +1311,10 @@
     }
   }
 
+  $("pf-role").addEventListener("change", () => {
+    compModel.role = $("pf-role").value;
+    $("pf-role-help").textContent = ROLE_HELP[compModel.role] || "";
+  });
   $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); applyTemplate(); updateWarning(); });
   document.querySelectorAll('input[name="pf-ct-mode"]').forEach(r => r.addEventListener("change", () => { colorTempDirty = true; showColorTempMode(); }));
   ["pf-ct-values", "pf-ct-from", "pf-ct-to"].forEach(id => $(id).addEventListener("input", () => { colorTempDirty = true; }));

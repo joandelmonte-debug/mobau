@@ -97,6 +97,7 @@
 <script src="moderacion-acceso.js"></script>
 <script src="product-lifecycle.js"></script>
 <script src="producto-archivos.js"></script>
+<script src="componentes-propuesta.js"></script>
 <script>
 /* Detalle de una propuesta (39). Solo lee después de que la puerta
    confirme { admin: true, aal2: true } en el servidor. La ÚNICA escritura
@@ -121,6 +122,7 @@
   let ctx = null;          // datos de la propuesta cargada
   let busy = false;        // una decisión en curso
   let approveBlocked = false;
+  let componentsPending = false;  // punto 46: algún componente nuevo de la propuesta aún no está aprobado
   let actionsLocked = false;
   let prefill = null;      // texto para «Solicitar cambios» tras un conflicto
   let userId = null;       // quien modera (para no ofrecer moderar una republicación propia)
@@ -225,7 +227,9 @@
     section.append(M.el("h2", "", p.proposal_kind === "create" ? "Datos del producto nuevo" : "Cambios propuestos"));
     const keys = proposedKeys(p);
     if (!keys.length){
-      section.append(M.el("p", "card-meta", "Sin cambios de datos: la propuesta solo afecta al precio."));
+      section.append(M.el("p", "card-meta", p.proposed_components && !p.proposed_price_status && !p.proposed_media
+        ? "Sin cambios de datos: la propuesta solo afecta a los componentes y accesorios (ver abajo)."
+        : "Sin cambios de datos: la propuesta solo afecta al precio."));
       return { section, conflicts: [] };
     }
     const conflicts = [];
@@ -432,6 +436,68 @@
     return section;
   }
 
+  /* Punto 46: componentes y accesorios propuestos, comparados con la estructura actual del producto. */
+  function componentsSection(){
+    componentsPending = false;
+    const p = ctx.proposal;
+    const pc = p.proposed_components;
+    if (!pc || !ctx.components) return null;
+    const C = MobauComponentes;
+    const comps = ctx.components;
+    const section = M.el("section", "mod-section");
+    section.append(M.el("h2", "", "Componentes y accesorios"));
+    section.append(M.el("p", "card-meta", "Mobau no certifica la compatibilidad técnica: solo se guarda lo que declara la empresa."));
+    const names = {
+      product: (id) => (comps.products.get(id) || {}).name || id,
+      proposal: (id) => { const r = comps.proposals.get(id); return r ? { name: (r.proposed_changes || {}).name, status: r.status } : null; }
+    };
+    const currentRole = ctx.product ? (ctx.product.catalog_role || "principal") : null;
+    if (pc.catalog_role){
+      section.append(M.el("p", "", currentRole && currentRole !== pc.catalog_role
+        ? `Uso en el catálogo: ${C.ROLE_LABELS[currentRole]} → ${C.ROLE_LABELS[pc.catalog_role]}`
+        : `Uso en el catálogo: ${C.ROLE_LABELS[pc.catalog_role] || pc.catalog_role}`));
+      if (p.proposal_kind === "create" && pc.catalog_role === "componente"){
+        section.append(M.el("p", "card-meta", "Es un componente nuevo: al aprobarlo no se mostrará como producto del catálogo; solo podrá ofrecerse dentro de otro producto de la empresa."));
+      }
+    }
+    if (Array.isArray(pc.groups)){
+      const base = p.proposal_kind === "create" ? null : C.toManifest(C.fromStructure(comps.structure, currentRole || "principal"));
+      const LABEL = { nuevo: "Nuevo", cambia: "Modificado", igual: "Sin cambios", retirado: "Se retira" };
+      const rows = C.diff(base, { groups: pc.groups }).map(d => {
+        const tr = document.createElement("tr");
+        const shown = d.group || d.before;
+        const detail = M.el("div");
+        detail.append(M.el("p", "card-meta", C.describeGroupRules(shown, d.group ? pc.groups : (base && base.groups), names)));
+        const list = document.createElement("ul");
+        (shown.options || []).forEach(o => list.append(M.el("li", "", C.describeOption(o, names))));
+        detail.append(list);
+        tr.append(cell("Grupo", document.createTextNode(d.label)), cell("Cambio", document.createTextNode(LABEL[d.status])), cell("Detalle", detail));
+        return tr;
+      });
+      if (rows.length) section.append(table(["Grupo", "Cambio", "Detalle"], rows));
+      else section.append(M.el("p", "card-meta", "La propuesta deja el producto sin grupos de componentes (se retiran todos)."));
+      /* Componentes nuevos que esta propuesta necesita: deben aprobarse antes. */
+      const seen = new Set();
+      pc.groups.forEach(g => (g.options || []).forEach(o => {
+        const id = o.component && o.component.proposal_id;
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        const r = comps.proposals.get(id);
+        const label = r ? ((r.proposed_changes || {}).name || "sin nombre") : "no disponible";
+        if (r && r.status === "approved") return;
+        componentsPending = true;
+        const warn = M.el("p", "mod-warn", `⚠ El componente nuevo «${label}» ${r ? `aún no está aprobado (estado: ${(M.STATUS[r.status] || { label: r.status }).label})` : "ya no existe o no es de esta empresa"}: no se podrá aprobar este producto hasta entonces.`);
+        if (r){
+          const link = M.el("a", "pd-link", "Abrir la propuesta del componente");
+          link.href = `moderacion-propuesta.html?id=${encodeURIComponent(id)}`;
+          warn.append(document.createTextNode(" "), link);
+        }
+        section.append(warn);
+      }));
+    }
+    return section;
+  }
+
   function lastEvent(status){
     return [...ctx.events].reverse().find(e => e.to_status === status && e.actor_kind === "mobau") || null;
   }
@@ -585,8 +651,9 @@
   function refreshButtons(){
     const approve = $("mod-approve");
     if (!approve) return;
-    approve.disabled = busy || actionsLocked || approveBlocked;
-    approve.title = !approveBlocked ? ""
+    approve.disabled = busy || actionsLocked || approveBlocked || componentsPending;
+    approve.title = componentsPending && !approveBlocked ? "Aprueba antes el componente nuevo que necesita esta propuesta."
+      : !approveBlocked ? ""
       : (ctx && mediaProblems().length ? "Falta información de la propuesta: solicita cambios." : "Bloqueado por un conflicto: vuelve a cargar la propuesta.");
     $("mod-request-changes").disabled = busy || actionsLocked;
     $("mod-reject").disabled = busy || actionsLocked;
@@ -618,8 +685,11 @@
       const m = p.proposed_media;
       lines.push(`Referencia ${m.reference_code}, ${(m.assets || []).length} archivos y ${(m.finishes || []).length} acabados (sustituyen a los actuales).`);
     }
+    if (p.proposed_components) MobauComponentes.summary(p.proposed_components).forEach(line => lines.push(`Componentes: ${line}.`));
     if (p.proposal_kind === "create"){
-      lines.push("El producto se creará y se publicará en el catálogo de inmediato.");
+      lines.push(p.proposed_components && p.proposed_components.catalog_role === "componente"
+        ? "El componente se creará y quedará disponible solo como pieza de otros productos de la empresa."
+        : "El producto se creará y se publicará en el catálogo de inmediato.");
       return `¿Aprobar y publicar este producto?\n${lines.join("\n")}`;
     }
     return `¿Aprobar esta propuesta?\n${lines.join("\n")}`;
@@ -718,6 +788,13 @@
     }
 
     const mapped = M.decisionError(error || {});
+    if (mapped.action === "components_block"){
+      approveBlocked = true;
+      prefill = mapped.message;
+      refreshButtons();
+      feedback(M.el("p", "", mapped.message), M.el("p", "card-meta", "No se puede aprobar tal como está: solicita cambios para que la empresa revise los componentes."));
+      return;
+    }
     if (mapped.action === "login"){
       window.location.href = MobauAccess.accessUrlForCurrentPage();
       return;
@@ -794,6 +871,8 @@
     if (price.section) nodes.push(price.section);
     const media = mediaSection();
     if (media) nodes.push(media);
+    const components = componentsSection();
+    if (components) nodes.push(components);
 
     let warning = null;
     if (p.status === "submitted"){
@@ -859,6 +938,28 @@
         if (res.error) throw res.error;
       }
       if (id !== loadId) return;
+      /* Punto 46: estructura actual del producto y datos de los componentes que cita la propuesta. */
+      let components = null;
+      const pc = p.proposed_components;
+      if (pc){
+        const refs = [];
+        (pc.groups || []).forEach(g => (g.options || []).forEach(o => { if (o.component) refs.push(o.component); }));
+        const productIds = [...new Set(refs.filter(c => c.product_id).map(c => c.product_id))];
+        const proposalIds = [...new Set(refs.filter(c => c.proposal_id).map(c => c.proposal_id))];
+        const [structure, prodRes, propRes] = await Promise.all([
+          p.product_id ? MobauComponentes.loadStructure(supabaseClient, p.product_id) : Promise.resolve({ groups: [], options: [] }),
+          productIds.length ? supabaseClient.from("products").select("id, name, catalog_role").in("id", productIds) : none,
+          proposalIds.length ? supabaseClient.from("product_proposals").select("id, status, proposed_changes, created_product_id, proposal_kind").in("id", proposalIds) : none
+        ]);
+        if (prodRes.error) throw prodRes.error;
+        if (propRes.error) throw propRes.error;
+        components = {
+          structure,
+          products: new Map((prodRes.data || []).map(x => [x.id, x])),
+          proposals: new Map((propRes.data || []).map(x => [x.id, x]))
+        };
+      }
+      if (id !== loadId) return;
       /* Punto 44: filas de los archivos propuestos (Mobau las lee todas). */
       const media = p.proposed_media || {};
       const assetIds = [...(media.assets || []).map(a => a.id), media.cover_asset_id, ...(media.finishes || []).map(f => f.image_asset_id)];
@@ -887,7 +988,8 @@
         categories: new Map((categoriesRes.data || []).map(c => [c.id, c])),
         company: companyRes.data ? companyRes.data.name : null,
         events: eventsRes.data || [],
-        created: createdRes.data
+        created: createdRes.data,
+        components
       };
       render();
     } catch (error){

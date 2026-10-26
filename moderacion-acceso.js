@@ -124,6 +124,13 @@ const MobauModeracion = (() => {
     }
     if (code === "22023") return { action: "show", message: message || "Revisa la decisión y el mensaje." };
     if (code === "P0002") return { action: "notfound", message: "No encontramos la propuesta." };
+    /* Punto 46: errores al aprobar una propuesta con componentes (trigger 61 de 46-03). */
+    if (code === "55000" && hint === "component_pending") return { action: "show", message: message || "Antes de aprobar este producto, aprueba su componente nuevo." };
+    if ((code === "55000" && ["component_finish_missing", "option_identity_changed", "components_no_product"].includes(hint))
+        || (code === "40001" && hint === "components_conflict")
+        || (code === "23514" && hint === "components_invalid")){
+      return { action: "components_block", message: message || "Los componentes de la propuesta no se pueden aplicar: solicita cambios." };
+    }
     if (code === "55000") return { action: "reload", message: message || "La propuesta no se puede decidir en su estado actual." };
     return { action: "network", message: "No pudimos enviar la decisión. Vuelve a cargar la propuesta antes de reintentar." };
   }

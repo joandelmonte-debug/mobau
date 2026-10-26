@@ -247,6 +247,24 @@
   #products-price-summary:not(:empty){
     margin-top:20px; padding-top:16px; border-top:1px solid var(--line-strong);
   }
+  /* Punto 46: nota técnica del profesional (distinta del resumen automático de la configuración). */
+  .dp-note{ margin:8px 0 0; padding:8px 10px; border-left:3px solid var(--ink-soft); background:#fff; border-radius:0 var(--radius) var(--radius) 0; }
+  .dp-note__label{ display:block; font-size:12px; font-weight:600; color: var(--ink); margin:0 0 4px; }
+  .dp-note__text{ margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; color: var(--ink); }
+  .dp-note textarea{ width:100%; min-height:56px; box-sizing:border-box; font:inherit; font-size:14px; padding:6px 8px; border:1px solid var(--line); border-radius: var(--radius); }
+  .dp-note__bar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px; }
+  .dp-note__status{ font-size:13px; color: var(--ink-soft); }
+  /* Punto 46: solicitudes enviadas (lo enviado, separado de las líneas vivas del proyecto). */
+  .dp-rfq{ border:1px solid var(--line); border-radius: var(--radius); background:#fff; padding:14px 16px; margin:0 0 12px; }
+  .dp-rfq__head{ display:flex; flex-wrap:wrap; gap:6px 12px; align-items:baseline; justify-content:space-between; }
+  .dp-rfq__title{ margin:0; font-weight:600; color: var(--ink); }
+  .dp-rfq__meta{ margin:4px 0 0; font-size:13.5px; color: var(--ink-soft); }
+  .dp-rfq__toggle{ margin-top:10px; }
+  .dp-rfq__body{ margin-top:12px; display:grid; gap:12px; }
+  .dp-rfq__group h4{ margin:0 0 6px; font-size:14px; }
+  .dp-rfq__line{ padding:8px 0; border-top:1px solid var(--line); font-size:14px; }
+  .dp-rfq__line:first-of-type{ border-top:0; }
+  .dp-rfq__line .card-meta{ margin:2px 0 0; }
 </style>
 </head>
 <body>
@@ -421,6 +439,13 @@
              resumen está vacío (proyecto sin productos, o filtro sin
              resultados). -->
         <div id="products-price-summary"></div>
+
+        <!-- Punto 46: solicitudes enviadas de este proyecto (cada una con la copia de lo solicitado). -->
+        <div id="project-rfqs" hidden style="margin-top:32px; margin-bottom:0; padding-top:24px; border-top:1px solid var(--line);">
+          <h2 style="margin:0 0 6px;">Solicitudes enviadas</h2>
+          <p class="card-meta" style="margin:0 0 14px;">Lo que se envió en cada solicitud, tal como quedó guardado en ese momento. No cambia aunque después edites el proyecto o el catálogo.</p>
+          <div id="project-rfqs-list"></div>
+        </div>
       </div>
 
     </div>
@@ -1184,6 +1209,57 @@
   /* Fila de producto guardado — reutilizada por renderProductsView().
      isArchived se pasa explícito (ya no hay closure de loadSavedProducts)
      para que el HTML nunca dependa de en qué función se generó. */
+  /* Nota técnica (texto libre opcional): editable solo en una línea viva de un proyecto activo; en archivados y en lo
+     solicitado, solo lectura. Siempre como texto (escapeHtml + pre-wrap), nunca como HTML. */
+  const NOTE_MAX = 1000;
+  function noteHtml(row, isArchived){
+    const note = typeof row.notes === "string" ? row.notes : "";
+    if (isArchived || row.requested){
+      return note ? `<div class="dp-note dp-note--ro"><span class="dp-note__label">Nota del profesional</span><p class="dp-note__text">${escapeHtml(note)}</p></div>` : "";
+    }
+    const id = `dp-note-${row.id}`;
+    return `<div class="dp-note">
+      <label class="dp-note__label" for="${id}">Nota técnica (opcional)</label>
+      <textarea id="${id}" class="dp-note-input" data-row-id="${row.id}" maxlength="${NOTE_MAX}" placeholder="Ej. medidas especiales, referencia de obra, condiciones de montaje…">${escapeHtml(note)}</textarea>
+      <div class="dp-note__bar"><button type="button" class="btn btn-outline btn-sm dp-note-save" data-row-id="${row.id}" disabled>Guardar nota</button><span class="dp-note__status" id="dp-note-status-${row.id}" role="status"></span></div>
+    </div>`;
+  }
+  document.addEventListener("input", (e) => {
+    const input = e.target.closest && e.target.closest(".dp-note-input");
+    if (!input) return;
+    const row = currentRows.find(r => String(r.id) === input.dataset.rowId);
+    const btn = document.querySelector(`.dp-note-save[data-row-id="${CSS.escape(input.dataset.rowId)}"]`);
+    if (btn) btn.disabled = !row || input.value.trim() === (row.notes || "");
+    const status = document.getElementById(`dp-note-status-${input.dataset.rowId}`);
+    if (status) status.textContent = "";
+  });
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest && e.target.closest(".dp-note-save");
+    if (!btn || btn.disabled) return;
+    const rowId = btn.dataset.rowId;
+    const input = document.getElementById(`dp-note-${rowId}`);
+    const status = document.getElementById(`dp-note-status-${rowId}`);
+    const row = currentRows.find(r => String(r.id) === rowId);
+    if (!input || !row) return;
+    btn.disabled = true;
+    input.disabled = true;
+    status.textContent = "Guardando…";
+    const { data, error } = await MobauProjects.updateLineNote(row.id, input.value);
+    input.disabled = false;
+    if (error || !data){
+      const hint = error && error.hint;
+      status.textContent = hint === "line_note_archived" ? "Este proyecto está archivado: la nota ya no se puede modificar."
+        : hint === "line_note_too_long" ? `La nota admite como máximo ${NOTE_MAX} caracteres.`
+        : "No pudimos guardar la nota. Inténtalo de nuevo.";
+      btn.disabled = false;
+      return;
+    }
+    row.notes = data.notes;
+    input.value = data.notes || "";
+    status.textContent = data.notes ? "Nota guardada." : "Nota eliminada.";
+    btn.disabled = true;
+  });
+
   function renderProductRow(row, isArchived){
     const removeBtn = `<button type="button" class="btn btn-outline btn-sm remove-product-btn" data-row-id="${row.id}"${isArchived ? " disabled" : ""}>Quitar</button>`;
     const p = PRODUCTS.find(pp => pp.id === row.product_id);
@@ -1227,6 +1303,7 @@
               <div class="sp-name">${escapeHtml(p.nombre)}</div>
               ${lineDetailText(p, row.finish_code) ? `<div class="sp-meta">${escapeHtml(lineDetailText(p, row.finish_code))}</div>` : ""}
               ${configHtml}
+              ${noteHtml(row, isArchived)}
               <div class="sp-meta">${escapeHtml(LABELS.marca[p.marca])} · ${escapeHtml(dist.nombre)} · ${p.status === "archived" ? "No disponible actualmente" : escapeHtml(LABELS.disponibilidad[p.disponibilidad])}</div>
             </div>
           </div>
@@ -1336,7 +1413,99 @@
     document.getElementById("project-view").style.display = "block";
     await renderProject();
     loadSavedProducts();
+    loadSentRequests();
   })();
+
+  /* ---------- punto 46: solicitudes enviadas (copia de lo solicitado en cada RFQ) ---------- */
+  const RFQ_STATUS = { submitted: "Enviada", draft: "Borrador" };
+  function mk(tag, cls, text){
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+  const BUDGET_LABELS = { up_to_5000: "hasta 5.000 €", "5000_15000": "5.000–15.000 €", "15000_30000": "15.000–30.000 €", "30000_60000": "30.000–60.000 €", over_60000: "más de 60.000 €" };
+  const STAGE_LABELS = { concepto: "Concepto / anteproyecto", desarrollo_diseno: "Desarrollo de diseño", documentacion: "Documentación técnica", construccion: "En construcción", acabados: "Acabados y mobiliario" };
+
+  function sentLineNode(line){
+    const box = mk("div", "dp-rfq__line");
+    const qty = line.quantity === null || line.quantity === undefined ? "" : ` × ${line.quantity} ${line.unit || ""}`.trimEnd();
+    box.append(mk("div", "", `${line.product_name || line.product_id}${line.finish_name ? ` — Acabado: ${line.finish_name}` : ""}${qty}`));
+    MobauLineConfig.sent(line).lines.forEach(text => box.append(mk("p", "card-meta", text)));
+    if (typeof line.notes === "string" && line.notes){
+      const note = mk("div", "dp-note dp-note--ro");
+      note.append(mk("span", "dp-note__label", "Nota del profesional"), mk("p", "dp-note__text", line.notes));
+      box.append(note);
+    }
+    return box;
+  }
+
+  function sentRequestNode(rfq, index, total){
+    const box = mk("div", "dp-rfq");
+    const head = mk("div", "dp-rfq__head");
+    const when = new Date(rfq.created_at);
+    head.append(mk("p", "dp-rfq__title", `Solicitud del ${Number.isNaN(when.getTime()) ? "—" : when.toLocaleDateString("es-DO", { day: "numeric", month: "long", year: "numeric" })}`),
+                mk("span", "card-meta", [RFQ_STATUS[rfq.status] || rfq.status, index === 0 && total > 1 ? "la más reciente" : ""].filter(Boolean).join(" · ")));
+    box.append(head);
+    const bits = [];
+    if (rfq.project_location) bits.push(`Ubicación: ${rfq.project_location}`);
+    if (rfq.project_stage) bits.push(`Etapa: ${STAGE_LABELS[rfq.project_stage] || rfq.project_stage}`);
+    if (rfq.budget_range) bits.push(`Presupuesto: ${BUDGET_LABELS[rfq.budget_range] || rfq.budget_range}`);
+    const snapshot = rfq.lines_snapshot;
+    const groups = snapshot && Array.isArray(snapshot.distributors) ? snapshot.distributors : null;
+    if (groups){
+      const lines = groups.reduce((sum, g) => sum + (g.lines || []).length, 0);
+      bits.push(`${lines} ${lines === 1 ? "línea" : "líneas"} en ${groups.length} ${groups.length === 1 ? "distribuidor" : "distribuidores"}`);
+    }
+    if (bits.length) box.append(mk("p", "dp-rfq__meta", bits.join(" · ")));
+
+    const toggle = mk("button", "btn btn-outline btn-sm dp-rfq__toggle", "Ver lo solicitado");
+    toggle.type = "button";
+    const body = mk("div", "dp-rfq__body");
+    body.hidden = true;
+    body.id = `dp-rfq-${rfq.id}`;
+    toggle.setAttribute("aria-controls", body.id);
+    toggle.setAttribute("aria-expanded", "false");
+    let filled = false;
+    toggle.addEventListener("click", () => {
+      if (!filled){
+        filled = true;
+        if (!groups){
+          body.append(mk("p", "card-meta", "Esta solicitud se envió antes de que se guardara una copia de las líneas: no hay detalle conservado."));
+        } else {
+          groups.forEach(group => {
+            const g = mk("div", "dp-rfq__group");
+            g.append(mk("h4", "", group.distributor_name || group.distributor_id || "Distribuidor"));
+            (group.lines || []).forEach(line => g.append(sentLineNode(line)));
+            body.append(g);
+          });
+        }
+        if (rfq.message) body.append(mk("p", "card-meta", `Información adicional enviada: ${rfq.message}`));
+      }
+      body.hidden = !body.hidden;
+      toggle.setAttribute("aria-expanded", String(!body.hidden));
+      toggle.textContent = body.hidden ? "Ver lo solicitado" : "Ocultar lo solicitado";
+    });
+    box.append(toggle, body);
+    return box;
+  }
+
+  async function loadSentRequests(){
+    const section = document.getElementById("project-rfqs");
+    const list = document.getElementById("project-rfqs-list");
+    const rfqs = await MobauProjects.listRfqsOfProject(project.id);
+    if (rfqs === null){
+      section.hidden = false;
+      list.replaceChildren(mk("p", "card-meta", "No pudimos leer las solicitudes enviadas de este proyecto. Recarga la página para reintentar."));
+      return;
+    }
+    if (!rfqs.length){
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    list.replaceChildren(...rfqs.map((rfq, index) => sentRequestNode(rfq, index, rfqs.length)));
+  }
 
   function showPlanGate(){
     const gate = document.getElementById("plan-gate");

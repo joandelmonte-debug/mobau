@@ -333,6 +333,7 @@
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
 <script src="product-lifecycle.js"></script>
+<script src="componentes-propuesta.js"></script>
 <script>
 /* Mis productos (38-C): centro de control del distribuidor verificado.
    Lee en tres consultas sin N+1: products (los de su empresa,
@@ -434,7 +435,7 @@
   let decisionsLoaded = false;
   let newDecisions = 0;
 
-  const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, reviewed_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason";
+  const PROPOSAL_COLUMNS = "id, proposal_kind, product_id, status, version, submitted_at, updated_at, reviewed_at, proposed_changes, proposed_new_subcategory, proposed_price_status, proposed_price_amount, internal_note, rejection_reason, proposed_components";
   const DECISION_DAYS = 30;
   const SEEN_KEY = "mobau_decisiones_vistas";
   const SEEN_MAX = 200;
@@ -531,6 +532,8 @@
         ? ` · US$ ${Number(proposal.proposed_price_amount).toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
       lines.push(`Precio: ${PROPOSED_PRICE_LABELS[proposal.proposed_price_status] || proposal.proposed_price_status}${amount}`);
     }
+    /* Punto 46: componentes y accesorios propuestos (uso en el catálogo y grupos). */
+    if (proposal.proposed_components) MobauComponentes.summary(proposal.proposed_components).forEach(line => lines.push(`Componentes · ${line}`));
     if (proposal.internal_note) lines.push(`Tu nota: ${proposal.internal_note}`);
     const list = document.createElement("ul");
     list.append(...lines.map(line => { const li = document.createElement("li"); li.textContent = line; return li; }));

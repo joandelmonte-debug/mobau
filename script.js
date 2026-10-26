@@ -377,8 +377,8 @@ const CATALOG_ABSENT = new Set();
    interior/exterior, datos de iluminación y temperatura de color; ninguna
    versión lee la caché de otra. */
 const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v5", distributors: "mobau_distributors_v5", categories: "mobau_categories_v5" };
-/* Las 29 columnas de catalog_products, en su orden (21 de 41-02, 4 de 44-01, 3 de 44-02 y 1 de 44-03). */
-const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options, environment, light_source, electrical_connection, color_temperature";
+/* Las 30 columnas de catalog_products, en su orden (21 de 41-02, 4 de 44-01, 3 de 44-02, 1 de 44-03 y catalog_role de 46-01). */
+const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options, environment, light_source, electrical_connection, color_temperature, catalog_role";
 const STATIC_ORDER = Object.freeze({
   products: STATIC_PRODUCTS.map(p => p.id),
   distributors: Object.keys(DISTRIBUTORS),
@@ -446,12 +446,29 @@ function lineDetailText(product, code){
     .filter(Boolean).join(" · ");
 }
 
+/* Punto 46 · uso del producto en el catálogo (products.catalog_role, 46-01: NOT NULL, por defecto
+   'principal'; solo 'principal', 'componente' o 'ambos'). Una fila sin la columna (anterior a 46-01, caché
+   previa) equivale al valor por defecto; un valor presente que no es uno de los tres NO se toma por
+   «principal»: queda como «desconocido» y se trata como no comercial. */
+function productCatalogRole(p){
+  const role = p ? p.rol : undefined;
+  if (role === undefined) return "principal";
+  return role === "principal" || role === "componente" || role === "ambos" ? role : "desconocido";
+}
+/* Condición común de las pantallas comerciales (catálogo, búsqueda, relacionados, listados por distribuidor):
+   solo «principal» y «ambos». PRODUCTS conserva todos (nombres, acabados y líneas existentes se leen por id). */
+function isCommercialProduct(p){
+  const role = productCatalogRole(p);
+  return role === "principal" || role === "ambos";
+}
+const commercialProducts = () => PRODUCTS.filter(isCommercialProduct);
+
 /* Fila de la base de datos -> forma que ya consume todo el front. La
    imagen de las tarjetas es la versión 4:5 de la portada; sin portada, el
    enlace antiguo image_url. */
 function mapProductRow(row){
   return {
-    id: row.id, nombre: row.name, distribuidor: row.distributor_id, marca: brandKey(row.brand),
+    id: row.id, rol: row.catalog_role, nombre: row.name, distribuidor: row.distributor_id, marca: brandKey(row.brand),
     categoria: row.category_id, subcategoria: row.subcategory, uso: row.use_context, espacio: row.space,
     disponibilidad: row.availability, icon: row.icon, descripcion: row.description,
     medidas: row.measurements, materiales: row.materials, acabados: row.finishes, leadtime: row.lead_time,

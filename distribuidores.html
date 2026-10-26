@@ -268,7 +268,7 @@ runWithCatalog(() => {
   }
 
   function activeProductCount(key){
-    return PRODUCTS.filter(p => p.distribuidor === key && p.status !== "archived").length;
+    return commercialProducts().filter(p => p.distribuidor === key && p.status !== "archived").length;
   }
 
   /* Filas de contacto (email/teléfono/web) — se omite cada una que no

@@ -200,6 +200,10 @@ function addToSelection(productId, initialQuantity, initialUnit, finish, configu
   if (typeof PRODUCTS !== "undefined" && PRODUCTS.some(p => p.id === productId && p.status === "archived")) {
     return { success: false, error: "Este producto ya no está disponible." };
   }
+  /* 46: un producto «solo componente» no se añade por su cuenta (sí dentro de una configuración). */
+  if (typeof PRODUCTS !== "undefined" && typeof isCommercialProduct === "function" && PRODUCTS.some(p => p.id === productId && !isCommercialProduct(p))) {
+    return { success: false, error: "Este producto solo se ofrece como componente." };
+  }
   const items = getSelection();
   const key = selectionLineKey(productId, finish, configuration);
   if (items.some(item => selectionLineKey(item.productId, item.finish, item.configuration) === key)) {

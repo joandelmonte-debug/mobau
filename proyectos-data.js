@@ -231,7 +231,7 @@ const MobauProjects = {
        ordenar, no hace falta traerlos de vuelta. */
     const { data, error } = await supabaseClient
       .from("project_products")
-      .select("id, product_id, finish_code, configuration, quantity, unit")
+      .select("id, product_id, finish_code, configuration, quantity, unit, notes")
       .eq("project_id", projectId)
       .order("order_position", { ascending: true })
       .order("created_at", { ascending: true });
@@ -274,8 +274,37 @@ const MobauProjects = {
       configuration: line.configuration || null,
       quantity: line.quantity,
       unit: line.unit,
+      notes: line.notes || null,
       requested: line
     })));
+  },
+
+  /* Punto 46: nota técnica de una línea del proyecto (texto libre opcional del profesional; vacío = sin nota).
+     Solo toca notes de esa fila: nunca quantity, unit, producto ni configuración. */
+  async updateLineNote(projectProductId, note) {
+    const value = typeof note === "string" && note.trim() ? note.trim() : null;
+    const { data, error } = await supabaseClient
+      .from("project_products")
+      .update({ notes: value })
+      .eq("id", projectProductId)
+      .select("id, notes")
+      .single();
+    return { data, error };
+  },
+
+  /* Punto 46 · bloque 4: solicitudes enviadas de un proyecto (la RLS solo deja ver las propias), de la más
+     reciente a la más antigua, con su copia de líneas (null en las anteriores a 46-04). null = no se pudo leer. */
+  async listRfqsOfProject(projectId) {
+    const { data, error } = await supabaseClient
+      .from("rfqs")
+      .select("id, created_at, status, requester_name, project_location, budget_range, project_stage, message, lines_snapshot")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Error leyendo las solicitudes del proyecto:", error);
+      return null;
+    }
+    return data || [];
   },
 
   /* Punto 46 · bloque 4: estado actual de cada línea del proyecto
