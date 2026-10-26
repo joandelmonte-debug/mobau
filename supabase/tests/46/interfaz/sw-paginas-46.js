@@ -2,7 +2,8 @@
    páginas reales del repositorio bajo supabase/tests/46/interfaz/pagina/,
    para poder abrirlas con su consulta (?id=…), con una única sustitución en
    cada página HTML: la etiqueta de supabase-js pasa a ser el cliente simulado
-   de CC1 y, tras supabase-client.js, se añade mock-proyecto-46.js. El resto
+   de CC1 y, tras supabase-client.js, se añaden mock-proyecto-46.js y
+   mock-grupos-46.js (cada uno solo sustituye lo suyo). El resto
    de archivos se devuelve tal cual desde la raíz del repositorio; las
    navegaciones internas siguen dentro de pagina/ (nunca a la red real). */
 /* Solo en un origen local de pruebas: en cualquier otro no intercepta nada
@@ -27,7 +28,8 @@ self.addEventListener("fetch", event => {
       return new Response(`Ensayo 46: ${file} no tiene las etiquetas esperadas`, { status: 500 });
     }
     const out = html.replace(CDN, '<script src="supabase/tests/43/interfaz/mock-supabase-cc1.js"></script>')
-      .replace(CLIENT, CLIENT + '\n<script src="supabase/tests/46/interfaz/mock-proyecto-46.js"></script>');
+      .replace(CLIENT, CLIENT + '\n<script src="supabase/tests/46/interfaz/mock-proyecto-46.js"></script>'
+                       + '\n<script src="supabase/tests/46/interfaz/mock-grupos-46.js"></script>');
     return new Response(out, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   })());
 });

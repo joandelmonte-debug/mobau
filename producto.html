@@ -5,6 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ficha de producto — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+  /* Punto 46 · configurador de la ficha (solo este panel; usa los colores de styles.css). */
+  .cfg-panel{ margin: 0 0 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .cfg-title{ font-size: 18px; margin: 0 0 6px; }
+  .cfg-note, .cfg-status, .cfg-meta, .cfg-conditional{ font-size: 13px; color: var(--ink-soft); margin: 0 0 8px; }
+  .cfg-group{ border: 0; padding: 0; margin: 0 0 16px; min-width: 0; }
+  .cfg-group legend{ font-weight: 600; font-size: 14px; padding: 0; margin: 0 0 6px; }
+  .cfg-hint{ font-weight: 400; color: var(--ink-faint); }
+  .cfg-option{ display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin: 0 0 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+  .cfg-option input{ margin-top: 3px; flex: 0 0 auto; }
+  .cfg-option--on{ border-color: var(--ink); }
+  .cfg-option__text{ min-width: 0; overflow-wrap: anywhere; }
+  .cfg-ro-list{ list-style: none; margin: 0 0 6px; padding: 0; }
+  .cfg-ro-list > li{ padding: 6px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .cfg-nested{ margin: 4px 0 8px 14px; padding-left: 12px; border-left: 2px solid var(--line); }
+  .cfg-status--bad{ color: var(--danger); }
+</style>
 <script src="nav-account-hint.js"></script>
 </head>
 <body>
@@ -83,6 +100,13 @@
       <div class="spec-row"><dt>Distribuidor</dt><dd id="p-distribuidor">—</dd></div>
       <div class="spec-row"><dt>Marca</dt><dd id="p-marca">—</dd></div>
     </dl>
+
+    <section id="configurar" class="cfg-panel" aria-labelledby="cfg-title" hidden>
+      <h2 id="cfg-title" class="cfg-title">Configurar</h2>
+      <p class="cfg-note" id="cfg-price-note"></p>
+      <div id="cfg-body"></div>
+      <div class="cfg-status" id="cfg-status" role="status" aria-live="polite"></div>
+    </section>
 
     <div class="product-actions product-selection-actions" hidden>
       <div class="product-qty-field">
@@ -532,6 +556,306 @@ runWithCatalog(async function renderProductPage(){
     refreshAddButton();
   });
 
+  /* ---------- Punto 46 · bloque 4 · paso 3: configurador ----------
+     Las elecciones siguen el contrato de 46-04: { choices: [{ path, group, options }] }, con path
+     = pasos { group, option } desde el producto principal (como mucho dos). Un grupo condicionado
+     usa el mismo path que el grupo que lo activa; los grupos de un componente, el path de la opción
+     elegida. Lo que deja de aplicar (condición que se apaga, componente que se quita) se elimina de
+     la configuración activa: el servidor lo daría por pendiente. Sin herramientas profesionales (o
+     con el producto no disponible) el panel es de solo lectura.
+     Estado de la comprobación contra el catálogo (line_configuration_resolve):
+       incomplete  faltan elecciones necesarias (local); no se añade
+       checking    comprobando; no se añade
+       ok          el servidor la confirma completa
+       pending     el servidor la confirma pendiente; no se añade
+       unverified  no se pudo comprobar (error, rechazo, límite o respuesta desconocida): nunca se
+                   muestra como completa; se puede conservar en la selección para revisarla. */
+  const cfg = { booted: false, booting: false, failed: false, interactive: false, choices: [], state: "idle", result: null, seq: 0, results: new Map() };
+  const cfgPanel = document.getElementById("configurar");
+  const cfgPathKey = path => JSON.stringify(path.map(s => [s.group, s.option]));
+  const cfgGroups = productId => { const c = componentConfigFor(productId); return c.status === "ready" ? c.groups : []; };
+  const cfgChosen = (path, groupCode) => { const c = cfg.choices.find(x => x.group === groupCode && cfgPathKey(x.path) === cfgPathKey(path)); return c ? c.options : []; };
+  const cfgProductName = id => { const p = PRODUCTS.find(x => x.id === id); return p ? p.nombre : "este componente"; };
+
+  /* Recorre los grupos que aplican con las elecciones actuales: visit(grupo, path, producto). */
+  function cfgWalk(productId, path, visit){
+    cfgGroups(productId).forEach(group => {
+      const dep = group.dependsOn;
+      if (dep && !(dep.groupCode && cfgChosen(path, dep.groupCode).includes(dep.optionCode))) return;
+      visit(group, path, productId);
+      if (path.length >= 2) return;
+      cfgChosen(path, group.code).forEach(code => {
+        const option = group.options.find(o => o.code === code);
+        if (option && option.kind === "componente" && option.componentProductId){
+          cfgWalk(option.componentProductId, path.concat([{ group: group.code, option: code }]), visit);
+        }
+      });
+    });
+  }
+  function cfgPrune(){
+    for (let guard = 0; guard < 6; guard++){
+      const valid = new Set();
+      cfgWalk(product.id, [], (group, path) => valid.add(cfgPathKey(path) + "|" + group.code));
+      const before = cfg.choices.length;
+      cfg.choices = cfg.choices.filter(c => c.options.length && valid.has(cfgPathKey(c.path) + "|" + c.group));
+      if (cfg.choices.length === before) return;
+    }
+  }
+  function cfgToggle(path, group, code, on){
+    const current = cfg.choices.find(x => x.group === group.code && cfgPathKey(x.path) === cfgPathKey(path));
+    const options = new Set(current ? current.options : []);
+    if (group.choice === "una") options.clear();
+    if (on) options.add(code); else options.delete(code);
+    cfg.choices = cfg.choices.filter(x => x !== current);
+    if (options.size) cfg.choices.push({ path, group: group.code, options: [...options] });
+    cfgPrune();
+  }
+  function cfgMissing(){
+    const missing = [];
+    cfgWalk(product.id, [], (group, path, owner) => {
+      if (group.requirement === "necesario" && !cfgChosen(path, group.code).length){
+        missing.push(`${group.options.length ? "Falta elegir" : "No se puede completar:"} «${group.label}»${path.length ? ` (en ${cfgProductName(owner)})` : ""}${group.options.length ? "" : ", no tiene opciones disponibles"}.`);
+      }
+    });
+    return missing;
+  }
+  function cfgConfiguration(){
+    return cfg.choices.length
+      ? { choices: cfg.choices.map(c => ({ path: c.path.map(s => ({ group: s.group, option: s.option })), group: c.group, options: [...c.options].sort() })) }
+      : null;
+  }
+
+  /* Textos de una opción (todo escapado al incorporarlo al HTML). */
+  function cfgOptionLabel(o){ return o.kind === "ajuste" ? (o.settingLabel || o.code) : cfgProductName(o.componentProductId); }
+  function cfgOptionMeta(o){
+    const parts = [];
+    if (o.kind === "componente"){
+      parts.push(o.supply === "incluido" ? "Incluido" : "Se suministra aparte");
+      parts.push(o.quantityMode === "a_calcular" ? "cantidad a calcular" : `${o.quantity} por unidad`);
+      if (o.componentFinishCode){
+        const cp = PRODUCTS.find(x => x.id === o.componentProductId);
+        const f = cp && (cp.acabadosOpciones || []).find(x => x.codigo === o.componentFinishCode);
+        if (f) parts.push(`Acabado: ${finishOptionText(f)}`);
+      }
+    }
+    (o.attributes || []).forEach(a => { if (a && typeof a.label === "string" && typeof a.value === "string") parts.push(`${a.label}: ${a.value}`); });
+    return parts.join(" · ");
+  }
+  const cfgHint = g => `${g.requirement === "necesario" ? "necesario" : "opcional"} · ${g.choice === "una" ? "elige una" : "puedes elegir varias"}`;
+
+  /* Interactivo: solo los grupos que aplican, con sus componentes anidados por path. */
+  function cfgGroupHtml(productId, path, ctr){
+    return cfgGroups(productId).map(group => {
+      const dep = group.dependsOn;
+      if (dep && !(dep.groupCode && cfgChosen(path, dep.groupCode).includes(dep.optionCode))) return "";
+      const chosen = cfgChosen(path, group.code);
+      const type = group.choice === "una" ? "radio" : "checkbox";
+      const name = `cfg-${ctr.n++}`;
+      const idOf = code => escapeHtml(JSON.stringify([cfgPathKey(path), group.code, code]));
+      const none = group.choice === "una" && group.requirement === "opcional"
+        ? `<label class="cfg-option${chosen.length ? "" : " cfg-option--on"}"><input type="radio" name="${name}" data-cfg-id="${idOf("")}" data-cfg-path="${escapeHtml(JSON.stringify(path))}" data-cfg-group="${escapeHtml(group.code)}" data-cfg-option="" ${chosen.length ? "" : "checked"}><span class="cfg-option__text">Ninguna</span></label>` : "";
+      const options = group.options.map(o => {
+        const on = chosen.includes(o.code);
+        const meta = cfgOptionMeta(o);
+        const nested = on && o.kind === "componente" && o.componentProductId && path.length < 2
+          ? cfgGroupHtml(o.componentProductId, path.concat([{ group: group.code, option: o.code }]), ctr) : "";
+        return `<label class="cfg-option${on ? " cfg-option--on" : ""}"><input type="${type}" name="${name}" data-cfg-id="${idOf(o.code)}" data-cfg-path="${escapeHtml(JSON.stringify(path))}" data-cfg-group="${escapeHtml(group.code)}" data-cfg-option="${escapeHtml(o.code)}" ${on ? "checked" : ""}>
+          <span class="cfg-option__text">${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}</span></label>${nested ? `<div class="cfg-nested">${nested}</div>` : ""}`;
+      }).join("");
+      return `<fieldset class="cfg-group"><legend>${escapeHtml(group.label)} <span class="cfg-hint">(${escapeHtml(cfgHint(group))})</span></legend>${group.options.length ? none + options : `<p class="cfg-meta">No hay opciones disponibles por ahora.</p>`}</fieldset>`;
+    }).join("");
+  }
+
+  /* Solo lectura: todos los grupos y opciones, también los condicionados (con su condición) y los de los componentes. */
+  function cfgReadOnlyHtml(productId, path){
+    return cfgGroups(productId).map(group => {
+      let condition = "";
+      if (group.dependsOn){
+        const og = cfgGroups(productId).find(x => x.code === group.dependsOn.groupCode);
+        const oo = og && og.options.find(x => x.code === group.dependsOn.optionCode);
+        condition = oo ? `<p class="cfg-conditional">Solo aplica si eliges «${escapeHtml(cfgOptionLabel(oo))}» en «${escapeHtml(og.label)}».</p>`
+                       : `<p class="cfg-conditional">Solo aplica con una opción que ya no está disponible.</p>`;
+      }
+      const items = group.options.map(o => {
+        const meta = cfgOptionMeta(o);
+        const nestedGroups = o.kind === "componente" && o.componentProductId && path.length < 2
+          ? cfgReadOnlyHtml(o.componentProductId, path.concat([{ group: group.code, option: o.code }])) : "";
+        return `<li>${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}${nestedGroups ? `<div class="cfg-nested"><p class="cfg-conditional">Con este componente:</p>${nestedGroups}</div>` : ""}</li>`;
+      }).join("");
+      return `<fieldset class="cfg-group"><legend>${escapeHtml(group.label)} <span class="cfg-hint">(${escapeHtml(cfgHint(group))})</span></legend>${condition}${items ? `<ul class="cfg-ro-list">${items}</ul>` : `<p class="cfg-meta">No hay opciones disponibles por ahora.</p>`}</fieldset>`;
+    }).join("");
+  }
+
+  function cfgNeedsQuote(){
+    let needs = false;
+    cfgWalk(product.id, [], (group, path) => cfgChosen(path, group.code).forEach(code => {
+      const o = group.options.find(x => x.code === code);
+      if (o && o.kind === "componente" && (o.supply === "aparte" || o.quantityMode === "a_calcular")) needs = true;
+    }));
+    return needs;
+  }
+  function cfgRenderStatus(){
+    const el = document.getElementById("cfg-status");
+    const retry = `<button type="button" class="btn btn-outline btn-sm" id="cfg-retry-check">Reintentar la comprobación</button>`;
+    const reasons = () => ((cfg.result && cfg.result.data && Array.isArray(cfg.result.data.reasons)) ? cfg.result.data.reasons : []).map(r => r && r.message).filter(m => typeof m === "string");
+    const notices = () => ((cfg.result && cfg.result.data && Array.isArray(cfg.result.data.notices)) ? cfg.result.data.notices : []).map(r => r && r.message).filter(m => typeof m === "string");
+    let html = "", bad = false;
+    if (cfg.state === "incomplete") html = cfgMissing().map(m => `<div>${escapeHtml(m)}</div>`).join(""), bad = true;
+    else if (cfg.state === "checking") html = "Comprobando la configuración…";
+    else if (cfg.state === "pending") html = `<div>Configuración pendiente de revisar: no se puede añadir todavía.</div>${reasons().map(m => `<div>${escapeHtml(m)}</div>`).join("")}`, bad = true;
+    else if (cfg.state === "ok") html = `Configuración completa según el catálogo actual.${notices().map(m => `<div>${escapeHtml(m)}</div>`).join("")}`;
+    else if (cfg.state === "unverified") html = `<div>No pudimos verificar esta configuración con el catálogo actual. Puedes añadirla a tu selección: se volverá a comprobar antes de enviar la solicitud.</div>${retry}`;
+    else if (cfg.state === "empty") html = "Sin opciones elegidas: el producto se añade sin configuración.";
+    el.className = "cfg-status" + (bad ? " cfg-status--bad" : "");
+    el.innerHTML = html;
+    document.getElementById("cfg-price-note").textContent = "El precio indicado en la ficha es el del producto principal, no el del conjunto." + (cfg.interactive && cfgNeedsQuote() ? " El importe final del conjunto requiere cotización." : "");
+  }
+  function cfgRenderBody(){
+    const active = document.activeElement;
+    const focusId = active && active.dataset ? active.dataset.cfgId : null;
+    document.getElementById("cfg-body").innerHTML = cfgGroupHtml(product.id, [], { n: 0 });
+    if (focusId){ const again = [...document.querySelectorAll("#cfg-body [data-cfg-id]")].find(x => x.dataset.cfgId === focusId); if (again) again.focus(); }
+  }
+
+  /* Comprobación con el catálogo: límite de espera y respuesta antigua descartada (seq). */
+  async function cfgValidate(configuration){
+    const unverified = { kind: "unverified" };
+    const run = (async () => {
+      const { data, error } = await runCatalogQuery(supabaseClient.rpc("line_configuration_resolve", { p_product_id: product.id, p_configuration: configuration }));
+      if (error || !data) return unverified;
+      if (data.status === "completa") return { kind: "ok", data };
+      if (data.status === "pendiente") return { kind: "pending", data };
+      return unverified;
+    })().catch(() => unverified);
+    let timer;
+    const limit = new Promise(done => { timer = setTimeout(() => done(unverified), CATALOG_CONFIG.timeoutMs + 500); });
+    const result = await Promise.race([run, limit]);
+    clearTimeout(timer);
+    return result;
+  }
+  function cfgApply(result){
+    cfg.result = result;
+    cfg.state = result.kind;
+    cfgRenderStatus();
+    refreshAddButton();
+  }
+  async function cfgRequestValidation(){
+    const configuration = cfgConfiguration();
+    if (!configuration){ cfg.result = null; cfg.state = "empty"; cfgRenderStatus(); refreshAddButton(); return; }
+    const key = selectionConfigurationKey(configuration);
+    const known = cfg.results.get(key);
+    if (known){ cfgApply(known); return; }
+    const seq = cfg.seq;
+    cfg.result = null; cfg.state = "checking"; cfgRenderStatus(); refreshAddButton();
+    const result = await cfgValidate(configuration);
+    if (seq !== cfg.seq) return; // la elección cambió mientras tanto: esta respuesta ya no vale
+    if (result.kind !== "unverified") cfg.results.set(key, result);
+    cfgApply(result);
+  }
+  function cfgChanged(){
+    cfg.seq++; // invalida cualquier comprobación en vuelo
+    cfgPrune();
+    cfgRenderBody();
+    if (cfgMissing().length){ cfg.result = null; cfg.state = "incomplete"; cfgRenderStatus(); refreshAddButton(); return; }
+    cfgRequestValidation();
+  }
+
+  /* Lo que puede hacer el botón de añadir según la configuración: null = sin configuración (como antes). */
+  function cfgAddState(){
+    if (!MobauAccess.hasProfessionalTools()) return null;
+    if (cfg.failed) return { allow: false, label: "Configuración no disponible" };
+    const c = componentConfigFor(product.id);
+    if (c.status !== "ready") return { allow: false, label: COMPONENT_CONFIG.status === "error" ? "Configuración no disponible" : "Comprobando…" };
+    if (!c.groups.length) return null;
+    if (!cfg.booted) return { allow: false, label: "Comprobando…" };
+    if (cfg.state === "incomplete") return { allow: false, label: "Completa la configuración" };
+    if (cfg.state === "checking" || cfg.state === "idle") return { allow: false, label: "Comprobando…" };
+    if (cfg.state === "pending") return { allow: false, label: "Configuración pendiente" };
+    return { allow: true, label: "Añadir configuración" };
+  }
+  const cfgActiveConfiguration = () => (cfg.booted && cfg.interactive ? cfgConfiguration() : null);
+
+  function cfgShowLoadError(){
+    cfg.failed = true;
+    cfgPanel.hidden = false;
+    document.getElementById("cfg-price-note").textContent = "";
+    document.getElementById("cfg-body").innerHTML = `<p class="cfg-meta">No pudimos cargar las opciones de configuración de este producto.</p><button type="button" class="btn btn-outline btn-sm" id="cfg-retry-load">Reintentar</button>`;
+    document.getElementById("cfg-status").textContent = "";
+  }
+  /* Nombres y acabados de los componentes: un componente visible en las opciones ya está en PRODUCTS
+     (misma vista que catalog_products); si no (carrera de publicación), se leen UNA vez por identificadores
+     con la lectura existente. Si no se pueden obtener, no se ofrecen opciones sin nombre. */
+  async function cfgComponentProductsReady(){
+    const ids = new Set();
+    (function collect(productId, depth){
+      cfgGroups(productId).forEach(g => g.options.forEach(o => {
+        if (o.kind !== "componente" || !o.componentProductId) return;
+        ids.add(o.componentProductId);
+        if (depth < 2) collect(o.componentProductId, depth + 1);
+      }));
+    })(product.id, 0);
+    const missing = [...ids].filter(id => !PRODUCTS.some(p => p.id === id));
+    if (!missing.length) return true;
+    try { await loadProductsByIds(missing); } catch (e) { return false; }
+    return missing.every(id => PRODUCTS.some(p => p.id === id));
+  }
+  async function cfgBoot(){
+    if (cfg.booting || cfg.booted) return;
+    cfg.booting = true;
+    try {
+      const result = await whenComponentConfig();
+      cfg.interactive = MobauAccess.hasProfessionalTools() && product.status !== "archived";
+      if (result !== "ready"){ cfgShowLoadError(); refreshAddButton(); return; }
+      if (!cfgGroups(product.id).length){ cfg.failed = false; cfgPanel.hidden = true; refreshAddButton(); return; }
+      if (!(await cfgComponentProductsReady())){ cfgShowLoadError(); refreshAddButton(); return; }
+      cfg.failed = false;
+      cfgShowBoot();
+    } finally { cfg.booting = false; }
+  }
+  function cfgShowBoot(){
+    cfgPanel.hidden = false;
+    cfg.booted = true;
+    if (cfg.interactive){
+      cfgChanged();
+    } else {
+      document.getElementById("cfg-body").innerHTML =
+        `<p class="cfg-meta">Estas son las opciones de configuración de este producto. Para configurarlo y añadirlo a tu selección se necesita un plan Individual o Estudio.</p>${cfgReadOnlyHtml(product.id, [])}`;
+      cfgRenderStatus();
+    }
+    if (window.location.hash === "#configurar") cfgPanel.scrollIntoView();
+    refreshAddButton();
+  }
+  /* La carga de las opciones puede reintentarse desde el panel o desde una tarjeta: el panel y el botón
+     siguen la carga vigente (las tarjetas hacen lo mismo en script.js). */
+  document.addEventListener("mobau:component-config", (e) => {
+    if (e.detail.status === "ready" && !cfg.booted) cfgBoot();
+    else if (e.detail.status === "error" && cfg.failed) cfgShowLoadError();
+    refreshAddButton();
+  });
+  document.getElementById("cfg-body").addEventListener("change", (e) => {
+    const input = e.target.closest("input[data-cfg-group]");
+    if (!input || !cfg.interactive) return;
+    const path = JSON.parse(input.dataset.cfgPath);
+    let productId = product.id;
+    for (const step of path){
+      const g = cfgGroups(productId).find(x => x.code === step.group);
+      const o = g && g.options.find(x => x.code === step.option);
+      if (!o || !o.componentProductId) return;
+      productId = o.componentProductId;
+    }
+    const group = cfgGroups(productId).find(x => x.code === input.dataset.cfgGroup);
+    if (!group) return;
+    cfgToggle(path, group, input.dataset.cfgOption, input.dataset.cfgOption === "" ? false : input.checked);
+    cfgChanged();
+  });
+  cfgPanel.addEventListener("click", async (e) => {
+    if (e.target.closest("#cfg-retry-check")){ cfg.seq++; cfg.results.clear(); cfgRequestValidation(); }
+    if (e.target.closest("#cfg-retry-load")){
+      e.target.closest("#cfg-retry-load").disabled = true;
+      await loadComponentConfig({ force: true }); // el evento de la carga rearranca el panel (cfgBoot)
+    }
+  });
+
   function refreshAddButton(){
     const btn = document.getElementById("add-project-btn");
     if (product.status === "archived"){
@@ -544,7 +868,7 @@ runWithCatalog(async function renderProductPage(){
       btn.disabled = true;
       return;
     }
-    const already = inSelection(product.id, selectedFinish());
+    const already = inSelection(product.id, selectedFinish(), cfgActiveConfiguration());
     qtyInput.disabled = already;
     qtyIncrementBtn.disabled = already;
     qtyDecrementBtn.disabled = already || selectedQuantity <= 1;
@@ -555,10 +879,12 @@ runWithCatalog(async function renderProductPage(){
       btn.disabled = true;
       return;
     }
-    btn.textContent = "Añadir a la selección";
+    /* 46: con configuración, el botón espera a conocer su estado; nunca se añade «a ciegas». */
+    const gate = cfgAddState();
+    btn.textContent = gate ? gate.label : "Añadir a la selección";
     btn.classList.add("btn-primary");
     btn.classList.remove("btn-added");
-    btn.disabled = false;
+    btn.disabled = !!gate && !gate.allow;
   }
 
   const relatedProducts = PRODUCTS.filter(p => p.categoria === product.categoria && p.id !== product.id && p.status !== "archived").slice(0,3);
@@ -570,6 +896,7 @@ runWithCatalog(async function renderProductPage(){
     /* Sin callback: bindAddButtons ya actualiza el botón y el contador; volver
        a pintar los relacionados hacía parpadear el resto de tarjetas. */
     bindAddButtons(grid);
+    watchCardConfig(grid);
     propagateCartLinks();
   }
 
@@ -587,7 +914,10 @@ runWithCatalog(async function renderProductPage(){
 
     const unit = getProductUnit(product);
 
-    const addResult = addToSelection(product.id, selectedQuantity, unit, selectedFinish());
+    /* 46: la configuración y el bloqueo se vuelven a calcular aquí, no se confía en el estado del botón. */
+    const gate = cfgAddState();
+    if (gate && !gate.allow){ refreshAddButton(); return; }
+    const addResult = addToSelection(product.id, selectedQuantity, unit, selectedFinish(), cfgActiveConfiguration());
     if (!addResult.success){
       btn.textContent = originalLabel;
       btn.disabled = false;
@@ -623,11 +953,15 @@ runWithCatalog(async function renderProductPage(){
   }
 
   (async () => {
+    /* 46: con herramientas profesionales, la configuración se carga a la vez que
+       los precios para que los relacionados ya sepan qué ofrecer al pintarse. */
+    MobauAccess.access().then(access => { if (access === "pro") loadComponentConfig(); }, () => {});
     await loadPriceState(priceIds);
     renderPriceBlock();
     refreshAddButton();
     renderRelated();
     injectIconSprite();
+    cfgBoot();
   })();
 }, { hide: "#product-root, .related-strip" });
 </script>

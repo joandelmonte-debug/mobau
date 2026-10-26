@@ -1001,7 +1001,16 @@ runWithCatalog(() => {
        tarjeta; volver a pintar toda la cuadrícula hacía parpadear el resto. */
     bindAddButtons(grid);
     bindAddToProjectButtons(grid);
+    watchCardConfig(grid, syncFolderButton);
     propagateCartLinks();
+  }
+
+  /* 46: «Añadir a mi proyecto activo» tampoco se ofrece mientras no se sepa que
+     el producto no necesita configuración (o si la necesita): ese camino añadiría
+     el producto sin sus elecciones. */
+  function syncFolderButton(card, state){
+    const btn = card.querySelector(".btn-add-to-project");
+    if (btn) btn.style.display = (state === "plain" || state === "archived") ? "" : "none";
   }
 
   /* Punto 31 — quita "Ver ficha" de cada tarjeta (renderProductCard,
@@ -1077,6 +1086,13 @@ runWithCatalog(() => {
           const product = PRODUCTS.find(p => p.id === productId);
           if (!product){
             showToast("No se pudo añadir el producto. Intenta de nuevo.");
+            return;
+          }
+          const configState = cardSelectState(product);
+          if (configState === "configurable" || configState === "pending" || configState === "error"){
+            showToast(configState === "configurable"
+              ? "Este producto necesita configuración: ábrelo con «Configurar»."
+              : "Aún no sabemos si este producto necesita configuración.");
             return;
           }
           const unit = getProductUnit(product);
@@ -1183,6 +1199,9 @@ runWithCatalog(() => {
   }
 
   (async () => {
+    /* 46: con herramientas profesionales, la configuración se carga a la vez que
+       los precios para que, al pintar, las tarjetas ya sepan qué ofrecer. */
+    MobauAccess.access().then(access => { if (access === "pro") loadComponentConfig(); }, () => {});
     await loadPriceState();
     applyPriceFilterAccess();
     /* El texto de ayuda de Precio necesita PRICE_STATE ya cargado

@@ -525,6 +525,7 @@ function invalidateCatalogCache(){
     try { sessionStorage.removeItem(key); } catch (e) {}
   });
   CATALOG_ABSENT.clear();
+  resetComponentConfig();
 }
 async function runCatalogQuery(builder){
   const controller = new AbortController();
@@ -654,6 +655,231 @@ async function fetchCatalogProduct(id, options = {}){
   const index = PRODUCTS.findIndex(p => p.id === product.id);
   if (index >= 0) PRODUCTS[index] = product; else PRODUCTS.push(product);
   return product;
+}
+
+/* ---------- Punto 46: grupos y opciones de configuración ----------
+   Se leen de catalog_component_groups y catalog_component_options (las dos
+   vistas públicas de 46-01; visitantes, Gratis e Individual ven lo mismo) en
+   dos consultas conjuntas, nunca una por producto ni por tarjeta. Es una carga
+   APARTE de loadCatalog: si falla, el catálogo sigue funcionando y esta carga
+   queda como «no disponible» (nunca como «sin grupos»).
+   Sin caché de sesión: catalog_version() no cubre estas tablas, así que un
+   sello así ocultaría grupos nuevos. Solo se recuerda en memoria la carga
+   correcta de esta página; un fallo no se recuerda (la siguiente llamada
+   reintenta) y force:true la renueva.
+   Estado: "idle" | "loading" | "ready" | "error".
+   componentConfigFor(id): { status: "ready", groups } (groups vacío = cargado y
+   sin grupos) o { status: "unavailable" } (sin cargar, cargando o fallida). */
+const COMPONENT_CONFIG = { status: "idle", byProduct: new Map(), error: null, run: 0 };
+let componentConfigPromise = null;
+
+/* Cada cambio de estado de la carga (cargando, lista, error) se anuncia en el documento: panel, botón
+   principal y tarjetas se sincronizan con la misma carga vigente, la haya reintentado quien la haya reintentado. */
+function announceComponentConfig(){
+  document.dispatchEvent(new CustomEvent("mobau:component-config", { detail: { status: COMPONENT_CONFIG.status } }));
+}
+
+function resetComponentConfig(){
+  COMPONENT_CONFIG.run++; // una carga en vuelo queda obsoleta y no escribe nada
+  COMPONENT_CONFIG.status = "idle";
+  COMPONENT_CONFIG.byProduct = new Map();
+  COMPONENT_CONFIG.error = null;
+  componentConfigPromise = null;
+}
+
+/* Une grupos y opciones por sus claves estables. Cualquier forma inesperada
+   lanza: no se descarta nada en silencio. */
+function buildComponentConfig(groupRows, optionRows){
+  if (!Array.isArray(groupRows) || !Array.isArray(optionRows)) throw new Error("Respuesta no válida de los grupos de configuración");
+  const text = v => typeof v === "string" && v !== "";
+  const bySortThenCode = (a, b) => (a.sortOrder - b.sortOrder) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
+  const groups = new Map();
+  groupRows.forEach(r => {
+    if (!r || !text(r.id) || !text(r.product_id) || !text(r.code) || !text(r.label)
+        || (r.requirement !== "necesario" && r.requirement !== "opcional") || (r.choice !== "una" && r.choice !== "varias")) {
+      throw new Error("Grupo de configuración no válido");
+    }
+    groups.set(r.id, { id: r.id, productId: r.product_id, code: r.code, label: r.label, requirement: r.requirement, choice: r.choice,
+      dependsOn: r.depends_on_option_id ? { optionId: r.depends_on_option_id, groupCode: null, optionCode: null } : null,
+      sortOrder: Number(r.sort_order) || 0, availableOptions: Number(r.available_options) || 0, options: [] });
+  });
+  const optionById = new Map();
+  optionRows.forEach(r => {
+    if (!r || !text(r.id) || !text(r.group_id) || !text(r.code) || (r.kind !== "componente" && r.kind !== "ajuste")) {
+      throw new Error("Opción de configuración no válida");
+    }
+    const group = groups.get(r.group_id);
+    if (!group) return; // las dos consultas pueden verse con un instante de diferencia: sin grupo visible, no se muestra
+    const option = { id: r.id, code: r.code, kind: r.kind, componentProductId: r.component_product_id || null,
+      componentFinishCode: r.component_finish_code || null, settingLabel: r.setting_label || null, supply: r.supply || null,
+      quantity: r.quantity === null || r.quantity === undefined ? null : Number(r.quantity), quantityMode: r.quantity_mode || null,
+      attributes: Array.isArray(r.attributes) ? r.attributes : [], sortOrder: Number(r.sort_order) || 0, groupCode: group.code };
+    group.options.push(option);
+    optionById.set(option.id, option);
+  });
+  const byProduct = new Map();
+  groups.forEach(group => {
+    group.options.sort(bySortThenCode);
+    /* Condición del grupo: código del grupo y de la opción que lo activa; sin
+       opción visible queda con códigos nulos (la condición no puede cumplirse). */
+    if (group.dependsOn){
+      const needed = optionById.get(group.dependsOn.optionId);
+      if (needed){ group.dependsOn.optionCode = needed.code; group.dependsOn.groupCode = needed.groupCode; }
+    }
+    if (!byProduct.has(group.productId)) byProduct.set(group.productId, []);
+    byProduct.get(group.productId).push(group);
+  });
+  byProduct.forEach(list => list.sort(bySortThenCode));
+  return byProduct;
+}
+
+/* Una carga renovada (force) o invalidada mientras estaba en vuelo: su resultado
+   es el de la carga vigente, y si no hay ninguna, «error» (nunca «ready» sin datos). */
+function staleComponentConfigResult(){
+  return componentConfigPromise || Promise.resolve(COMPONENT_CONFIG.status === "ready" ? "ready" : "error");
+}
+
+/* options: { force: boolean } -> Promise<"ready" | "error">. Nunca rechaza. */
+function loadComponentConfig(options = {}){
+  if (!catalogUsesDb(options)){
+    COMPONENT_CONFIG.status = "ready"; // catálogo estático: sin grupos reales
+    return Promise.resolve("ready");
+  }
+  if (options.force) resetComponentConfig();
+  if (componentConfigPromise) return componentConfigPromise;
+  const run = ++COMPONENT_CONFIG.run;
+  COMPONENT_CONFIG.status = "loading";
+  COMPONENT_CONFIG.error = null;
+  announceComponentConfig();
+  const fetching = (async () => {
+    const [groupRows, optionRows] = await Promise.all([
+      selectAllRows(() => supabaseClient.from("catalog_component_groups").select("id, product_id, code, label, requirement, choice, depends_on_option_id, sort_order, available_options").order("id")),
+      selectAllRows(() => supabaseClient.from("catalog_component_options").select("id, group_id, product_id, code, kind, component_product_id, component_finish_code, setting_label, supply, quantity, quantity_mode, attributes, sort_order").order("id"))
+    ]);
+    return buildComponentConfig(groupRows, optionRows);
+  })();
+  /* Plazo de respaldo por si una consulta no termina ni al cancelarla. */
+  let timer;
+  const limit = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Tiempo de espera agotado")), CATALOG_CONFIG.timeoutMs + 500); });
+  const promise = Promise.race([fetching, limit]).then(byProduct => {
+    clearTimeout(timer);
+    if (run !== COMPONENT_CONFIG.run) return staleComponentConfigResult(); // obsoleta: no escribe nada
+    COMPONENT_CONFIG.byProduct = byProduct;
+    COMPONENT_CONFIG.status = "ready";
+    announceComponentConfig();
+    return "ready";
+  }, error => {
+    clearTimeout(timer);
+    if (run !== COMPONENT_CONFIG.run) return staleComponentConfigResult();
+    COMPONENT_CONFIG.status = "error";
+    COMPONENT_CONFIG.error = error;
+    componentConfigPromise = null; // un fallo no se recuerda: la siguiente llamada reintenta
+    announceComponentConfig();
+    return "error";
+  });
+  fetching.catch(() => {}); // una respuesta tardía o fallida después del plazo no deja errores sin capturar
+  componentConfigPromise = promise;
+  return promise;
+}
+
+/* La carga vigente o su resultado, sin lanzar otra tras un fallo (solo arranca si nunca se pidió):
+   el reintento tras un error es siempre explícito (loadComponentConfig({ force: true })). */
+function whenComponentConfig(){
+  if (COMPONENT_CONFIG.status === "idle") return loadComponentConfig();
+  return componentConfigPromise || Promise.resolve(COMPONENT_CONFIG.status === "ready" ? "ready" : "error");
+}
+
+function componentConfigFor(productId){
+  if (COMPONENT_CONFIG.status !== "ready") return { status: "unavailable" };
+  return { status: "ready", groups: COMPONENT_CONFIG.byProduct.get(productId) || [] };
+}
+
+/* ---------- Punto 46 · bloque 4 · paso 2: acción de selección de las tarjetas ----------
+   Qué ofrece la tarjeta (solo con herramientas profesionales; el resto sigue
+   con «Ver ficha», sin acceso a la selección) según la configuración cargada:
+     plain        carga correcta y sin grupos: «Añadir a la selección» como siempre
+     configurable carga correcta y con grupos activos: «Configurar» (a la ficha)
+     pending      sin cargar o cargando: «Comprobando…», sin poder añadir
+     error        la carga falló: aviso y «Reintentar», sin poder añadir
+     archived     «No disponible actualmente»
+   Hasta saber si el producto requiere configuración nunca se ofrece añadirlo. */
+function cardSelectState(p){
+  if (p.status === "archived") return "archived";
+  const config = componentConfigFor(p.id);
+  if (config.status === "ready") return config.groups.length ? "configurable" : "plain";
+  return COMPONENT_CONFIG.status === "error" ? "error" : "pending";
+}
+
+function cardSelectSlotHtml(p, state, finish, inSel){
+  const idAttr = escapeHtml(p.id);
+  let inner;
+  if (state === "archived"){
+    inner = `<button type="button" class="btn btn-added" disabled>No disponible actualmente</button>`;
+  } else if (state === "configurable"){
+    inner = `<a class="btn btn-primary btn-configure" href="${escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}#configurar`)}">Configurar</a>`;
+  } else if (state === "pending"){
+    inner = `<button type="button" class="btn btn-outline btn-config-pending" disabled title="Comprobando si este producto necesita configuración">Comprobando…</button>`;
+  } else if (state === "error"){
+    inner = `<span class="card-meta" role="status" style="flex-basis:100%;">No pudimos comprobar si necesita configuración.</span>
+      <button type="button" class="btn btn-outline btn-config-retry">Reintentar</button>`;
+  } else {
+    inner = `<button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${idAttr}" data-finish="${escapeHtml(finish || "")}" ${inSel ? "disabled" : ""}>
+      ${inSel ? "En mi selección" : "Añadir a la selección"}
+    </button>`;
+  }
+  return `<span data-select-slot data-config-state="${state}" style="display:contents;">${inner}</span>`;
+}
+
+/* Actualiza EN SU SITIO la acción de cada tarjeta cuyo estado cambió (solo ese
+   elemento): no reconstruye la cuadrícula, así que no hay parpadeo y se conservan
+   filtros, orden y desplazamiento. onState(card, state) deja a la página
+   sincronizar otros controles de la tarjeta. Las tarjetas de solo lectura no
+   tienen acción de selección y se saltan. */
+function refreshCardConfigActions(container, onState){
+  container.querySelectorAll(".product-card").forEach(card => {
+    let slot = card.querySelector("[data-select-slot]");
+    if (!slot) return;
+    const p = PRODUCTS.find(x => x.id === card.dataset.productId);
+    if (!p) return;
+    const state = cardSelectState(p);
+    if (slot.dataset.configState !== state){
+      const finish = defaultFinishCode(p);
+      slot.outerHTML = cardSelectSlotHtml(p, state, finish, inSelection(p.id, finish));
+      slot = card.querySelector("[data-select-slot]");
+    }
+    if (onState) onState(card, state);
+  });
+  bindAddButtons(container); // solo enlaza los botones nuevos
+}
+
+/* Reintento de la carga desde cualquier tarjeta con error (un único escuchador
+   por contenedor, sin reenlazar al repintar). */
+let cardConfigRetrying = false;
+function bindCardConfigRetry(container, onState){
+  if (container.dataset.configRetryBound) return;
+  container.dataset.configRetryBound = "1";
+  container.addEventListener("click", async (event) => {
+    if (!event.target.closest(".btn-config-retry") || cardConfigRetrying) return;
+    cardConfigRetrying = true;
+    try { await loadComponentConfig({ force: true }); } // las tarjetas se actualizan con el evento de la carga
+    finally { cardConfigRetrying = false; }
+  });
+  /* Las tarjetas siguen cualquier cambio de la carga (también el reintento desde la ficha). */
+  document.addEventListener("mobau:component-config", () => {
+    if (container.isConnected) refreshCardConfigActions(container, onState);
+  });
+}
+
+/* Se llama tras pintar las tarjetas: solo con herramientas profesionales,
+   arranca (o reutiliza) la carga y actualiza las tarjetas cuando termina. */
+function watchCardConfig(container, onState){
+  if (cardActionsReadOnly()) return;
+  bindCardConfigRetry(container, onState);
+  /* Solo arranca la carga si nunca se pidió; tras un fallo espera al «Reintentar»
+     explícito (cada repintado por un filtro no reintenta por su cuenta). */
+  const loading = whenComponentConfig();
+  refreshCardConfigActions(container, onState);
+  loading.then(() => refreshCardConfigActions(container, onState));
 }
 
 /* ---------- estados de carga y error del catálogo ---------- */
@@ -1107,12 +1333,15 @@ function updateCartBadge(){
 
 function withCartHref(href, cart){
   if(!href || /^https?:|^mailto:|^tel:|^#/.test(href)) return href;
-  const [path, query = ""] = href.split("?");
+  /* El fragmento (#configurar…) se conserva tal cual: no pasa por URLSearchParams. */
+  const hashAt = href.indexOf("#");
+  const hash = hashAt >= 0 ? href.slice(hashAt) : "";
+  const [path, query = ""] = (hashAt >= 0 ? href.slice(0, hashAt) : href).split("?");
   const p = new URLSearchParams(query);
   if(cart.length) p.set("carrito", cartParamString(cart));
   else p.delete("carrito");
   const qs = p.toString();
-  return qs ? `${path}?${qs}` : path;
+  return (qs ? `${path}?${qs}` : path) + hash;
 }
 
 function propagateCartLinks(){
@@ -1360,12 +1589,7 @@ function renderProductCard(p){
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
   const actionsHtml = cardActionsReadOnly() ? readOnlyCardActionsHtml(fichaUrl) : null;
-  const selectButton = p.status === "archived"
-    ? `<button type="button" class="btn btn-added" disabled>No disponible actualmente</button>`
-    : `
-    <button type="button" class="btn ${inSel ? "btn-added" : "btn-primary"} btn-add-selection" data-id="${idAttr}" data-finish="${escapeHtml(finish || "")}" ${inSel ? "disabled" : ""}>
-      ${inSel ? "En mi selección" : "Añadir a la selección"}
-    </button>`;
+  const selectButton = cardSelectSlotHtml(p, cardSelectState(p), finish, inSel);
   return `
     <article class="product-card" data-product-id="${idAttr}">
       <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${escapeHtml(p.nombre)}">
@@ -1429,6 +1653,8 @@ function updateSelectionBadge(){
 
 function bindAddButtons(container, onChange){
   container.querySelectorAll(".btn-add-selection").forEach(btn => {
+    if (btn.dataset.addBound) return; // un botón ya enlazado no se enlaza dos veces
+    btn.dataset.addBound = "1";
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       const originalLabel = btn.textContent;

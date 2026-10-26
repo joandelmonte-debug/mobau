@@ -103,6 +103,9 @@ const DAMA = {
   /* Columnas que pide la web (PRODUCT_COLUMNS), no las de catalog_products: catalog_role (46-01) no se pide. */
   check("C07 columnas del catálogo que pide la web (29, las 4 de iluminación al final)", PRODUCT_COLUMNS.split(", ").slice(-4).concat(PRODUCT_COLUMNS.split(", ").length), ["environment", "light_source", "electrical_connection", "color_temperature", 29]);
   PRODUCTS.push(p, { id: "pared-1", nombre: "Pared", categoria: "revestimientos", distribuidor: "spectro", marca: "x", disponibilidad: "en-stock", status: "active", acabadosOpciones: [] });
+  /* 46: una tarjeta con herramientas profesionales solo ofrece añadir cuando se sabe que el producto no
+     necesita configuración. Preparación: configuración cargada correctamente y sin grupos (carga real, catálogo estático). */
+  await loadComponentConfig({ source: "static" });
   const card = document.createElement("div");
   card.innerHTML = renderProductCard(p);
   check("C08 tarjeta: añade el acabado por defecto y muestra la referencia", [card.querySelector(".btn-add-selection").dataset.finish, card.querySelector(".card-meta").textContent.includes("Ref. 3225")], ["25", true]);

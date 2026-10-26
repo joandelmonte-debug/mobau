@@ -1,0 +1,515 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 46 · datos de configuración (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:900px;height:700px;border:0;position:absolute;left:-9999px}</style>
+<h1>Punto 46 · bloque 4 · paso 1 · carga de grupos y opciones (mocks)</h1>
+<p>Sin red ni Supabase; servir la raíz del repositorio (solo en un origen local). Ejecuta <code>catalogo.html</code> y <code>producto.html</code> reales a través de <code>sw-paginas-46.js</code>, que en cada página solo sustituye la etiqueta de supabase-js por el cliente simulado de CC1 y añade <code>mock-proyecto-46.js</code> y <code>mock-grupos-46.js</code>. Si una página no carga el simulador, el ensayo se detiene. Al terminar elimina el registro del service worker y comprueba que ya no intercepta páginas.</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<div id="marco"></div>
+<script>
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const QS_IND = "rol=individual&pro=1&uid=a";     // Individual: las páginas cargan la configuración por su cuenta
+const QS_GRATIS = "rol=individual&pro=0&uid=a";  // Gratis: no la cargan; los casos del paso 1 la piden a mano
+const QS_VISITANTE = "rol=anon";
+const frame = document.createElement("iframe");
+document.body.appendChild(frame);
+let reg, ok = 0, ko = 0, n = 0;
+
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+
+/* Abre una página real (servida por el service worker) y espera a que pinte sus tarjetas.
+   Sin los simuladores no se continúa: nunca con el cliente real. */
+const GRID = { "catalogo.html": "#product-grid", "producto.html": "#related-grid" };
+async function open(conf = {}, { page = "catalogo.html", qs = QS_GRATIS, wait = 7000, cards = true, id = "demo-pub", width = "" } = {}){
+  sessionStorage.setItem("__grupos46", JSON.stringify(conf));
+  ["mobau_catalog_v5", "mobau_distributors_v5", "mobau_categories_v5"].forEach(k => sessionStorage.removeItem(k)); // la caché de catálogo no mezcla ensayos
+  frame.style.width = width; frame.style.height = width ? "2600px" : "";
+  sessionStorage.removeItem("__mockqs");
+  const query = page === "producto.html" ? `id=${id}&${qs}` : qs;
+  await new Promise(res => { frame.onload = res; frame.src = `pagina/${page}?${query}`; });
+  const w = frame.contentWindow;
+  if (!w || !w.__mock || !w.__grupos46) throw new Error(`${page} no cargó el simulador: ensayo detenido`);
+  const t0 = Date.now();
+  while (cards && Date.now() - t0 < wait){
+    await sleep(60);
+    if (frame.contentDocument.querySelectorAll(`${GRID[page]} .product-card`).length > 0) { await sleep(150); return w; }
+  }
+  if (cards) throw new Error(`${page} no pintó tarjetas: ensayo detenido`);
+  return w;
+}
+const W = () => frame.contentWindow;
+const calls = () => W().__grupos46.calls.map(c => c.vista.replace("catalog_component_", "").replace(/s$/, "") + `@${c.from}`);
+const nCalls = () => W().__grupos46.calls.length;
+const state = () => W().eval("COMPONENT_CONFIG.status");
+const cfg = id => W().componentConfigFor(id);
+const codes = id => { const r = cfg(id); return r.status === "ready" ? r.groups.map(g => g.code) : r.status; };
+const sinCapturar = () => W().__sinCapturar;
+
+(async () => {
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Solo en un origen local de pruebas");
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    reg = await navigator.serviceWorker.register("sw-paginas-46.js");
+    while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await sleep(50);
+
+    /* ===== Catálogo habitual, sin grupos cargados ===== */
+    let w = await open();
+    check("G0 el catálogo habitual carga sin consultar grupos ni opciones; la configuración aún no está cargada (no es «sin grupos»)",
+      [w.document.querySelectorAll("#product-grid .product-card").length, nCalls(), state(), cfg("demo-sin")], [5, 0, "idle", { status: "unavailable" }]);
+
+    /* ===== Carga correcta ===== */
+    check("G1 carga: dos consultas conjuntas (grupos y opciones), una vez, sin consulta por producto",
+      [await w.loadComponentConfig(), state(), calls().sort()], ["ready", "ready", ["group@0", "option@0"]]);
+    check("G2 producto con grupos: orden y claves estables; producto sin grupos: cargado y vacío; producto sin opciones disponibles: grupo con 0 opciones",
+      [codes("demo-pub"), codes("demo-cot"), cfg("demo-sin"), cfg("demo-nodisp"), cfg("demo-pend").groups.map(g => [g.code, g.availableOptions, g.options.length])],
+      [["fuente", "extras", "control"], ["carcasa"], { status: "ready", groups: [] }, { status: "ready", groups: [] }, [["vacio", 0, 0]]]);
+    const pub = cfg("demo-pub").groups;
+    check("G3 requisito y elección de cada grupo; opciones ordenadas con sus códigos; componente y ajuste",
+      [pub.map(g => [g.code, g.requirement, g.choice]), pub[0].options.map(o => [o.code, o.kind, o.componentProductId, o.settingLabel]), pub[2].options.map(o => o.code)],
+      [[["fuente", "necesario", "una"], ["extras", "opcional", "varias"], ["control", "necesario", "una"]],
+       [["comp", "componente", "demo-cot", null], ["calida", "ajuste", null, "Cálida"]], ["dim", "onoff"]]);
+    const comp = pub[0].options[0], cable = pub[1].options[0];
+    check("G4 suministro, cantidad por unidad (número), modo «a calcular» sin cantidad y atributos",
+      [[comp.supply, comp.quantity, comp.quantityMode, comp.attributes], [cable.supply, cable.quantity, cable.quantityMode]],
+      [["aparte", 1, "fija", [{ label: "Potencia", value: "24 W" }]], ["incluido", null, "a_calcular"]]);
+    check("G5 grupo condicionado: indica el grupo y la opción que lo activan; los demás no tienen condición",
+      [pub.map(g => g.dependsOn)], [[null, null, { optionId: "o-comp", groupCode: "fuente", optionCode: "comp" }]]);
+
+    /* ===== Memoria de la página y renovación ===== */
+    await w.loadComponentConfig();
+    check("G6 una segunda llamada reutiliza la carga correcta (sin consultas nuevas)", nCalls(), 2);
+    await w.loadComponentConfig({ force: true });
+    check("G7 force:true la renueva con dos consultas nuevas", [nCalls(), state()], [4, "ready"]);
+    w.invalidateCatalogCache();
+    check("G8 invalidar la caché del catálogo olvida la configuración: vuelve a «no disponible», no a «sin grupos»", [state(), cfg("demo-pub")], ["idle", { status: "unavailable" }]);
+    await w.loadComponentConfig();
+    check("G9 y la siguiente carga la pide de nuevo", [nCalls(), state()], [6, "ready"]);
+
+    /* ===== Paginación ===== */
+    w = await open();
+    w.eval("CATALOG_CONFIG").pageSize = 2;
+    await w.loadComponentConfig();
+    check("G10 con más filas que el tamaño de página, pagina cada vista y reúne todo (5 grupos, 7 opciones)",
+      [calls().sort(), codes("demo-pub"), cfg("demo-pub").groups[0].options.length, codes("demo-cot")],
+      [["group@0", "option@0", "group@2", "option@2", "group@4", "option@4", "option@6"].sort(), ["fuente", "extras", "control"], 2, ["carcasa"]]);
+
+    /* ===== Sin grupos en la base ===== */
+    w = await open({ vacio: true });
+    check("G11 carga correcta sin ningún grupo: «ready» con listas vacías (no es error)", [await w.loadComponentConfig(), state(), cfg("demo-pub")], ["ready", "ready", { status: "ready", groups: [] }]);
+
+    /* ===== Fallos: nunca «sin grupos» ===== */
+    for (const [modo, nombre] of [["error", "error de la consulta"], ["rechazo", "rechazo (fallo de red)"], ["malformada", "grupos con forma no válida"], ["sin_arreglo", "respuesta que no es una lista"]]){
+      w = await open({ modo });
+      const r = await w.loadComponentConfig();
+      check(`G12 ${nombre}: «error», no disponible (nunca «sin grupos»), el catálogo sigue y sin errores sin capturar`,
+        [r, state(), cfg("demo-pub"), cfg("demo-sin"), w.eval("PRODUCTS.length"), sinCapturar()], ["error", "error", { status: "unavailable" }, { status: "unavailable" }, 5, []]);
+      w.__grupos46.conf.modo = "normal";
+      const n0 = nCalls();
+      const r2 = await w.loadComponentConfig();
+      check(`G13 tras ${nombre}: el fallo no se recuerda, la siguiente llamada reintenta y se recupera`,
+        [r2, state(), nCalls() > n0, codes("demo-pub")], ["ready", "ready", true, ["fuente", "extras", "control"]]);
+    }
+    w = await open({ modo: "error", soloOpciones: true });
+    check("G14 fallan solo las opciones: toda la carga es «error»; no queda cargado un resultado a medias",
+      [await w.loadComponentConfig(), state(), cfg("demo-pub"), w.eval("COMPONENT_CONFIG.byProduct.size")], ["error", "error", { status: "unavailable" }, 0]);
+
+    /* ===== Límite de espera y respuesta tardía ===== */
+    w = await open({ modo: "colgada" });
+    let t0 = Date.now(); const rc = await w.loadComponentConfig(); const dt = Date.now() - t0;
+    check("G15 consulta sin respuesta (ni al cancelar): «error» al cumplirse el plazo de respaldo (4,5 s), sin errores sin capturar",
+      [rc, dt >= 4400 && dt < 6000, cfg("demo-pub"), sinCapturar()], ["error", true, { status: "unavailable" }, []]);
+    w.__grupos46.conf.modo = "normal";
+    check("G16 tras el plazo agotado, reintenta y se recupera", [await w.loadComponentConfig(), codes("demo-pub")], ["ready", ["fuente", "extras", "control"]]);
+
+    w = await open({ modo: "tardia" });
+    t0 = Date.now(); const rt = await w.loadComponentConfig(); const dt2 = Date.now() - t0;
+    await sleep(2200); // llega la respuesta tardía (5,5 s)
+    check("G17 respuesta que llega después del límite: «error» a tiempo; la respuesta tardía no cambia el estado ni produce errores sin capturar",
+      [rt, dt2 < 5400, state(), cfg("demo-pub"), w.__grupos46.tardias.length > 0, sinCapturar()], ["error", true, "error", { status: "unavailable" }, true, []]);
+    w.__grupos46.conf.modo = "normal";
+    check("G18 y después se recupera con una carga nueva", [await w.loadComponentConfig(), codes("demo-pub")], ["ready", ["fuente", "extras", "control"]]);
+
+    /* ===== Renovación en vuelo ===== */
+    w = await open();
+    const a = w.loadComponentConfig(); const b = w.loadComponentConfig({ force: true });
+    check("G19 una carga renovada mientras otra está en vuelo: ambas terminan con la vigente, sin mezclar estados",
+      [await a, await b, state(), nCalls(), codes("demo-pub")], ["ready", "ready", "ready", 4, ["fuente", "extras", "control"]]);
+
+    /* ===== Caché: sin sello obsoleto ===== */
+    w = await open();
+    await w.loadComponentConfig();
+    const claves = Object.keys(sessionStorage).concat(Object.keys(localStorage)).filter(k => /compon|grupo|config/i.test(k) && k !== "__grupos46");
+    check("G20 no escribe nada en sessionStorage ni localStorage (no hay caché que oculte grupos nuevos)", claves, []);
+    check("G21 antes de que exista el grupo nuevo, demo-sin no tiene grupos", cfg("demo-sin").groups.length, 0);
+    w = await open({ conNuevo: true });
+    await w.loadComponentConfig();
+    check("G22 una página nueva ve un grupo recién añadido en la base, sin invalidar nada", codes("demo-sin"), ["nuevo"]);
+
+    /* ===== Paso 2 · acción de las tarjetas (catálogo y relacionados) ===== */
+    const IDS = ["demo-cot", "demo-pend", "demo-pub", "demo-sin", "demo-nodisp"];
+    const REL = ["demo-cot", "demo-pend", "demo-sin"];
+    const until = async (fn, ms = 4000) => { const t0 = Date.now(); while (Date.now() - t0 < ms){ if (fn()) return true; await sleep(50); } return false; };
+    const doc = () => frame.contentDocument;
+    const card = id => doc().querySelector(`.product-card[data-product-id="${id}"]`);
+    const slot = id => { const e = card(id).querySelector("[data-select-slot]"); return e ? e.dataset.configState : "solo lectura"; };
+    const labels = id => [...card(id).querySelectorAll("a.btn, button.btn, .btn-add-to-project")]
+      .filter(e => e.style.display !== "none" && e.getClientRects().length).map(e => e.textContent.replace(/\s+/g, " ").trim() || "carpeta");
+    const addBtns = () => doc().querySelectorAll(".product-card .btn-add-selection").length;
+    const selKey = () => Object.keys(localStorage).find(k => k.startsWith("mobau_seleccion:"));
+    const stored = () => selKey() ? JSON.parse(localStorage.getItem(selKey())).map(i => `${i.productId}|${i.finish || ""}|${i.quantity}`) : [];
+    const clearSel = () => Object.keys(localStorage).filter(k => k.startsWith("mobau_seleccion")).forEach(k => localStorage.removeItem(k));
+    const ready = w => until(() => w.eval("COMPONENT_CONFIG.status") === "ready");
+    const mark = gridSel => { const g = doc().querySelector(gridSel); const cs = [...g.querySelectorAll(".product-card")]; cs.forEach((c, i) => c._mark = i);
+      const o = { mut: 0, replaced: () => [...g.querySelectorAll(".product-card")].filter(c => c._mark === undefined).length };
+      new MutationObserver(m => o.mut += m.length).observe(g, { childList: true }); return o; };
+    const badge = () => doc().getElementById("selection-count-link")?.textContent;
+    const views = w => w.__grupos46.calls.length;
+
+    clearSel();
+    w = await open({}, { qs: QS_IND });
+    await ready(w);
+    check("P1 catálogo Individual: con grupos → «configurable»; sin grupos → «plain»; incluye el grupo necesario sin opciones (demo-pend)",
+      IDS.map(slot), ["configurable", "configurable", "configurable", "plain", "plain"]);
+    check("P2 «Configurar» enlaza a la ficha con #configurar y sustituye a añadir (ni «Añadir a la selección» ni «carpeta»); sin grupos, todo como antes",
+      [card("demo-pub").querySelector("a.btn-configure").getAttribute("href"), labels("demo-pub"), labels("demo-pend"), labels("demo-sin")],
+      ["producto.html?id=demo-pub#configurar", ["Configurar"], ["Configurar"], ["Añadir a la selección", "carpeta"]]);
+    const folder = card("demo-pend").querySelector(".btn-add-to-project");
+    const w0 = w.__escrituras46.length; folder.click(); await sleep(600);
+    check("P3 grupo necesario sin opciones: no hay botón de añadir y ni forzando «añadir a mi proyecto» se escribe nada (ni en proyecto ni en selección)",
+      [card("demo-pend").querySelectorAll(".btn-add-selection").length, w.__escrituras46.length - w0, stored()], [0, 0, []]);
+
+    /* Carga pendiente */
+    w = await open({ retraso: 1500 }, { qs: QS_IND });
+    const o4 = mark("#product-grid");
+    check("P4a carga pendiente: ninguna tarjeta ofrece añadir; muestran «Comprobando…» (sin «carpeta»); no se presenta como sin configuración",
+      [IDS.map(slot), addBtns(), labels("demo-sin"), labels("demo-pub")], [Array(5).fill("pending"), 0, ["Comprobando…"], ["Comprobando…"]]);
+    await ready(w); await sleep(200);
+    check("P4b al resolverse la carga se actualiza cada tarjeta en su sitio: sin reconstruir la cuadrícula (0 tarjetas nuevas, 0 mutaciones)",
+      [IDS.map(slot), o4.replaced(), o4.mut], [["configurable", "configurable", "configurable", "plain", "plain"], 0, 0]);
+    clearSel();
+    card("demo-sin").querySelector(".btn-add-selection").click(); await sleep(700);
+    check("P4c el botón creado tras la carga funciona una sola vez (sin enlazar dos veces): una línea, contador y botón al día",
+      [stored(), badge(), labels("demo-sin")[0], o4.replaced(), o4.mut], [["demo-sin||1"], "Mi selección (1)", "En mi selección", 0, 0]);
+
+    /* Error y reintento, con orden, filtro y desplazamiento */
+    clearSel();
+    w = await open({ modo: "error" }, { qs: QS_IND });
+    await until(() => w.eval("COMPONENT_CONFIG.status") === "error"); await sleep(200);
+    check("P5a error: aviso comprensible y «Reintentar»; ningún producto se ofrece para añadir ni se presenta como sin configuración",
+      [IDS.map(slot), addBtns(), labels("demo-sin"), card("demo-sin").innerText.includes("No pudimos comprobar si necesita configuración.")],
+      [Array(5).fill("error"), 0, ["Reintentar"], true]);
+    const sortSel = doc().getElementById("sort-select"); sortSel.value = "nombre"; sortSel.dispatchEvent(new Event("change", { bubbles: true })); await sleep(300);
+    const cb = [...doc().querySelectorAll(".filter-group input[type=checkbox]")].find(i => !i.checked); cb.click(); await sleep(300);
+    doc().body.style.minHeight = "4000px"; frame.contentWindow.scrollTo({ top: 250, behavior: "instant" }); await sleep(800);
+    const y0 = frame.contentWindow.scrollY, callsErr = views(w);
+    check("P5b filtrar u ordenar con error no relanza la carga por su cuenta; las tarjetas siguen en «error»",
+      [IDS.map(slot), views(w) === callsErr, w.eval("COMPONENT_CONFIG.status")], [Array(5).fill("error"), true, "error"]);
+    const o5 = mark("#product-grid");
+    w.__grupos46.conf.modo = "normal"; w.__grupos46.conf.retraso = 500;
+    card("demo-sin").querySelector(".btn-config-retry").click(); await sleep(150);
+    const mid = IDS.map(slot);
+    await ready(w); await sleep(200);
+    check("P5c «Reintentar»: pasa a «Comprobando…» y se recupera; no reconstruye la cuadrícula y conserva orden, filtro y desplazamiento",
+      [mid, IDS.map(slot), o5.replaced(), o5.mut, sortSel.value, cb.checked, frame.contentWindow.scrollY === y0],
+      [Array(5).fill("pending"), ["configurable", "configurable", "configurable", "plain", "plain"], 0, 0, "nombre", true, true]);
+
+    /* Añadir sin grupos: botón y contador, sin parpadeo */
+    clearSel();
+    w = await open({}, { qs: QS_IND }); await ready(w);
+    const o6 = mark("#product-grid");
+    card("demo-sin").querySelector(".btn-add-selection").click(); await sleep(700);
+    card("demo-nodisp").querySelector(".btn-add-selection").click(); await sleep(700);
+    const b6 = card("demo-sin").querySelector(".btn-add-selection"); b6.disabled = false; b6.click(); await sleep(700);
+    check("P6 añadir dos productos sin grupos y repetir el clic: botón y contador al día, sin duplicar, sin reconstruir la cuadrícula",
+      [stored(), badge(), labels("demo-sin")[0], labels("demo-nodisp")[0], o6.replaced(), o6.mut],
+      [["demo-sin||1", "demo-nodisp||1"], "Mi selección (2)", "En mi selección", "En mi selección", 0, 0]);
+
+    /* Visitante y Gratis: solo «Ver ficha», sin acceso a la selección ni consultas */
+    for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+      clearSel();
+      w = await open({}, { qs }); await sleep(600);
+      check(`P7 ${nombre}: cada tarjeta solo ofrece «Ver ficha»; ni «Configurar» ni añadir; no consulta grupos ni opciones`,
+        [IDS.map(slot), IDS.map(id => labels(id).join("|")).filter(l => l !== "Ver ficha").length, addBtns(), views(w), doc().querySelectorAll(".btn-configure").length],
+        [Array(5).fill("solo lectura"), 0, 0, 0, 0]);
+    }
+
+    /* Relacionados (tarjetas compartidas) */
+    clearSel();
+    w = await open({}, { page: "producto.html", qs: QS_IND }); await ready(w);
+    check("P8 relacionados Individual: «Configurar» para los productos con grupos; «Añadir» para el que no tiene; conserva «Ver ficha»",
+      [REL.map(slot), REL.map(labels)], [["configurable", "configurable", "plain"], [["Ver ficha", "Configurar"], ["Ver ficha", "Configurar"], ["Ver ficha", "Añadir a la selección"]]]);
+    const o8 = mark("#related-grid");
+    card("demo-sin").querySelector(".btn-add-selection").click(); await sleep(700);
+    const b8 = card("demo-sin").querySelector(".btn-add-selection"); b8.disabled = false; b8.click(); await sleep(700);
+    check("P9 relacionados: añadir el producto sin grupos (y repetir) actualiza botón y contador sin reconstruir las demás tarjetas ni duplicar",
+      [stored(), badge(), labels("demo-sin"), o8.replaced(), o8.mut], [["demo-sin||1"], "Mi selección (1)", ["Ver ficha", "En mi selección"], 0, 0]);
+
+    clearSel();
+    w = await open({ retraso: 1500 }, { page: "producto.html", qs: QS_IND });
+    const o10 = mark("#related-grid");
+    const pend = [REL.map(slot), addBtns()];
+    await ready(w); await sleep(200);
+    check("P10 relacionados con carga pendiente: «Comprobando…» sin poder añadir; al resolverse se actualiza en su sitio",
+      [pend, REL.map(slot), o10.replaced(), o10.mut], [[Array(3).fill("pending"), 0], ["configurable", "configurable", "plain"], 0, 0]);
+
+    w = await open({ modo: "error" }, { page: "producto.html", qs: QS_IND });
+    await until(() => w.eval("COMPONENT_CONFIG.status") === "error"); await sleep(200);
+    const e11 = [REL.map(slot), addBtns(), labels("demo-sin")];
+    const o11 = mark("#related-grid");
+    w.__grupos46.conf.modo = "normal";
+    card("demo-sin").querySelector(".btn-config-retry").click(); await ready(w); await sleep(300);
+    check("P11 relacionados con error: aviso y «Reintentar» sin poder añadir; el reintento correcto se recupera sin reconstruir las tarjetas",
+      [e11, REL.map(slot), o11.replaced(), o11.mut], [[Array(3).fill("error"), 0, ["Ver ficha", "Reintentar"]], ["configurable", "configurable", "plain"], 0, 0]);
+
+    for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+      w = await open({}, { page: "producto.html", qs }); await sleep(600);
+      check(`P12 relacionados ${nombre}: solo «Ver ficha», sin «Configurar» ni añadir; las tarjetas no consultan nada (la única carga, 2 consultas, es la del panel de solo lectura de la ficha)`,
+        [REL.map(slot), addBtns(), doc().querySelectorAll(".btn-configure").length, views(w)], [Array(3).fill("solo lectura"), 0, 0, 2]);
+    }
+    clearSel();
+
+    /* ===== Paso 3 · configurador en la ficha ===== */
+    const FICHA = { page: "producto.html", qs: QS_IND };
+    const ab = () => doc().getElementById("add-project-btn");
+    const panel = () => doc().getElementById("configurar");
+    const status = () => doc().getElementById("cfg-status").innerText.trim();
+    const abLabel = () => ab().textContent.trim() + (ab().disabled ? " (off)" : "");
+    const legends = () => [...doc().querySelectorAll("#cfg-body legend")].map(l => l.firstChild.textContent.trim());
+    const inp = (group, option, path = []) => doc().querySelector(`#cfg-body input[data-cfg-group="${group}"][data-cfg-option="${option}"][data-cfg-path='${JSON.stringify(path)}']`);
+    const pick = async (group, option, path = [], ms = 40) => { inp(group, option, path).click(); await sleep(ms); };
+    const checked = () => [...doc().querySelectorAll("#cfg-body input:checked")].map(i => `${i.dataset.cfgGroup}:${i.dataset.cfgOption || "—"}`);
+    const vals = w => w.__grupos46.validaciones;
+    const lastCfg = w => vals(w)[vals(w).length - 1].p_configuration;
+    const norm = (w, c) => JSON.stringify(w.normalizeSelectionConfiguration(c));
+    const CH = (group, options, path = []) => ({ path, group, options });
+    const settled = async () => { await until(() => ab() && ab().textContent.trim() !== "Comprobando…" || false, 6000); await sleep(150); };
+    const storedLines = () => selKey() ? JSON.parse(localStorage.getItem(selKey())) : [];
+    const COMP = [{ group: "fuente", option: "comp" }];
+
+    /* Requisitos, única/múltiple, condiciones, anidados y comprobación */
+    clearSel();
+    w = await open({ validacion: "ok" }, FICHA); await settled();
+    check("Q1 ficha Individual con grupos: panel visible; solo los grupos que aplican (el condicionado no); «una» = radio y «varias» = casilla; no se puede añadir y se dice qué falta; sin consulta al servidor",
+      [!panel().hidden, legends(), inp("fuente", "comp").type, inp("extras", "cable").type, abLabel(), status().includes("Falta elegir «Fuente»."), vals(w).length],
+      [true, ["Fuente", "Extras"], "radio", "checkbox", "Completa la configuración (off)", true, 0]);
+    await pick("fuente", "calida"); await sleep(150);
+    check("Q2 elegir «calida» (ajuste): completa; se comprueba una vez con la configuración exacta; se puede añadir; el precio es el del principal sin pedir cotización",
+      [status().startsWith("Configuración completa según el catálogo actual."), vals(w).length, norm(w, lastCfg(w)), abLabel(), doc().getElementById("cfg-price-note").textContent.includes("precio indicado en la ficha es el del producto principal"), doc().getElementById("cfg-price-note").textContent.includes("cotización")],
+      [true, 1, norm(w, { choices: [CH("fuente", ["calida"])] }), "Añadir configuración", true, false]);
+    await pick("fuente", "comp");
+    check("Q3a elegir el componente: aparecen el grupo condicionado y los del componente (con su path); faltan elecciones: no se añade ni se consulta",
+      [legends(), doc().querySelectorAll("#cfg-body .cfg-nested legend").length, abLabel(), status().includes("Falta elegir «Control».") && status().includes("«Carcasa» (en Bajo cotización)"), vals(w).length],
+      [["Fuente", "Carcasa", "Extras", "Control"], 1, "Completa la configuración (off)", true, 1]);
+    await pick("fuente", "comp"); // ya elegido: no cambia
+    await pick("carcasa", "x", COMP); await pick("control", "dim"); await sleep(150);
+    check("Q3b completas: configuración exacta con path (carcasa dentro del componente), condicionado en el path principal; el precio pide cotización (componente aparte)",
+      [vals(w).length, norm(w, lastCfg(w)), abLabel(), doc().getElementById("cfg-price-note").textContent.includes("requiere cotización")],
+      [2, norm(w, { choices: [CH("fuente", ["comp"]), CH("control", ["dim"]), CH("carcasa", ["x"], COMP)] }), "Añadir configuración", true]);
+    await pick("fuente", "calida");
+    check("Q4 al volver a «calida» se eliminan la condición apagada y el componente quitado (control y carcasa); la comprobación anterior se reutiliza (sin consulta nueva)",
+      [legends(), checked(), vals(w).length, abLabel()], [["Fuente", "Extras"], ["fuente:calida"], 2, "Añadir configuración"]);
+    await pick("extras", "cable");
+    check("Q5a opción de un componente con un grupo necesario sin opciones: no se puede completar y se explica; no bloquea por un opcional vacío (antes sí se añadía)",
+      [abLabel(), status().includes("No se puede completar: «Sin opciones» (en Pendiente), no tiene opciones disponibles."), vals(w).length], ["Completa la configuración (off)", true, 2]);
+    await pick("extras", "cable");
+    check("Q5b quitar el componente: vuelve a poder añadirse con la comprobación en caché", [abLabel(), vals(w).length, checked()], ["Añadir configuración", 2, ["fuente:calida"]]);
+
+    /* Añadir: acabado y cantidad del principal, equivalencia y líneas distintas */
+    clearSel();
+    w = await open({ validacion: "ok", acabados: true }, FICHA); await settled();
+    doc().querySelector('.finish-option[data-finish="11"]').click(); await sleep(60);
+    doc().getElementById("product-qty-increment").click(); doc().getElementById("product-qty-increment").click(); await sleep(60);
+    await pick("fuente", "calida"); await sleep(150);
+    let args = null; const original = w.addToSelection;
+    w.addToSelection = (...a) => { args = JSON.parse(JSON.stringify(a)); return original(...a); };
+    ab().click(); await sleep(800);
+    check("Q6 añadir: addToSelection recibe la configuración exacta con el acabado y la cantidad elegidos; se guarda una línea y el botón pasa a «En mi selección»",
+      [args && args.slice(0, 4), args && norm(w, args[4]), storedLines().map(l => [l.productId, l.finish, l.quantity, norm(w, l.configuration)]), abLabel(), badge()],
+      [["demo-pub", 3, "ud.", "11"], norm(w, { choices: [CH("fuente", ["calida"])] }), [["demo-pub", "11", 3, norm(w, { choices: [CH("fuente", ["calida"])] })]], "En mi selección (off)", "Mi selección (1)"]);
+    await pick("fuente", "comp"); await pick("carcasa", "x", COMP); await pick("control", "dim"); await sleep(150);
+    check("Q7a una configuración distinta (mismo acabado y cantidad) permite una línea diferente", [abLabel(), doc().getElementById("product-qty-input").value], ["Añadir configuración", "3"]);
+    ab().click(); await sleep(800);
+    check("Q7b se añade como segunda línea conservando acabado y cantidad", [storedLines().length, storedLines()[1].finish, storedLines()[1].quantity, norm(w, storedLines()[1].configuration), abLabel()],
+      [2, "11", 3, norm(w, { choices: [CH("fuente", ["comp"]), CH("control", ["dim"]), CH("carcasa", ["x"], COMP)] }), "En mi selección (off)"]);
+    await pick("fuente", "calida"); await pick("fuente", "comp"); await pick("control", "dim"); await pick("carcasa", "x", COMP);
+    check("Q7c la misma configuración elegida en otro orden es equivalente: «En mi selección», sin línea nueva", [abLabel(), storedLines().length], ["En mi selección (off)", 2]);
+    doc().querySelector('.finish-option[data-finish="25"]').click(); await sleep(100);
+    check("Q7d con otro acabado la misma configuración es otra línea", [abLabel(), badge()], ["Añadir configuración", "Mi selección (2)"]);
+
+    /* Pendiente confirmada y no verificable */
+    clearSel();
+    w = await open({ validacion: "pendiente" }, FICHA); await settled();
+    await pick("fuente", "calida"); await sleep(200);
+    check("Q8 el servidor la confirma pendiente: se muestran los motivos y no se puede añadir",
+      [abLabel(), status().includes("Configuración pendiente de revisar"), status().includes("Una opción elegida en «Fuente» ya no está disponible."), storedLines().length], ["Configuración pendiente (off)", true, true, 0]);
+    for (const modo of ["error", "rechazo"]){
+      clearSel();
+      w = await open({ validacion: modo }, FICHA); await settled();
+      await pick("fuente", "calida"); await sleep(250);
+      const st = [status().includes("No pudimos verificar esta configuración"), status().includes("completa según"), abLabel(), !!doc().getElementById("cfg-retry-check")];
+      await pick("fuente", "comp"); const local = abLabel();
+      await pick("fuente", "calida"); await sleep(200);
+      check(`Q9 ${modo}: «no se pudo verificar», nunca «completa»; se puede conservar para revisión; un requisito local sigue bloqueando`, [st, local], [[true, false, "Añadir configuración", true], "Completa la configuración (off)"]);
+      ab().click(); await sleep(800);
+      check(`Q9b ${modo}: se conserva en la selección con su configuración`, [storedLines().length, norm(w, storedLines()[0].configuration)], [1, norm(w, { choices: [CH("fuente", ["calida"])] })]);
+    }
+    clearSel();
+    w = await open({ validacion: "error" }, FICHA); await settled();
+    await pick("fuente", "calida"); await sleep(250);
+    w.__grupos46.conf.validacion = "ok";
+    doc().getElementById("cfg-retry-check").click(); await sleep(250);
+    check("Q9c «Reintentar la comprobación» con el servidor recuperado: pasa a «completa según el catálogo»", [status().startsWith("Configuración completa según el catálogo actual."), vals(w).length], [true, 2]);
+
+    w = await open({ validacion: "colgada" }, FICHA); await settled();
+    await pick("fuente", "calida");
+    const t0c = Date.now(); await until(() => abLabel() !== "Comprobando… (off)", 8000); const dtc = Date.now() - t0c;
+    check("Q10 sin respuesta del servidor: se queda «Comprobando…» hasta el límite (4,5 s) y entonces «no se pudo verificar» (nunca completa)",
+      [dtc >= 4000 && dtc < 6500, status().includes("No pudimos verificar"), abLabel(), sinCapturar()], [true, true, "Añadir configuración", []]);
+    w = await open({ validacion: "tardia" }, FICHA); await settled();
+    await pick("fuente", "calida"); await until(() => status().includes("No pudimos verificar"), 8000);
+    await sleep(2200); // llega la respuesta tardía (pendiente)
+    check("Q11 respuesta que llega después del límite: no cambia el estado «no verificada» ni produce errores sin capturar",
+      [status().includes("No pudimos verificar"), abLabel(), w.__grupos46.tardias.length > 0, sinCapturar()], [true, "Añadir configuración", true, []]);
+
+    /* Respuesta antigua */
+    w = await open({ validacion: "ok", modosVal: ["pendiente", "ok"], retrasosVal: [700, 5] }, FICHA); await settled();
+    await pick("fuente", "calida", [], 0); await pick("fuente", "comp", [], 0);
+    await pick("carcasa", "x", COMP, 0); await pick("control", "dim", [], 0); await sleep(150);
+    const nuevo = [status().startsWith("Configuración completa"), abLabel()];
+    await sleep(900);
+    check("Q12 una respuesta antigua (pendiente) de una elección anterior no sustituye el estado de la actual (completa)",
+      [nuevo, status().startsWith("Configuración completa"), abLabel(), vals(w).length], [[true, "Añadir configuración"], true, "Añadir configuración", 2]);
+    w = await open({ validacion: "ok", modosVal: ["pendiente"], retrasosVal: [600] }, FICHA); await settled();
+    await pick("fuente", "calida", [], 0); await pick("fuente", "comp", [], 0); await sleep(900);
+    check("Q13 una respuesta antigua que llega con la elección ya incompleta no la desbloquea", [abLabel(), status().includes("Falta elegir"), status().includes("pendiente")], ["Completa la configuración (off)", true, false]);
+
+    /* Profundidad: un componente dentro de un componente */
+    w = await open({ validacion: "ok", profundo: true }, FICHA); await settled();
+    await pick("fuente", "comp"); await pick("carcasa", "x", COMP); await pick("control", "dim");
+    await pick("tapa", "t1", COMP);
+    const P2 = COMP.concat([{ group: "tapa", option: "t1" }]);
+    check("Q14a segundo nivel (path de dos pasos): el grupo necesario del componente interno bloquea hasta elegirlo",
+      [legends().includes("Tono"), abLabel(), status().includes("«Tono» (en Precio no disponible)")], [true, "Completa la configuración (off)", true]);
+    await pick("tono", "warm", P2); await sleep(150);
+    check("Q14b configuración exacta con path de dos pasos", [norm(w, lastCfg(w)), abLabel()],
+      [norm(w, { choices: [CH("fuente", ["comp"]), CH("control", ["dim"]), CH("carcasa", ["x"], COMP), CH("tapa", ["t1"], COMP), CH("tono", ["warm"], P2)] }), "Añadir configuración"]);
+    await pick("tapa", "", COMP); // «Ninguna»: se quita el componente intermedio
+    check("Q14c quitar el componente intermedio elimina lo que dependía de él (tono) y sigue completa", [checked().sort(), legends().includes("Tono")], [["carcasa:x", "control:dim", "fuente:comp", "tapa:—"], false]);
+
+    /* Solo lectura según rol */
+    for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+      clearSel();
+      w = await open({ validacion: "ok" }, { page: "producto.html", qs }); await settled();
+      check(`Q15 ${nombre}: opciones en solo lectura (sin controles ni botón de añadir), con la condición de «Control» y los grupos del componente; sin comprobaciones`,
+        [!panel().hidden, doc().querySelectorAll("#cfg-body input").length, doc().querySelector(".product-selection-actions").hidden, legends(),
+         doc().querySelector("#cfg-body").innerText.includes("Solo aplica si eliges «Bajo cotización» en «Fuente»."), doc().querySelector("#cfg-body .cfg-nested") !== null, vals(w).length, storedLines().length],
+        [true, 0, true, ["Fuente", "Carcasa", "Extras", "Sin opciones", "Control"], true, true, 0, 0]);
+    }
+
+    /* Producto sin grupos y carga fallida */
+    clearSel();
+    w = await open({ validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-sin" }); await settled();
+    ab().click(); await sleep(800);
+    check("Q16 producto sin grupos: el panel no aparece y se añade como siempre", [panel().hidden, storedLines().map(l => [l.productId, l.configuration || null])], [true, [["demo-sin", null]]]);
+    w = await open({ retraso: 1500 }, FICHA);
+    const antes = abLabel();
+    await settled();
+    check("Q17 mientras no se sabe si el producto necesita configuración no se puede añadir; después, completa la configuración", [antes, abLabel(), !panel().hidden], ["Comprobando… (off)", "Completa la configuración (off)", true]);
+    clearSel();
+    w = await open({ modo: "error" }, FICHA); await until(() => !!doc().getElementById("cfg-retry-load"), 8000); await sleep(200);
+    check("Q18 carga de opciones fallida: aviso y «Reintentar»; no se presenta como sin configuración ni se puede añadir",
+      [!panel().hidden, doc().getElementById("cfg-body").innerText.includes("No pudimos cargar las opciones de configuración"), abLabel(), storedLines().length], [true, true, "Configuración no disponible (off)", 0]);
+    w.__grupos46.conf.modo = "normal"; doc().getElementById("cfg-retry-load").click(); await until(() => inp("fuente", "comp") !== null, 6000); await sleep(150);
+    check("Q18b el reintento correcto muestra el configurador", [legends(), abLabel()], [["Fuente", "Extras"], "Completa la configuración (off)"]);
+
+    /* Sin parpadeo del resto de la ficha y móvil */
+    w = await open({ validacion: "ok", retrasosVal: [60, 60, 60] }, FICHA); await settled();
+    const rel = mark("#related-grid"), gal = mark("#gallery-main");
+    await pick("fuente", "comp"); await pick("carcasa", "x", COMP); await pick("control", "dim"); await sleep(300); await pick("fuente", "calida"); await sleep(300);
+    check("Q19 elegir, comprobar y limpiar elecciones no reconstruye la galería ni los relacionados (0 mutaciones, 0 tarjetas nuevas)",
+      [rel.mut, rel.replaced(), gal.mut], [0, 0, 0]);
+    w = await open({ validacion: "ok" }, { page: "producto.html", qs: QS_IND, width: "375px" }); await settled();
+    await pick("fuente", "comp"); await pick("carcasa", "x", COMP); await pick("control", "dim"); await sleep(200);
+    const de = doc().documentElement;
+    const fuera = [...doc().querySelectorAll("#cfg-panel, #configurar, #configurar *, .product-selection-actions, .product-selection-actions *")].filter(e => e.getBoundingClientRect().right > de.clientWidth + 0.5).length;
+    check("Q20 móvil (375 px) con la configuración completa desplegada: sin desplazamiento horizontal y todo dentro del ancho", [de.scrollWidth <= de.clientWidth, fuera], [true, 0]);
+    clearSel();
+
+    /* Componentes que no están en la lista del catálogo principal (solo se leen por identificadores) */
+    clearSel();
+    w = await open({ validacion: "ok", fuera: ["demo-cot"], acabadoComp: true }, FICHA); await settled();
+    const textoComp = () => inp("fuente", "comp").closest("label").innerText.replace(/\s+/g, " ");
+    const enLista = w.eval("PRODUCTS.some(p => p.id === 'demo-cot')");
+    check("Q21a un componente fuera de la lista del catálogo se muestra con su nombre y su acabado identificable (no «este componente»); se lee una sola vez por identificadores",
+      [enLista, textoComp().includes("Bajo cotización"), textoComp().includes("Acabado: C-11 · Negro"), textoComp().includes("este componente"), w.__grupos46.productosPorId], [true, true, true, false, [["demo-cot"]]]);
+    await pick("fuente", "comp");
+    await pick("fuente", "calida"); await pick("fuente", "comp");
+    check("Q21b al elegirlo, sus grupos usan su nombre y elegir o repintar no vuelve a consultar", [status().includes("«Carcasa» (en Bajo cotización)"), w.__grupos46.productosPorId.length], [true, 1]);
+    w = await open({ validacion: "ok", fuera: ["demo-cot"], acabadoComp: true }, { page: "producto.html", qs: QS_GRATIS }); await sleep(900);
+    check("Q21c solo lectura: también muestra el nombre y el acabado del componente fuera de la lista",
+      [doc().getElementById("cfg-body").innerText.includes("Bajo cotización"), doc().getElementById("cfg-body").innerText.includes("Acabado: C-11 · Negro"), doc().getElementById("cfg-body").innerText.replace(/Con este componente:/g, "").includes("este componente")], [true, true, false]);
+    w = await open({ validacion: "ok", fuera: ["demo-cot"], errorPorId: true }, FICHA); await until(() => !!doc().getElementById("cfg-retry-load"), 8000); await sleep(200);
+    check("Q22a si no se pueden leer los componentes: aviso con «Reintentar», sin etiquetas ambiguas y sin poder añadir",
+      [!panel().hidden, doc().getElementById("cfg-body").innerText.includes("No pudimos cargar las opciones"), doc().querySelectorAll("#cfg-body input").length, abLabel()], [true, true, 0, "Configuración no disponible (off)"]);
+    w.__grupos46.conf.errorPorId = false; doc().getElementById("cfg-retry-load").click(); await until(() => inp("fuente", "comp") !== null, 6000); await sleep(200);
+    check("Q22b el reintento lee los componentes y muestra el configurador con sus nombres", [legends(), textoComp().includes("Bajo cotización"), abLabel()], [["Fuente", "Extras"], true, "Completa la configuración (off)"]);
+    w = await open({ validacion: "ok", fuera: ["demo-cot"], ausenteSiempre: true }, FICHA); await until(() => !!doc().getElementById("cfg-retry-load"), 8000); await sleep(200);
+    check("Q23 un componente que no existe en el catálogo (carrera de publicación): no se ofrece sin nombre; aviso y «Reintentar»", [doc().querySelectorAll("#cfg-body input").length, abLabel()], [0, "Configuración no disponible (off)"]);
+
+    /* Reintento desde el panel y desde una tarjeta relacionada: misma carga vigente en todo */
+    for (const via of ["panel", "tarjeta"]){
+      clearSel();
+      w = await open({ modo: "error", validacion: "ok" }, FICHA);
+      await until(() => !!doc().getElementById("cfg-retry-load") && REL.every(id => slot(id) === "error"), 8000); await sleep(200);
+      const antes = [!panel().hidden, abLabel(), REL.map(slot), doc().querySelectorAll("#cfg-body input").length];
+      const rel = mark("#related-grid");
+      w.__grupos46.conf.modo = "normal";
+      if (via === "panel") doc().getElementById("cfg-retry-load").click(); else card("demo-sin").querySelector(".btn-config-retry").click();
+      await until(() => inp("fuente", "comp") !== null && REL.every(id => slot(id) === "configurable" || slot(id) === "plain"), 6000); await sleep(300);
+      check(`Q24 fallo inicial y reintento desde ${via === "panel" ? "el panel" : "una tarjeta relacionada"}: panel, botón principal y relacionados se recuperan con la misma carga (sin quedarse en error, sin reconstruir las tarjetas, una sola carga nueva)`,
+        [antes, legends(), abLabel(), REL.map(slot), doc().getElementById("cfg-body").innerText.includes("No pudimos cargar"), rel.replaced(), rel.mut, views(w)],
+        [[true, "Configuración no disponible (off)", ["error", "error", "error"], 0], ["Fuente", "Extras"], "Completa la configuración (off)", ["configurable", "configurable", "plain"], false, 0, 0, 4]);
+      await pick("fuente", "calida"); await sleep(200);
+      check(`Q24b tras el reintento desde ${via === "panel" ? "el panel" : "una tarjeta"} se puede configurar y añadir con normalidad`, [abLabel(), status().startsWith("Configuración completa")], ["Añadir configuración", true]);
+    }
+
+    /* ===== Contrato de construcción (filas sintéticas) ===== */
+    w = await open();
+    const build = (g, o) => { try { const m = w.buildComponentConfig(g, o); return [...m.entries()].map(([k, v]) => [k, v.map(x => [x.code, x.options.map(y => y.code), x.dependsOn])]); } catch (e) { return "lanza: " + e.message; } };
+    const G = (id, extra) => Object.assign({ id, product_id: "p", code: id, label: id, requirement: "opcional", choice: "una", sort_order: 1, available_options: 1 }, extra);
+    const O = (id, group_id, extra) => Object.assign({ id, group_id, code: id, kind: "ajuste", setting_label: id, sort_order: 1 }, extra);
+    check("G23 condición cuyo origen no es visible: la condición queda con códigos nulos (no se cumple nunca)",
+      build([G("g1", { depends_on_option_id: "falta" })], []), [["p", [["g1", [], { optionId: "falta", groupCode: null, optionCode: null }]]]]);
+    check("G24 opciones de un grupo no visible se ignoran", build([G("g1")], [O("o1", "g1"), O("o2", "otro")]), [["p", [["g1", ["o1"], null]]]]);
+    check("G25 formas no válidas (requisito, tipo de opción, listas) lanzan en vez de descartarse",
+      [build([G("g1", { requirement: "x" })], []), build([G("g1")], [O("o1", "g1", { kind: "z" })]), build(null, [])].map(x => String(x).slice(0, 8)), ["lanza: G", "lanza: O", "lanza: R"]);
+  } catch (e) {
+    check("ABORTO", String(e && e.stack || e), "sin errores");
+  } finally {
+    sessionStorage.clear(); localStorage.clear();
+    /* Limpieza: sin registro del service worker, sin cachés y sin interceptar páginas. */
+    try {
+      await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+      const restantes = (await navigator.serviceWorker.getRegistrations()).length;
+      await new Promise(res => { frame.onload = res; frame.src = `pagina/catalogo.html?${QS_IND}`; });
+      const sinInterceptar = [!frame.contentWindow.__mock, /404/.test(frame.contentDocument.body.innerText)];
+      await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+      sessionStorage.clear(); localStorage.clear();
+      check("Limpieza: service worker eliminado, sin cachés, pagina/ ya no se sirve (404, sin simulador) y almacenamiento vacío",
+        [restantes, (await caches.keys()).length, sinInterceptar, localStorage.length, sessionStorage.length], [0, 0, [true, true], 0, 0]);
+    } catch (e) { check("Limpieza", String(e), "sin errores"); }
+    document.getElementById("sum").textContent = `${ok}/${ok + ko} correctos`;
+    document.title = `46 grupos · ${ok}/${ok + ko}`;
+  }
+})();
+</script>
