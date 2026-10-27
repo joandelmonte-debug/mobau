@@ -24,6 +24,22 @@
      → grid. Se usa un nombre de clase nuevo a propósito, para no heredar
      ninguna regla de .catalog-layout en styles.css. */
   .catalog-main{ padding: 24px 0 96px; }
+  /* Punto 46 · vista «Componentes y accesorios». Fila del buscador: el campo ocupa el espacio principal y, a su derecha y fuera de él, va el enlace secundario
+     «Componentes y accesorios» (o «Volver a productos»): texto de enlace, sin fondo, borde ni sombra; sin subrayado
+     fijo (sí al pasar el cursor) y con foco visible. En pantallas estrechas el campo ocupa todo el ancho y el enlace
+     pasa debajo, a la derecha. */
+  .search-bar__row{ display:flex; align-items:center; gap:28px; }
+  .search-bar__row input{ flex:1 1 auto; min-width:0; }
+  .catalog-viewlink{ margin:0; flex:0 0 auto; font-size:14.5px; white-space:nowrap; }
+  .catalog-viewlink a{ color: var(--accent); text-decoration:none; }
+  .catalog-viewlink a:hover{ text-decoration:underline; text-underline-offset:3px; }
+  .catalog-viewlink a:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:2px; text-decoration:underline; }
+  @media (max-width: 680px){
+    .search-bar__row{ display:block; }
+    .catalog-viewlink{ margin-top:10px; text-align:right; white-space:normal; }
+  }
+  .catalog-view-note{ margin:0 0 14px; max-width:72ch; font-size:14px; color: var(--ink-soft); }
+  .card-role{ font-weight:600; }
 
   /* Label del buscador — visualmente oculto (el placeholder ya lo explica
      en pantalla), pero real para lectores de pantalla. Mismo patrón que
@@ -267,8 +283,8 @@
 
 <div class="page-head">
   <div class="wrap">
-    <div class="eyebrow">Catálogo</div>
-    <h1>Productos para arquitectura e interiorismo</h1>
+    <div class="eyebrow" id="catalog-eyebrow">Catálogo</div>
+    <h1 id="catalog-title">Productos para arquitectura e interiorismo</h1>
     <!-- Punto 43 (O1): aclaración de precios, visible siempre cerca del inicio. -->
     <p id="catalog-price-note" style="margin-top:12px; max-width:72ch; font-size:13.5px; color:var(--ink-soft);">*Los planes Individual y Estudio permiten consultar los precios publicados y solicitar cotizaciones. No todos los productos tienen precio publicado: algunos requieren cotización o están pendientes de confirmación.</p>
   </div>
@@ -276,9 +292,22 @@
 
 <main class="wrap catalog-main">
 
+  <!-- Punto 46: dos vistas del mismo catálogo (Productos, la principal, y Componentes y accesorios). Esta última no es una
+       categoría: es una vista transversal a las seis, con los artículos «componente» y «ambos». -->
+  <p class="catalog-view-note" id="catalog-view-note" hidden>Piezas y accesorios que se ofrecen dentro de otros productos, de cualquier categoría. Aquí puedes consultar su ficha y sus archivos; para configurar un producto, ábrelo desde la vista «Productos».</p>
+
   <div class="search-bar">
-    <label for="search-input" class="search-bar__label">Buscar productos</label>
-    <input type="search" id="search-input" placeholder="Buscar por nombre, producto, marca o categoría…">
+    <label for="search-input" class="search-bar__label" id="search-label">Buscar productos</label>
+    <!-- Productos es la vista principal. Un enlace secundario, a la derecha del campo y fuera de él, lleva a
+         «Componentes y accesorios» y, ya dentro, a «Volver a productos». Son enlaces reales (teclado, clic central,
+         URL directa), no botones de pestaña. -->
+    <div class="search-bar__row">
+      <input type="search" id="search-input" placeholder="Buscar por nombre, referencia, marca o categoría…">
+      <p class="catalog-viewlink" id="catalog-viewlink">
+        <a href="catalogo.html?vista=componentes" id="view-componentes" data-vista="componentes">Componentes y accesorios</a>
+        <a href="catalogo.html" id="view-productos" data-vista="productos" hidden>← Volver a productos</a>
+      </p>
+    </div>
   </div>
 
   <section class="catalog-filters" aria-label="Filtros de catálogo">
@@ -554,6 +583,8 @@ runWithCatalog(() => {
     espacio: new Set(),
     disponibilidad: new Set(),
     search: "",
+    /* Punto 46: «productos» (catálogo principal) o «componentes» (Componentes y accesorios). */
+    vista: "productos",
     sort: "relevancia",
     /* Precio — no es un Set (es un rango, no una lista de OR): "" significa
        "sin límite", nunca 0. Nunca se añade a GROUPS (ese array asume
@@ -565,6 +596,9 @@ runWithCatalog(() => {
   const GROUPS = ["categoria","subcategoria","distribuidor","marca","uso","espacio","disponibilidad"];
 
   const params = new URLSearchParams(window.location.search);
+  if (params.get("vista") === "componentes") state.vista = "componentes";
+  /* La lista de la vista activa: la búsqueda, los filtros y sus opciones solo ven esta lista. */
+  const viewProducts = () => state.vista === "componentes" ? componentProducts() : commercialProducts();
   GROUPS.forEach(key => {
     const val = params.get(key);
     if(val){
@@ -702,7 +736,7 @@ runWithCatalog(() => {
      subcategorías reales. */
   function getValidSubcategorias(){
     const cats = state.categoria;
-    const relevant = cats.size === 0 ? commercialProducts() : commercialProducts().filter(p => cats.has(p.categoria));
+    const relevant = cats.size === 0 ? viewProducts() : viewProducts().filter(p => cats.has(p.categoria));
     return [...new Set(relevant.map(p => p.subcategoria).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
   }
 
@@ -758,7 +792,7 @@ runWithCatalog(() => {
   function getGroupOptions(group){
     const seen = new Set();
     const list = [];
-    commercialProducts().forEach(product => {
+    viewProducts().forEach(product => {
       const code = product[group];
       if (!seen.has(code)){
         seen.add(code);
@@ -962,7 +996,8 @@ runWithCatalog(() => {
   }
 
   function render(){
-    const { results: searched, fuzzyTerm } = searchProducts(commercialProducts(), state.search);
+    const componentView = state.vista === "componentes";
+    const { results: searched, fuzzyTerm } = searchProducts(viewProducts(), state.search);
     const hasActiveSearch = normalizeSearchText(state.search).length >= 2;
     const filtered = sortList(searched.filter(matchesFilters), hasActiveSearch);
     /* La opción predeterminada dice el orden que se aplica: relevancia con
@@ -970,7 +1005,7 @@ runWithCatalog(() => {
     document.getElementById("sort-default-option").textContent = hasActiveSearch ? "Relevancia" : "Orden del catálogo";
 
     const grid = document.getElementById("product-grid");
-    grid.innerHTML = filtered.map(renderProductCard).join("");
+    grid.innerHTML = filtered.map(p => renderProductCard(p, { viewOnly: componentView })).join("");
 
     /* "Resultados similares a: ..." solo cuando la búsqueda no tuvo
        ninguna coincidencia literal y se usó el fallback aproximado —
@@ -985,23 +1020,31 @@ runWithCatalog(() => {
 
     const emptyState = document.getElementById("empty-state");
     if (!filtered.length){
-      emptyState.textContent = hasActiveSearch
-        ? "No encontramos productos relacionados. Prueba con otra palabra o categoría."
-        : "No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.";
+      emptyState.textContent = componentView
+        ? (hasActiveSearch
+          ? "No encontramos componentes relacionados. Prueba con otro nombre, referencia o marca."
+          : "No hay componentes que coincidan con estos filtros. Prueba a quitar alguno.")
+        : (hasActiveSearch
+          ? "No encontramos productos relacionados. Prueba con otra palabra o categoría."
+          : "No hay productos que coincidan con esta búsqueda o estos filtros. Prueba a quitar alguno.");
       emptyState.style.display = "block";
     } else {
       emptyState.style.display = "none";
     }
 
+    const unit = componentView ? ["componente", "componentes"] : ["producto", "productos"];
     document.getElementById("result-count").textContent =
-      filtered.length === 1 ? "1 producto" : `${filtered.length} productos`;
+      filtered.length === 1 ? `1 ${unit[0]}` : `${filtered.length} ${unit[1]}`;
     injectIconSprite();
-    patchCardActionsForActiveProject(grid);
-    /* Sin callback: bindAddButtons ya actualiza el botón y el contador de la
-       tarjeta; volver a pintar toda la cuadrícula hacía parpadear el resto. */
-    bindAddButtons(grid);
-    bindAddToProjectButtons(grid);
-    watchCardConfig(grid, syncFolderButton);
+    /* Vista de componentes: solo «Ver ficha». Sin acciones de añadir y sin consultar la configuración de las tarjetas. */
+    if (!componentView){
+      patchCardActionsForActiveProject(grid);
+      /* Sin callback: bindAddButtons ya actualiza el botón y el contador de la
+         tarjeta; volver a pintar toda la cuadrícula hacía parpadear el resto. */
+      bindAddButtons(grid);
+      bindAddToProjectButtons(grid);
+      watchCardConfig(grid, syncFolderButton);
+    }
     propagateCartLinks();
   }
 
@@ -1169,6 +1212,65 @@ runWithCatalog(() => {
     render();
   });
 
+  /* Punto 46: vista activa (Productos / Componentes y accesorios). Cambiar de vista conserva el texto de búsqueda y
+     reinicia los filtros (sus opciones dependen de cada vista); la búsqueda y los filtros solo ven la lista de la
+     vista activa. No hace consultas nuevas. El título, el rótulo y el buscador dicen qué vista está activa. */
+  const ORIGINAL_TITLE = document.title;
+  function applyVistaUI(){
+    const comp = state.vista === "componentes";
+    document.getElementById("catalog-eyebrow").textContent = comp ? "Catálogo · Componentes y accesorios" : "Catálogo";
+    document.getElementById("catalog-title").textContent = comp ? "Componentes y accesorios" : "Productos para arquitectura e interiorismo";
+    document.getElementById("catalog-view-note").hidden = !comp;
+    document.getElementById("search-label").textContent = comp ? "Buscar componentes" : "Buscar productos";
+    document.getElementById("search-input").placeholder = comp
+      ? "Buscar por nombre, referencia o marca…" : "Buscar por nombre, referencia, marca o categoría…";
+    document.title = comp ? "Componentes y accesorios — Mobau" : ORIGINAL_TITLE;
+    document.getElementById("view-componentes").hidden = comp;
+    document.getElementById("view-productos").hidden = !comp;
+  }
+
+  function setVista(vista){
+    if (vista === state.vista) return;
+    state.vista = vista;
+    clearTimeout(searchDebounceTimer);
+    document.querySelectorAll(".filter-group input[type=checkbox]").forEach(i => i.checked = false);
+    GROUPS.forEach(k => state[k].clear());
+    document.getElementById("distribuidor-search").value = "";
+    document.getElementById("marca-search").value = "";
+    ["distribuidor", "marca"].forEach(k => { searchableGroupState[k].query = ""; searchableGroupState[k].isLetter = false; });
+    state.priceMin = ""; state.priceMax = "";
+    document.getElementById("price-min").value = "";
+    document.getElementById("price-max").value = "";
+    document.getElementById("price-range-error").hidden = true;
+    /* La URL refleja la vista (enlace directo); los filtros reiniciados salen de ella. */
+    try {
+      const next = new URLSearchParams(window.location.search);
+      GROUPS.forEach(k => next.delete(k));
+      if (vista === "componentes") next.set("vista", "componentes"); else next.delete("vista");
+      const qs = next.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`);
+    } catch (e) { /* sin historial (vista previa): no pasa nada */ }
+    applyVistaUI();
+    updateCategoryChipsUI();
+    renderSubcategoriaPanel();
+    renderSearchableGroup("distribuidor");
+    renderSearchableGroup("marca");
+    updateFilterTriggerCounts();
+    closeAllFilterPanels();
+    render();
+  }
+  /* Clic normal: cambia de vista sin recargar; con Ctrl/Cmd/Mayús o clic central, el navegador sigue el enlace. */
+  document.querySelectorAll("#catalog-viewlink a").forEach(link => {
+    link.addEventListener("click", (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      setVista(link.dataset.vista);
+      /* El foco no se pierde: pasa al otro enlace de la misma línea. */
+      const other = document.getElementById(link.dataset.vista === "componentes" ? "view-productos" : "view-componentes");
+      if (other) other.focus();
+    });
+  });
+
   /* Llamadas iniciales — DESPUÉS del bucle genérico de checkboxes de
      arriba, a propósito: en este punto los paneles de subcategoría/
      distribuidor/marca todavía están vacíos (ese bucle solo encuentra
@@ -1177,6 +1279,7 @@ runWithCatalog(() => {
      state ya está poblado desde la URL (arriba del todo del script).
      Nunca dispara una consulta nueva: todo se deriva de PRODUCTS, ya
      cargado en memoria por script.js. */
+  applyVistaUI();
   updateCategoryChipsUI();
   renderSubcategoriaPanel();
   renderSearchableGroup("distribuidor");

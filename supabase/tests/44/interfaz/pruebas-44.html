@@ -145,7 +145,7 @@ const DAMA = {
   check("P05 transferir conserva el acabado de cada línea", MOCK.calls.filter(c => c.table === "project_products" && c.ops.some(o => o[0] === "insert")).map(c => c.ops.find(o => o[0] === "insert")[1].finish_code || null), ["11", null]);
   MOCK.calls.length = 0;
   await MobauProjects.listProductsInProject("proy");
-  check("P06 listar trae finish_code y configuration", MOCK.calls[0].ops.find(o => o[0] === "select")[1], "id, product_id, finish_code, configuration, quantity, unit");
+  check("P06 listar trae finish_code, configuration y la nota técnica (46)", MOCK.calls[0].ops.find(o => o[0] === "select")[1], "id, product_id, finish_code, configuration, quantity, unit, notes");
 
   /* ---------- archivos ---------- */
   const A = MobauArchivos;

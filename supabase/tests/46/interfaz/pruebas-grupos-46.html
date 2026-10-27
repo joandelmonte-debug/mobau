@@ -12,6 +12,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const QS_IND = "rol=individual&pro=1&uid=a";     // Individual: las páginas cargan la configuración por su cuenta
 const QS_GRATIS = "rol=individual&pro=0&uid=a";  // Gratis: no la cargan; los casos del paso 1 la piden a mano
 const QS_VISITANTE = "rol=anon";
+const QS_DUENO = "rol=supplier&perfil=own";   // distribuidor dueño (spectro): conserva su vista de solo lectura
+const QS_MOBAU = "rol=mobau&aal=2";           // cuenta de Mobau: ídem
 const frame = document.createElement("iframe");
 document.body.appendChild(frame);
 let reg, ok = 0, ko = 0, n = 0;
@@ -271,8 +273,8 @@ const sinCapturar = () => W().__sinCapturar;
 
     for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
       w = await open({}, { page: "producto.html", qs }); await sleep(600);
-      check(`P12 relacionados ${nombre}: solo «Ver ficha», sin «Configurar» ni añadir; las tarjetas no consultan nada (la única carga, 2 consultas, es la del panel de solo lectura de la ficha; Gratis no tiene panel y no consulta nada)`,
-        [REL.map(slot), addBtns(), doc().querySelectorAll(".btn-configure").length, views(w)], [Array(3).fill("solo lectura"), 0, 0, nombre === "Gratis" ? 0 : 2]);
+      check(`P12 relacionados ${nombre}: solo «Ver ficha», sin «Configurar» ni añadir; las tarjetas no consultan nada y, sin sesión o con Gratis, la ficha no tiene bloque de componentes ni lo carga`,
+        [REL.map(slot), addBtns(), doc().querySelectorAll(".btn-configure").length, views(w)], [Array(3).fill("solo lectura"), 0, 0, 0]);
     }
     clearSel();
 
@@ -405,7 +407,7 @@ const sinCapturar = () => W().__sinCapturar;
     check("Q14c quitar el componente intermedio elimina lo que dependía de él (tono) y sigue completa", [checked().sort(), legends().includes("Tono")], [["carcasa:x", "control:dim", "fuente:comp", "tapa:—"], false]);
 
     /* Solo lectura según rol */
-    for (const [nombre, qs] of [["Visitante", QS_VISITANTE]]){
+    for (const [nombre, qs] of [["Distribuidor dueño", QS_DUENO], ["Mobau", QS_MOBAU]]){
       clearSel();
       w = await open({ validacion: "ok" }, { page: "producto.html", qs }); await settled();
       check(`Q15 ${nombre}: opciones en solo lectura (sin controles ni botón de añadir), con la condición de «Control» y los grupos del componente; sin comprobaciones`,
@@ -414,13 +416,16 @@ const sinCapturar = () => W().__sinCapturar;
         [true, 0, true, ["Fuente", "Carcasa", "Extras", "Sin opciones", "Control"], true, true, 0, 0]);
     }
 
-    /* Gratis: el configurador queda reservado a Individual y Estudio; sin panel, sin opciones, sin consultas ni vía para añadir */
-    clearSel();
-    w = await open({ validacion: "ok" }, { page: "producto.html", qs: QS_GRATIS }); await settled(); await sleep(600);
-    check("Q15g Gratis: la ficha normal sigue, pero sin panel «Configurar», sin grupos ni opciones ni avisos de configuración, sin botón de añadir y sin consultas de configuración",
-      [panel().hidden, doc().querySelectorAll("#cfg-body input").length, doc().getElementById("cfg-body").innerText.trim(), doc().querySelector(".product-selection-actions").hidden,
-       doc().getElementById("product-root") !== null && doc().querySelector("h1") !== null, views(w), vals(w).length, storedLines().length],
-      [true, 0, "", true, true, 0, 0, 0]);
+    /* Sin sesión y Gratis: no hay bloque de componentes en la ficha (ni grupos, opciones, anidados, «Ver ficha», avisos ni
+       panel bloqueado); la ficha normal sigue igual y no se consulta ninguna configuración. */
+    for (const [nombre, qs] of [["Visitante sin sesión", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+      clearSel();
+      w = await open({ validacion: "ok" }, { page: "producto.html", qs }); await settled(); await sleep(600);
+      check(`Q15g ${nombre}: la ficha normal sigue, pero sin bloque de componentes: sin panel, grupos, opciones, enlaces «Ver ficha», avisos ni sustituto, sin botón de añadir y sin consultas de configuración`,
+        [panel().hidden, doc().querySelectorAll("#cfg-body input, #cfg-body a, #cfg-body fieldset").length, doc().getElementById("cfg-body").innerText.trim(), doc().querySelector(".product-selection-actions").hidden,
+         doc().getElementById("product-root") !== null && doc().querySelector("h1") !== null, /elige una|opciones de configuración|plan Individual o Estudio para configurar/i.test(doc().body.innerText), views(w), vals(w).length, storedLines().length],
+        [true, 0, "", true, true, false, 0, 0, 0]);
+    }
 
     /* Producto sin grupos y carga fallida */
     clearSel();
@@ -461,8 +466,8 @@ const sinCapturar = () => W().__sinCapturar;
     await pick("fuente", "comp");
     await pick("fuente", "calida"); await pick("fuente", "comp");
     check("Q21b al elegirlo, sus grupos usan su nombre y elegir o repintar no vuelve a consultar", [status().includes("«Carcasa» (en Bajo cotización)"), w.__grupos46.productosPorId.length], [true, 1]);
-    w = await open({ validacion: "ok", fuera: ["demo-cot"], acabadoComp: true }, { page: "producto.html", qs: QS_VISITANTE }); await sleep(900);
-    check("Q21c solo lectura: también muestra el nombre y el acabado del componente fuera de la lista",
+    w = await open({ validacion: "ok", fuera: ["demo-cot"], acabadoComp: true }, { page: "producto.html", qs: QS_DUENO }); await sleep(900);
+    check("Q21c solo lectura (distribuidor dueño): también muestra el nombre y el acabado del componente fuera de la lista",
       [doc().getElementById("cfg-body").innerText.includes("Bajo cotización"), doc().getElementById("cfg-body").innerText.includes("Acabado: C-11 · Negro"), doc().getElementById("cfg-body").innerText.replace(/Con este componente:/g, "").includes("este componente")], [true, true, false]);
     w = await open({ validacion: "ok", fuera: ["demo-cot"], errorPorId: true }, FICHA); await until(() => !!doc().getElementById("cfg-retry-load"), 8000); await sleep(200);
     check("Q22a si no se pueden leer los componentes: aviso con «Reintentar», sin etiquetas ambiguas y sin poder añadir",
@@ -554,6 +559,98 @@ const sinCapturar = () => W().__sinCapturar;
     check("R12 una línea existente que referencia un componente se sigue leyendo y mostrando (Mi selección)",
       [doc().querySelectorAll("#selection-list .selection-item").length, doc().getElementById("selection-list").innerText.includes("Bajo cotización")], [1, true]);
     clearSel();
+
+
+    /* ===== Componentes consultables: «Ver ficha» en el configurador, vista «Componentes y accesorios» y búsqueda por referencia ===== */
+    const ROLES2 = { "demo-pub": "principal", "demo-cot": "componente", "demo-pend": "ambos", "demo-nodisp": "componente", "demo-sin": "raro" };
+    const REFS = { "demo-pub": "1.1120.8108", "demo-cot": "1.1122.0218", "demo-pend": "9.9999.0001", "demo-nodisp": "4.3069.6102", "demo-sin": "7.0000.0000" };
+    const CONF2 = { roles: ROLES2, refs: REFS, validacion: "ok", profundo: true };
+    const vFichaLinks = () => [...doc().querySelectorAll("#cfg-body a.cfg-ficha-link")];
+    const vHrefs = () => vFichaLinks().map(a => a.getAttribute("href")).sort();
+    const vWrites = w => w.__mock.calls.filter(c => /insert|update|delete|upsert/i.test(c));
+    /* Enlace secundario de vista: [«Componentes y accesorios» visible, «Volver a productos» visible]. */
+    const vLinks = () => [!doc().getElementById("view-componentes").hidden, !doc().getElementById("view-productos").hidden];
+    const vGoView = async v => { doc().getElementById(`view-${v}`).click(); await sleep(450); };
+    const vCardPrice = id => { const e = card(id) && card(id).querySelector(".card-price"); return e ? e.textContent.trim() : null; };
+
+    clearSel();
+    w = await open(CONF2, FICHA); await settled();
+    check("V1 configurador interactivo (Individual): «Ver ficha» solo en las opciones de componente (no en el ajuste), en otra pestaña, fuera de la etiqueta de la opción y con el aviso accesible",
+      [vHrefs(), vFichaLinks().every(a => a.target === "_blank" && /noopener/.test(a.rel) && a.closest("label") === null && /se abre en otra pestaña/.test(a.getAttribute("aria-label"))), vFichaLinks().length],
+      [["producto.html?id=demo-cot", "producto.html?id=demo-pend"], true, 2]);
+    await pick("fuente", "comp"); await sleep(150);
+    await pick("tapa", "t1", COMP); await sleep(150);
+    check("V2 componentes anidados: al elegir el componente aparecen sus propios componentes con «Ver ficha» (módulo → driver)",
+      vHrefs(), ["producto.html?id=demo-cot", "producto.html?id=demo-nodisp", "producto.html?id=demo-pend"]);
+    const vAntes = { checked: checked(), status: status(), ab: abLabel(), valid: vals(w).length, url: w.location.href, sel: storedLines().length, calls: nCalls(), escrituras: vWrites(w).length };
+    const vEnlace = vFichaLinks().find(a => a.getAttribute("href") === "producto.html?id=demo-nodisp");
+    let vNav = false;
+    vEnlace.addEventListener("click", ev => { ev.preventDefault(); vNav = true; });   // el ensayo no abre pestañas; mide que el clic no marca nada ni cambia esta página
+    vEnlace.click(); await sleep(400);
+    check("V3 abrir la ficha no cambia las elecciones, el estado ni la página del configurador, no marca ni desmarca opciones, no escribe y no añade nada a la selección",
+      [vNav, checked(), status(), abLabel(), vals(w).length, w.location.href, storedLines().length, vWrites(w).length],
+      [true, vAntes.checked, vAntes.status, vAntes.ab, vAntes.valid, vAntes.url, vAntes.sel, vAntes.escrituras]);
+
+    for (const [nombre, qs] of [["Visitante sin sesión", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+      w = await open(CONF2, { page: "producto.html", qs }); await sleep(1500);
+      check(`V4 ${nombre}: el bloque de componentes de la ficha está ausente: ningún grupo, opción, componente anidado ni «Ver ficha», y tampoco un panel de solo lectura ni un bloque bloqueado`,
+        [panel().hidden, vHrefs(), doc().getElementById("cfg-body").innerText.trim(), doc().querySelectorAll("#configurar a, #configurar input, #configurar fieldset").length, vWrites(w).length],
+        [true, [], "", 0, 0]);
+    }
+    for (const [nombre, qs] of [["Distribuidor dueño", QS_DUENO], ["Mobau", QS_MOBAU]]){
+      w = await open(CONF2, { page: "producto.html", qs }); await sleep(1500);
+      check(`V4b ${nombre}: conserva su panel de solo lectura con «Ver ficha» en cada componente, también anidados`,
+        [!panel().hidden, vHrefs(), doc().querySelectorAll("#cfg-body input").length], [true, ["producto.html?id=demo-cot", "producto.html?id=demo-nodisp", "producto.html?id=demo-pend"], 0]);
+    }
+
+    w = await open(CONF2, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1500);
+    check("V5 ficha del componente (módulo): migas hacia «Componentes y accesorios», solo lectura y «Ver ficha» de su driver",
+      [doc().body.innerHTML.includes('href="catalogo.html?vista=componentes"'), vHrefs(), doc().querySelector(".product-selection-actions").hidden, vWrites(w).length],
+      [true, ["producto.html?id=demo-nodisp"], true, 0]);
+    w = await open(CONF2, { page: "producto.html", qs: QS_IND, id: "demo-nodisp" }); await sleep(1500);
+    check("V6 desde el módulo se llega a la ficha de su driver: se carga identificada como componente, sin añadir y sin escrituras",
+      [!!doc().getElementById("p-component-note"), doc().querySelector(".product-selection-actions").hidden, doc().getElementById("bc-name").textContent.trim(), vWrites(w).length],
+      [true, true, "Precio no disponible", 0]);
+
+    for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS], ["Individual", QS_IND]]){
+      w = await open(CONF2, { qs }); await ready(w).catch(() => {}); await sleep(300);
+      check(`V7 ${nombre}: hay un enlace secundario visible «Componentes y accesorios» (texto, no botón); la vista de productos es la principal y el catálogo principal sigue sin «solo componente» ni rol desconocido`,
+        [vLinks(), (() => { const a = doc().getElementById("view-componentes"); return [a.tagName, a.getAttribute("href"), a.textContent.trim(), a.closest("button") === null, a.classList.contains("btn")]; })(), doc().getElementById("catalog-title").textContent, idsIn("#product-grid")],
+        [[true, false], ["A", "catalogo.html?vista=componentes", "Componentes y accesorios", true, false], "Productos para arquitectura e interiorismo", ["demo-pend", "demo-pub"]]);
+    }
+
+    w = await open(CONF2, { qs: QS_IND }); await ready(w); await sleep(200);
+    const vAntesVista = { calls: nCalls(), escrituras: vWrites(w).length, precioPend: vCardPrice("demo-pend") };
+    await vGoView("componentes");
+    check("V8 vista de componentes (Individual): lista «componente» y «ambos»; título, contador, rótulo y URL lo dicen; solo «Ver ficha», sin añadir ni configurar; sin consultas nuevas ni escrituras; el precio sigue las reglas de siempre",
+      [idsIn("#product-grid"), doc().getElementById("catalog-title").textContent, doc().getElementById("result-count").textContent.trim(), vLinks(), w.location.search.includes("vista=componentes"),
+       doc().querySelectorAll("#product-grid .btn-add-selection, #product-grid .btn-configure, #product-grid .btn-add-to-project, #product-grid .card-actions").length,
+       [...doc().querySelectorAll("#product-grid .card-actions-readonly a")].map(a => a.textContent.trim()).sort().join("|"), nCalls() - vAntesVista.calls, vWrites(w).length - vAntesVista.escrituras, vCardPrice("demo-pend") === vAntesVista.precioPend],
+      [["demo-cot", "demo-nodisp", "demo-pend"], "Componentes y accesorios", "3 componentes", [false, true], true, 0, "Ver ficha|Ver ficha|Ver ficha", 0, 0, true]);
+    check("V9 cada tarjeta de componente dice su función con texto (no solo color)",
+      Object.fromEntries(["demo-cot", "demo-pend", "demo-nodisp"].map(id => [id, card(id).querySelector(".card-role").textContent.trim()])),
+      { "demo-cot": "Componente o accesorio", "demo-pend": "Principal y también componente", "demo-nodisp": "Componente o accesorio" });
+
+    const vBuscar = async (t) => { await search(t); return idsIn("#product-grid"); };
+    check("V10 componentes: se encuentran por nombre, por referencia completa y parcial y por marca; un principal no aparece",
+      [await vBuscar("Bajo cotización"), await vBuscar("1.1122.0218"), await vBuscar("1122"), await vBuscar("4.3069.6102"), await vBuscar("Demo"), await vBuscar("Publicado"), await vBuscar("1.1120.8108")],
+      [["demo-cot"], ["demo-cot"], ["demo-cot"], ["demo-nodisp"], ["demo-cot", "demo-nodisp", "demo-pend"], [], []]);
+    await search("1122");
+    check("V11a en la vista de componentes hay un enlace sencillo «Volver a productos» (texto, accesible con teclado)",
+      (() => { const a = doc().getElementById("view-productos"); a.focus(); return [a.tagName, a.textContent.trim(), a.getAttribute("href"), doc().activeElement === a, a.closest("button") === null]; })(),
+      ["A", "← Volver a productos", "catalogo.html", true, true]);
+    await vGoView("productos");
+    check("V11 volver al catálogo principal: conserva el texto buscado, y la referencia de un «solo componente» NO lo trae al catálogo principal",
+      [doc().getElementById("search-input").value, idsIn("#product-grid"), doc().getElementById("catalog-title").textContent, w.location.search.includes("vista=")],
+      ["1122", [], "Productos para arquitectura e interiorismo", false]);
+    check("V12 catálogo principal: búsqueda por referencia de un principal y de un «ambos» (que está en las dos vistas); por nombre de un «solo componente» no",
+      [await vBuscar("1.1120.8108"), await vBuscar("9.9999.0001"), await vBuscar("Bajo cotización"), await vBuscar("4.3069")], [["demo-pub"], ["demo-pend"], [], []]);
+    await search("");
+
+    w = await open(CONF2, { qs: QS_VISITANTE + "&vista=componentes" }); await sleep(300);
+    check("V13 enlace directo ?vista=componentes (visitante): abre la vista de componentes, con el buscador adaptado y las seis categorías intactas",
+      [idsIn("#product-grid"), doc().getElementById("search-input").placeholder, vLinks(), [...doc().querySelectorAll("#catalog-category-chips button")].some(b => /Componentes/i.test(b.textContent)), doc().getElementById("catalog-view-note").hidden],
+      [["demo-cot", "demo-nodisp", "demo-pend"], "Buscar por nombre, referencia o marca…", [false, true], false, false]);
 
     /* ===== Contrato de construcción (filas sintéticas) ===== */
     w = await open();

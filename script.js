@@ -462,6 +462,14 @@ function isCommercialProduct(p){
   return role === "principal" || role === "ambos";
 }
 const commercialProducts = () => PRODUCTS.filter(isCommercialProduct);
+/* Vista «Componentes y accesorios» (transversal a las seis categorías, no es una categoría): solo «componente» y
+   «ambos». Una fila sin la columna (anterior a 46-01) o con un valor desconocido NO entra. Los «solo componente» no
+   salen del catálogo principal: esta lista y commercialProducts() son disjuntas salvo «ambos», que está en las dos. */
+function isListedComponent(p){
+  const role = productCatalogRole(p);
+  return role === "componente" || role === "ambos";
+}
+const componentProducts = () => PRODUCTS.filter(isListedComponent);
 
 /* Fila de la base de datos -> forma que ya consume todo el front. La
    imagen de las tarjetas es la versión 4:5 de la portada; sin portada, el
@@ -1447,15 +1455,20 @@ function scoreProductBySubstring(product, queryWords, normalizedQuery){
   const categoria = normalizeSearchText(LABELS.categoria[product.categoria] || "");
   const marca = normalizeSearchText(LABELS.marca[product.marca] || "");
   const descripcion = normalizeSearchText(product.descripcion || "");
+  /* Punto 46: la referencia del fabricante también se busca (completa o en parte, p. ej. «1.1122.0218» o «1122»).
+     Solo ve los productos de la lista que se le pasa: la vista activa decide cuáles son. */
+  const referencia = normalizeSearchText(product.referencia || "");
   const allWordsIn = (text) => queryWords.every(w => text.includes(w));
 
   if (normalizedQuery && nombre === normalizedQuery) return 100;
+  if (normalizedQuery && referencia && referencia === normalizedQuery) return 95;
   if (normalizedQuery && nombre.startsWith(normalizedQuery)) return 90;
   if (allWordsIn(nombre)) return 80;
+  if (referencia && allWordsIn(referencia)) return 75;
   if (allWordsIn(categoria)) return 70;
   if (allWordsIn(marca)) return 60;
   if (allWordsIn(descripcion)) return 50;
-  if (allWordsIn(`${nombre} ${categoria} ${marca} ${descripcion}`)) return 40;
+  if (allWordsIn(`${nombre} ${referencia} ${categoria} ${marca} ${descripcion}`)) return 40;
   return null; // ninguna palabra encaja de forma literal
 }
 
@@ -1598,15 +1611,20 @@ document.addEventListener("mobau:access", (e) => {
   if (e.detail.access !== "pro") makeCardsReadOnly();
 });
 
-function renderProductCard(p){
+/* opts.viewOnly (vista «Componentes y accesorios»): la tarjeta solo lleva «Ver ficha», con independencia de la
+   cuenta y el plan; el precio sigue las reglas de siempre (cardPriceLineHtml no cambia). */
+const CARD_ROLE_LABELS = { componente: "Componente o accesorio", ambos: "Principal y también componente" };
+function renderProductCard(p, opts){
+  const viewOnly = !!(opts && opts.viewOnly);
   const dist = DISTRIBUTORS[p.distribuidor];
   const marcaLabel = escapeHtml(LABELS.marca[p.marca]);
   const finish = defaultFinishCode(p);
   const inSel = inSelection(p.id, finish);
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
-  const actionsHtml = cardActionsReadOnly() ? readOnlyCardActionsHtml(fichaUrl) : null;
-  const selectButton = cardSelectSlotHtml(p, cardSelectState(p), finish, inSel);
+  const actionsHtml = (viewOnly || cardActionsReadOnly()) ? readOnlyCardActionsHtml(fichaUrl) : null;
+  const selectButton = viewOnly ? "" : cardSelectSlotHtml(p, cardSelectState(p), finish, inSel);
+  const roleLabel = viewOnly ? CARD_ROLE_LABELS[productCatalogRole(p)] : "";
   return `
     <article class="product-card" data-product-id="${idAttr}">
       <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${escapeHtml(p.nombre)}">
@@ -1617,6 +1635,7 @@ function renderProductCard(p){
         <span class="card-brand">${marcaLabel}</span>
         <span class="card-name">${escapeHtml(p.nombre)}</span>
         <span class="card-meta">${escapeHtml(dist.nombre)} · ${escapeHtml(LABELS.categoria[p.categoria])}${p.referencia ? ` · Ref. ${escapeHtml(p.referencia)}` : ""}</span>
+        ${roleLabel ? `<span class="card-meta card-role">${escapeHtml(roleLabel)}</span>` : ""}
         ${cardPriceLineHtml(p.id, "card-price")}
         ${actionsHtml || `<div class="card-actions">
           <a class="btn btn-outline" href="${fichaUrl}">Ver ficha</a>

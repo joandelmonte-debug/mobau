@@ -15,6 +15,10 @@
   .cfg-hint{ font-weight: 400; color: var(--ink-faint); }
   .cfg-option{ display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; margin: 0 0 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
   .cfg-option input{ margin-top: 3px; flex: 0 0 auto; }
+  /* Punto 46: «Ver ficha» del componente (otra pestaña; fuera de la etiqueta de la opción para no marcarla). */
+  .cfg-ficha{ margin: -2px 0 8px 12px; font-size: 13px; }
+  .cfg-ficha-link{ color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .cfg-ficha-link:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
   .cfg-option--on{ border-color: var(--ink); }
   .cfg-option__text{ min-width: 0; overflow-wrap: anywhere; }
   .cfg-ro-list{ list-style: none; margin: 0 0 6px; padding: 0; }
@@ -459,6 +463,10 @@ runWithCatalog(async function renderProductPage(){
       ? "Componente: se ofrece dentro de la configuración de otros productos y no se añade ni se solicita por separado."
       : "Este producto no se ofrece por separado.";
     document.getElementById("p-desc").after(note);
+    /* Un «solo componente» se encuentra en la vista «Componentes y accesorios»: las migas llevan a ella. */
+    if (productCatalogRole(product) === "componente"){
+      document.getElementById("bc-name").insertAdjacentHTML("beforebegin", `<a href="catalogo.html?vista=componentes">Componentes y accesorios</a> / `);
+    }
   }
   document.getElementById("p-medidas").textContent = product.medidas || "—";
   document.getElementById("p-materiales").textContent = product.materiales || "—";
@@ -635,6 +643,15 @@ runWithCatalog(async function renderProductPage(){
       : null;
   }
 
+  /* «Ver ficha» de una opción de componente: enlace normal a su ficha en OTRA pestaña, así esta página (elecciones,
+     estado y panel) no se toca. Solo si el artículo está en el catálogo cargado; los ajustes no tienen ficha. */
+  function cfgFichaLinkHtml(o){
+    if (o.kind !== "componente" || !o.componentProductId) return "";
+    if (!PRODUCTS.some(p => p.id === o.componentProductId)) return "";
+    const href = `producto.html?id=${encodeURIComponent(o.componentProductId)}`;
+    return `<div class="cfg-ficha"><a class="cfg-ficha-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="Ver ficha de ${escapeHtml(cfgOptionLabel(o))} (se abre en otra pestaña)" title="Se abre en otra pestaña">Ver ficha <span aria-hidden="true">↗</span></a></div>`;
+  }
+
   /* Textos de una opción (todo escapado al incorporarlo al HTML). */
   function cfgOptionLabel(o){ return o.kind === "ajuste" ? (o.settingLabel || o.code) : cfgProductName(o.componentProductId); }
   function cfgOptionMeta(o){
@@ -670,7 +687,7 @@ runWithCatalog(async function renderProductPage(){
         const nested = on && o.kind === "componente" && o.componentProductId && path.length < 2
           ? cfgGroupHtml(o.componentProductId, path.concat([{ group: group.code, option: o.code }]), ctr) : "";
         return `<label class="cfg-option${on ? " cfg-option--on" : ""}"><input type="${type}" name="${name}" data-cfg-id="${idOf(o.code)}" data-cfg-path="${escapeHtml(JSON.stringify(path))}" data-cfg-group="${escapeHtml(group.code)}" data-cfg-option="${escapeHtml(o.code)}" ${on ? "checked" : ""}>
-          <span class="cfg-option__text">${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}</span></label>${nested ? `<div class="cfg-nested">${nested}</div>` : ""}`;
+          <span class="cfg-option__text">${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}</span></label>${cfgFichaLinkHtml(o)}${nested ? `<div class="cfg-nested">${nested}</div>` : ""}`;
       }).join("");
       return `<fieldset class="cfg-group"><legend>${escapeHtml(group.label)} <span class="cfg-hint">(${escapeHtml(cfgHint(group))})</span></legend>${group.options.length ? none + options : `<p class="cfg-meta">No hay opciones disponibles por ahora.</p>`}</fieldset>`;
     }).join("");
@@ -690,7 +707,7 @@ runWithCatalog(async function renderProductPage(){
         const meta = cfgOptionMeta(o);
         const nestedGroups = o.kind === "componente" && o.componentProductId && path.length < 2
           ? cfgReadOnlyHtml(o.componentProductId, path.concat([{ group: group.code, option: o.code }])) : "";
-        return `<li>${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}${nestedGroups ? `<div class="cfg-nested"><p class="cfg-conditional">Con este componente:</p>${nestedGroups}</div>` : ""}</li>`;
+        return `<li>${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}${cfgFichaLinkHtml(o)}${nestedGroups ? `<div class="cfg-nested"><p class="cfg-conditional">Con este componente:</p>${nestedGroups}</div>` : ""}</li>`;
       }).join("");
       return `<fieldset class="cfg-group"><legend>${escapeHtml(group.label)} <span class="cfg-hint">(${escapeHtml(cfgHint(group))})</span></legend>${condition}${items ? `<ul class="cfg-ro-list">${items}</ul>` : `<p class="cfg-meta">No hay opciones disponibles por ahora.</p>`}</fieldset>`;
     }).join("");
@@ -813,10 +830,12 @@ runWithCatalog(async function renderProductPage(){
     if (cfg.booting || cfg.booted) return;
     cfg.booting = true;
     try {
-      /* Cuenta Gratis (con sesión, sin herramientas profesionales): el configurador queda reservado a Individual y
-         Estudio. No se muestra el panel ni se cargan las opciones; la ficha normal sigue igual. Visitantes sin sesión
-         y otros roles conservan su comportamiento actual. */
-      if (await MobauAccess.access() === "gratis"){ cfgPanel.hidden = true; refreshAddButton(); return; }
+      /* El bloque de componentes y accesorios (grupos, opciones, componentes anidados y sus «Ver ficha») es solo para
+         Individual y Estudio, y para el distribuidor y la cuenta de Mobau. Sin sesión, con plan Gratis o sin poder
+         comprobar el acceso («ante la duda, sin acceso») no se muestra ni se cargan las opciones, y tampoco se sustituye
+         por un aviso. La ficha normal sigue igual. */
+      const accessNow = await MobauAccess.access();
+      if (accessNow === "anon" || accessNow === "gratis" || accessNow === "unknown"){ cfgPanel.hidden = true; refreshAddButton(); return; }
       const result = await whenComponentConfig();
       cfg.interactive = MobauAccess.hasProfessionalTools() && product.status !== "archived" && isCommercialProduct(product);
       if (result !== "ready"){ cfgShowLoadError(); refreshAddButton(); return; }

@@ -7,7 +7,7 @@ Documento vivo de entrega. Versionado en local; el push está pendiente de autor
 - **Quién ve el configurador (decisión del 2026-10-26, sustituye a «Gratis en solo lectura»).**
   - **Gratis** (cuenta con sesión sin herramientas profesionales) **no ve el configurador**: ni el panel «Configurar», ni los grupos, opciones, componentes anidados o avisos internos. Ve la ficha normal del producto (imágenes, descripción, acabados, información no exclusiva). No hay otra vía para añadir al proyecto un producto que requiere configuración. No se muestra tarjeta promocional ni aviso de mejora de plan.
   - **Individual y Estudio con acceso habilitado** conservan el configurador interactivo.
-  - **Visitantes sin sesión** mantienen por ahora el comportamiento anterior (opciones en solo lectura). Cualquier cambio exige una decisión expresa.
+  - **Visitantes sin sesión** (decisión del 2026-10-27, que sustituye a «mantienen el comportamiento anterior»): tampoco ven el bloque de componentes. Sin sesión y con Gratis la ficha no muestra grupos, opciones, componentes anidados ni enlaces «Ver ficha», ni un panel de solo lectura ni un bloque bloqueado; si no se puede comprobar el acceso se trata como sin acceso. El distribuidor dueño y la cuenta de Mobau conservan su panel de solo lectura. No cambian la vista transversal, las URL directas de las fichas ni los permisos de descarga.
   - Las restricciones de acceso del servidor no cambian: ocultar el panel no las sustituye.
   - Implementación: `cfgBoot` en `producto.html` (corta antes de pedir la configuración si `MobauAccess.access()` es `"gratis"`). Las tarjetas del catálogo ya no cargan configuración sin herramientas profesionales.
   - Pruebas (mocks): `supabase/tests/46/interfaz/pruebas-grupos-46.html`, caso Q15g y ajustes en P12 y Q21c; 107/107.
@@ -20,6 +20,18 @@ Documento vivo de entrega. Versionado en local; el push está pendiente de autor
   - Protección en el servidor (migración 46-06, abajo): la nota de una línea de un proyecto archivado no se puede cambiar y un valor nuevo no puede pasar de 1000 caracteres. La interfaz ya no es la única barrera; muestra el motivo si el servidor rechaza.
   - Pruebas con mocks: `pruebas-proyecto-46.html`, casos N1–N7 (53/53).
 - **Bloque 5 «quote» (delimitación decidida el 2026-10-26, no es un requisito original recuperado).** Para esta entrega: crear la solicitud de cotización desde el proyecto, conservar su copia de líneas y consultar las solicitudes anteriores. Queda fuera: emitir presupuestos, precios ofertados, respuestas de distribuidores y negociación.
+
+- **Componentes consultables (decisión del 2026-10-27, a raíz del alta real de Malta; implementado en local, sin publicar).**
+  - Laguna detectada: un artículo «solo componente» estaba publicado y bien dado de alta, pero solo se llegaba a su ficha tecleando la URL; el configurador no enlazaba a él y no había vista ni búsqueda de componentes.
+  - **«Ver ficha»** junto a cada opción de componente del configurador (interactivo y de solo lectura, también anidados): enlace normal a `producto.html?id=…` en otra pestaña (`target="_blank"`, `rel="noopener"`, aviso accesible), fuera de la etiqueta de la opción. La página del configurador no cambia.
+  - **Vista «Componentes y accesorios»** dentro del catálogo (`catalogo.html`): la vista de productos es la principal y predeterminada; un enlace secundario de texto «Componentes y accesorios» bajo el buscador (y «← Volver a productos» dentro de la vista), accesible con teclado, más el enlace directo `?vista=componentes`: lista los artículos «componente» y «ambos». Es una vista transversal a las seis categorías, no una categoría. Tarjetas solo con «Ver ficha»; el precio sigue las reglas de siempre por cuenta y plan.
+  - **Los «solo componente» siguen fuera del catálogo principal** (listado, búsqueda y relacionados). Ver la ficha no permite añadirlos por separado; no cambia esa regla.
+  - **Búsqueda por referencia** (completa o parcial) en el catálogo principal y en la vista de componentes. Cada vista busca solo dentro de su propia lista, así que la referencia de un «solo componente» no lo trae al catálogo principal.
+  - **Sin cambios:** visibilidad, permisos de fichas, descargas y acciones, Cloudflare Access y migraciones.
+  - Pruebas con mocks: `pruebas-grupos-46.html`, casos V1–V13 y Q15/Q15g (128/128); `pruebas-44.html` 39/39 (se actualizó su caso P06 por la nota técnica).
+  - **Limitaciones declaradas de este cambio:** la comprobación con Malta en Production está pendiente (solo hay evidencia con mocks y con la copia de pruebas con datos sintéticos); las descargas no se probaron en esta revisión y el código de permisos no cambia; Estudio no tiene un caso diferenciado de Individual en los mocks (comparten el acceso profesional).
+  - **Pendiente aparte (decisión de no cambiarlo ahora):** revisar la política de descargas para Gratis. Hoy `can_download_product_file` exige rol individual o estudio y no comprueba el plan, por lo que Gratis descarga archivos de cualquier producto (comportamiento del punto 44).
+  - **Pendiente aparte, lo hace el usuario por «Proponer cambios» y moderación:** retirar del módulo Malta el archivo de Norway (`1.1112.0118.ldt`) y, temporalmente, `1.1122.0218 - 24D.ldt` mientras se valida. No está hecho.
 
 ## Prueba integrada en la interfaz real (mobau-pruebas, 2026-10-26)
 
@@ -46,6 +58,7 @@ Documento vivo de entrega. Versionado en local; el push está pendiente de autor
 
 ## Incidencias abiertas
 
+- **Estabilidad de dos pruebas con mocks (G15 y P10, `pruebas-grupos-46.html`), abierta.** En una ejecución con el panel del navegador oculto fallaron G15 (esperaba `["error", true, …]`, obtuvo `["error", false, …]`) y P10 (esperaba tarjetas «pending» y 0 consultas, obtuvo «configurable» y 1 consulta); con el panel visible la serie completa pasó (128/128). Causa **no confirmada**: hipótesis de que con el panel oculto los temporizadores se desfasan, porque ambos casos dependen de plazos o del momento de una respuesta. No se aisló ni se repitió la ejecución oculta. Los casos no se han modificado ni debilitado.
 - Error transitorio en el primer guardado del formulario («Indica el artículo de cada opción de componente del grupo «Lente»»), sin reproducir con los datos guardados (pendiente de reproducción dirigida).
 - Comprobación visual del bloqueo de «Solicitar cotización» por línea pendiente: **aparcada, no ejecutada en la interfaz real**. Evidencia: ensayo de servidor 07 (A10/A17) y pruebas con mocks.
 
