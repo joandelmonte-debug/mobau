@@ -651,11 +651,15 @@ const MobauAuth = {
     return supabaseClient.auth.signInWithOtp({ email, options });
   },
 
-  /* Cierra la sesión y regresa a acceso.html. */
+  /* Cierra la sesión y regresa a acceso.html.
+     Por defecto el cierre voluntario es LOCAL: solo termina la sesión de este navegador y conserva las de otros
+     equipos (varias personas pueden trabajar a la vez con la misma cuenta). El alcance de supabase-js por defecto
+     sería «global» (todas las sesiones de la cuenta); un cierre global deliberado (seguridad o relevo de cuenta)
+     debe pedirse de forma explícita: MobauAuth.signOut({ scope: "global" }). */
   _signingOut: false,
-  async signOut() {
+  async signOut({ scope = "local" } = {}) {
     this._signingOut = true;
-    const { error } = await supabaseClient.auth.signOut();
+    const { error } = await supabaseClient.auth.signOut({ scope });
     if (error) console.error("Error cerrando sesión:", error);
     MobauAccountHint.remember(false);
     window.location.href = "acceso.html";

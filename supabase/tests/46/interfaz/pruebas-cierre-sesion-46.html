@@ -1,0 +1,105 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas · cierre de sesión local (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:900px;height:500px;border:0;position:absolute;left:-9999px}</style>
+<h1>Cierre de sesión: el voluntario es local; el global, solo si se pide (mocks)</h1>
+<p>Sin red ni Supabase; servir la raíz del repositorio (solo en un origen local). Ejecuta las páginas reales a través de <code>sw-paginas-46.js</code> sobre el cliente simulado de CC1 y registra con qué alcance se llama a <code>auth.signOut</code>. <b>No prueba el servidor</b>: que «local» deje abiertas las sesiones de otros equipos es comportamiento de Supabase Auth (documentado) y se verifica con dos navegadores reales.</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<script>
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const frame = document.createElement("iframe");
+document.body.appendChild(frame);
+let ok = 0, ko = 0, n = 0, reg;
+window.__scopes = [];
+
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+const W = () => frame.contentWindow;
+async function open(path, qs){
+  sessionStorage.setItem("__mockqs", qs);
+  await new Promise(res => { frame.onload = res; frame.src = `pagina/${path}`; });
+  const t0 = Date.now();
+  while (Date.now() - t0 < 6000){
+    await sleep(80);
+    try { if (W().__mock && W().eval("typeof MobauAuth") === "object") { await sleep(300); return; } } catch (e) {}
+  }
+  throw new Error(`${path} no cargó el simulador: ensayo detenido`);
+}
+/* Registra el alcance con el que se llama a auth.signOut y deja que la llamada siga su curso. */
+function espiar(){
+  window.__scopes = [];
+  W().eval(`(() => { const a = supabaseClient.auth, orig = a.signOut.bind(a);
+    a.signOut = (o) => { top.__scopes.push(o && o.scope ? o.scope : "(sin alcance → global por defecto)"); return orig(o); }; })()`);
+}
+
+(async () => {
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Solo en un origen local de pruebas");
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    reg = await navigator.serviceWorker.register("sw-paginas-46.js");
+    while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await sleep(50);
+
+    /* El navegador puede conservar versiones anteriores de los archivos del sitio: se refrescan antes de empezar. */
+    for (const f of ["supabase-client.js", "nav-session.js", "index.html"]) await fetch(`../../../../${f}`, { cache: "reload" });
+
+    await open("index.html", "rol=supplier&perfil=own");
+    espiar();
+    W().document.getElementById("account-menu-logout").click();
+    await sleep(500);
+    check("S1 «Cerrar sesión» del menú (cuenta de distribuidor): scope «local»", window.__scopes, ["local"]);
+
+    await open("index.html", "rol=individual&pro=1&uid=a");
+    espiar();
+    W().document.getElementById("account-menu-logout").click();
+    await sleep(500);
+    check("S2 «Cerrar sesión» del menú (cuenta profesional): scope «local»", window.__scopes, ["local"]);
+
+    await open("index.html", "rol=supplier&perfil=own");
+    espiar();
+    W().eval("MobauAuth.signOut()");
+    await sleep(500);
+    check("S3 MobauAuth.signOut() sin argumentos: scope «local»", window.__scopes, ["local"]);
+
+    await open("index.html", "rol=supplier&perfil=own");
+    espiar();
+    W().eval(`MobauAuth.signOut({ scope: "global" })`);
+    await sleep(500);
+    check("S4 un cierre global deliberado debe pedirse de forma explícita: scope «global»", window.__scopes, ["global"]);
+
+    /* Revisión de TODOS los usos de auth.signOut en la web publicada (manifiesto): ninguno puede quedar sin alcance (global por
+       accidente). Los cierres voluntarios son locales; el global solo existe como opción explícita de MobauAuth.signOut. */
+    const manifiesto = (await (await fetch("../../../../scripts/pages-manifest.txt", { cache: "reload" })).text()).split("\n").map(l => l.trim()).filter(l => l && !l.startsWith("#") && /\.(html|js)$/.test(l));
+    const files = manifiesto;
+    const src = {};
+    for (const f of files) src[f] = await (await fetch(`../../../../${f}`, { cache: "reload" })).text();
+    const llamadas = [];
+    files.forEach(f => { for (const m of src[f].matchAll(/auth\.signOut\(([^)]*)\)/g)) llamadas.push(`${f}: signOut(${m[1].trim()})`); });
+    check("S5 todas las llamadas a auth.signOut de la web publicada pasan un alcance (ninguna global por accidente); registro.html y perfil-distribuidor.html cierran en local",
+      llamadas, ["perfil-distribuidor.html: signOut({ scope: \"local\" })", "registro.html: signOut({ scope: \"local\" })", "supabase-client.js: signOut({ scope })"]);
+    check("S5b ningún cierre en la web publicada pide el alcance «global» salvo, si acaso, el argumento explícito de MobauAuth.signOut (hoy sin uso)",
+      files.filter(f => /scope:\s*["']global["']/.test(src[f].replace(/\/\*[\s\S]*?\*\//g, ""))), []);
+    check("S6 el cierre del cliente común pasa el alcance a Supabase", [/auth\.signOut\(\{ scope \}\)/.test(src["supabase-client.js"]), /async signOut\(\{ scope = "local" \} = \{\}\)/.test(src["supabase-client.js"])], [true, true]);
+    check("S7 las pantallas que cierran sesión lo hacen por MobauAuth.signOut()", ["cuenta.html", "acceso.html", "verificar-correo.html", "nav-session.js"].map(f => /MobauAuth\.signOut\(\)/.test(src[f])), [true, true, true, true]);
+  } catch (e) {
+    check("Ensayo detenido por un error del propio ensayo", String(e && e.stack || e), "sin errores");
+  } finally {
+    try {
+      await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+      sessionStorage.clear(); localStorage.clear();
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+      check("Limpieza: service worker eliminado, sin cachés y almacenamiento vacío",
+        [(await navigator.serviceWorker.getRegistrations()).length, (await caches.keys()).length, localStorage.length, sessionStorage.length], [0, 0, 0, 0]);
+    } catch (e) { check("Limpieza", String(e), "sin errores"); }
+    document.getElementById("sum").textContent = `${ok}/${ok + ko} correctos`;
+    document.title = `cierre · ${ok}/${ok + ko}`;
+  }
+})();
+</script>

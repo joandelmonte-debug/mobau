@@ -471,7 +471,7 @@
   $("dp-create-supplier-btn").addEventListener("click", async () => {
     const btn = $("dp-create-supplier-btn");
     btn.disabled = true;
-    await supabaseClient.auth.signOut();
+    await supabaseClient.auth.signOut({ scope: "local" });   // solo este navegador: no cierra las sesiones de otros equipos
     window.location.href = "registro.html?tipo=distribuidor";
   });
 

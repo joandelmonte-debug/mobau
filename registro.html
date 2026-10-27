@@ -172,7 +172,7 @@
   })();
   document.getElementById("registro-signout-btn").addEventListener("click", async () => {
     document.getElementById("registro-signout-btn").disabled = true;
-    await supabaseClient.auth.signOut();
+    await supabaseClient.auth.signOut({ scope: "local" });   // solo este navegador: no cierra las sesiones de otros equipos
     window.location.replace("registro.html?tipo=distribuidor");
   });
 
