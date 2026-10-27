@@ -112,7 +112,7 @@
   const M = MobauModeracion;
   const $ = (id) => document.getElementById(id);
   const MAX_MESSAGE = 2000;
-  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, environment, light_source, electrical_connection, color_temperature";
+  const PRODUCT_COLUMNS = "id, name, brand, category_id, subcategory, use_context, space, availability, lead_time, description, measurements, materials, finishes, image_url, technical_sheet_url, cad_bim_3d_url, publication_status, environment, light_source, electrical_connection, color_temperature, catalog_role";
   const PUBLICATION = { draft: "Borrador", in_review: "En revisión", changes_requested: "Cambios solicitados", published: "Publicado", archived: "Archivado" };
 
   const params = new URLSearchParams(window.location.search);
@@ -454,10 +454,10 @@
     const currentRole = ctx.product ? (ctx.product.catalog_role || "principal") : null;
     if (pc.catalog_role){
       section.append(M.el("p", "", currentRole && currentRole !== pc.catalog_role
-        ? `Uso en el catálogo: ${C.ROLE_LABELS[currentRole]} → ${C.ROLE_LABELS[pc.catalog_role]}`
-        : `Uso en el catálogo: ${C.ROLE_LABELS[pc.catalog_role] || pc.catalog_role}`));
+        ? `Función en el catálogo: ${C.ROLE_LABELS[currentRole]} → ${C.ROLE_LABELS[pc.catalog_role]}`
+        : `Función en el catálogo: ${C.ROLE_LABELS[pc.catalog_role] || pc.catalog_role}`));
       if (p.proposal_kind === "create" && pc.catalog_role === "componente"){
-        section.append(M.el("p", "card-meta", "Es un componente nuevo: al aprobarlo no se mostrará como producto del catálogo; solo podrá ofrecerse dentro de otro producto de la empresa."));
+        section.append(M.el("p", "card-meta", "Es un componente nuevo: al aprobarlo aparecerá en «Componentes y accesorios» (no en «Productos») y podrá solicitarse por separado o elegirse dentro de otro producto de la empresa."));
       }
     }
     if (Array.isArray(pc.groups)){
@@ -688,7 +688,7 @@
     if (p.proposed_components) MobauComponentes.summary(p.proposed_components).forEach(line => lines.push(`Componentes: ${line}.`));
     if (p.proposal_kind === "create"){
       lines.push(p.proposed_components && p.proposed_components.catalog_role === "componente"
-        ? "El componente se creará y quedará disponible solo como pieza de otros productos de la empresa."
+        ? "El componente se creará y aparecerá en «Componentes y accesorios»; no estará en «Productos» y podrá solicitarse por separado."
         : "El producto se creará y se publicará en el catálogo de inmediato.");
       return `¿Aprobar y publicar este producto?\n${lines.join("\n")}`;
     }

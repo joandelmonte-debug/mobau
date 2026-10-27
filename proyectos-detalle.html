@@ -1084,6 +1084,7 @@
        el que ya trae "rows" (order_position/created_at de
        listProductsInProject) — no se introduce ningún orden nuevo. */
     listEl.innerHTML = visibleRows.map(row => renderProductRow(row, isArchived)).join("");
+    MobauLineConfig.compatNote(listEl, visibleRows.some(row => row.configuration));
 
     listEl.querySelectorAll(".remove-product-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -1480,6 +1481,7 @@
             body.append(g);
           });
         }
+        if (groups && groups.some(g => (g.lines || []).some(l => l.configuration))) body.append(mk("p", "card-meta", MobauLineConfig.COMPAT_NOTE));
         if (rfq.message) body.append(mk("p", "card-meta", `Información adicional enviada: ${rfq.message}`));
       }
       body.hidden = !body.hidden;

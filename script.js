@@ -462,6 +462,12 @@ function isCommercialProduct(p){
   return role === "principal" || role === "ambos";
 }
 const commercialProducts = () => PRODUCTS.filter(isCommercialProduct);
+/* «Principal / componente / ambos» decide DÓNDE aparece el artículo (Productos, Componentes y accesorios o las dos
+   vistas), no si se puede solicitar: los tres se solicitan por separado con los permisos de siempre. Solo un valor de
+   función desconocido (dato anómalo) no se ofrece para solicitar. */
+function isRequestableProduct(p){
+  return productCatalogRole(p) !== "desconocido";
+}
 /* Vista «Componentes y accesorios» (transversal a las seis categorías, no es una categoría): solo «componente» y
    «ambos». Una fila sin la columna (anterior a 46-01) o con un valor desconocido NO entra. Los «solo componente» no
    salen del catálogo principal: esta lista y commercialProducts() son disjuntas salvo «ambos», que está en las dos. */
@@ -1611,20 +1617,20 @@ document.addEventListener("mobau:access", (e) => {
   if (e.detail.access !== "pro") makeCardsReadOnly();
 });
 
-/* opts.viewOnly (vista «Componentes y accesorios»): la tarjeta solo lleva «Ver ficha», con independencia de la
-   cuenta y el plan; el precio sigue las reglas de siempre (cardPriceLineHtml no cambia). */
+/* opts.showRole (vista «Componentes y accesorios»): la tarjeta añade la función del artículo en texto; las acciones y
+   el precio siguen las reglas de siempre por cuenta y plan (nada cambia por estar en esta vista). */
 const CARD_ROLE_LABELS = { componente: "Componente o accesorio", ambos: "Principal y también componente" };
 function renderProductCard(p, opts){
-  const viewOnly = !!(opts && opts.viewOnly);
+  const showRole = !!(opts && opts.showRole);
   const dist = DISTRIBUTORS[p.distribuidor];
   const marcaLabel = escapeHtml(LABELS.marca[p.marca]);
   const finish = defaultFinishCode(p);
   const inSel = inSelection(p.id, finish);
   const idAttr = escapeHtml(p.id);
   const fichaUrl = escapeHtml(`producto.html?id=${encodeURIComponent(p.id)}`);
-  const actionsHtml = (viewOnly || cardActionsReadOnly()) ? readOnlyCardActionsHtml(fichaUrl) : null;
-  const selectButton = viewOnly ? "" : cardSelectSlotHtml(p, cardSelectState(p), finish, inSel);
-  const roleLabel = viewOnly ? CARD_ROLE_LABELS[productCatalogRole(p)] : "";
+  const actionsHtml = cardActionsReadOnly() ? readOnlyCardActionsHtml(fichaUrl) : null;
+  const selectButton = cardSelectSlotHtml(p, cardSelectState(p), finish, inSel);
+  const roleLabel = showRole ? CARD_ROLE_LABELS[productCatalogRole(p)] : "";
   return `
     <article class="product-card" data-product-id="${idAttr}">
       <a class="card-media" href="${fichaUrl}" aria-label="Ver ficha de ${escapeHtml(p.nombre)}">

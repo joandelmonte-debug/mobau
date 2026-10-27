@@ -123,9 +123,9 @@ check("dos grupos con la misma clave", v(modelo(grupo("A", { code: "x" }), grupo
 check("más de 30 grupos", v(modelo(...Array.from({ length: 31 }, (_, i) => grupo("G" + i))), false), "Máximo 30 grupos de componentes.");
 
 /* ---------- resumen ---------- */
-check("resumen de un manifiesto", M.summary({ catalog_role: "componente", groups: base.manifest.groups }), ["Uso en el catálogo: Solo componente o accesorio", "Fuente (necesario, una): 2 opciones", "Lente (opcional, varias): 1 opción, con condición"]);
+check("resumen de un manifiesto", M.summary({ catalog_role: "componente", groups: base.manifest.groups }), ["Función en el catálogo: Componente o accesorio", "Fuente (necesario, una): 2 opciones", "Lente (opcional, varias): 1 opción, con condición"]);
 check("resumen: retirar todos los grupos", M.summary({ groups: [] }), ["Grupos de componentes: se retiran todos"]);
-check("resumen: sin manifiesto con uso conocido", M.summary(null, "ambos"), ["Uso en el catálogo: Principal y también componente"]);
+check("resumen: sin manifiesto con uso conocido", M.summary(null, "ambos"), ["Función en el catálogo: Principal y también componente"]);
 
 /* ---------- editor (DOM) ---------- */
 const host = document.getElementById("host");

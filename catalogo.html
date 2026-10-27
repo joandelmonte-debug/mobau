@@ -294,7 +294,7 @@
 
   <!-- Punto 46: dos vistas del mismo catálogo (Productos, la principal, y Componentes y accesorios). Esta última no es una
        categoría: es una vista transversal a las seis, con los artículos «componente» y «ambos». -->
-  <p class="catalog-view-note" id="catalog-view-note" hidden>Piezas y accesorios que se ofrecen dentro de otros productos, de cualquier categoría. Aquí puedes consultar su ficha y sus archivos; para configurar un producto, ábrelo desde la vista «Productos».</p>
+  <p class="catalog-view-note" id="catalog-view-note" hidden>Piezas y accesorios que se ofrecen dentro de otros productos, de cualquier categoría. Puedes consultar su ficha y sus archivos y, con tu plan, solicitarlos por separado, por ejemplo como recambio.</p>
 
   <div class="search-bar">
     <label for="search-input" class="search-bar__label" id="search-label">Buscar productos</label>
@@ -1005,7 +1005,7 @@ runWithCatalog(() => {
     document.getElementById("sort-default-option").textContent = hasActiveSearch ? "Relevancia" : "Orden del catálogo";
 
     const grid = document.getElementById("product-grid");
-    grid.innerHTML = filtered.map(p => renderProductCard(p, { viewOnly: componentView })).join("");
+    grid.innerHTML = filtered.map(p => renderProductCard(p, { showRole: componentView })).join("");
 
     /* "Resultados similares a: ..." solo cuando la búsqueda no tuvo
        ninguna coincidencia literal y se usó el fallback aproximado —
@@ -1036,15 +1036,13 @@ runWithCatalog(() => {
     document.getElementById("result-count").textContent =
       filtered.length === 1 ? `1 ${unit[0]}` : `${filtered.length} ${unit[1]}`;
     injectIconSprite();
-    /* Vista de componentes: solo «Ver ficha». Sin acciones de añadir y sin consultar la configuración de las tarjetas. */
-    if (!componentView){
-      patchCardActionsForActiveProject(grid);
-      /* Sin callback: bindAddButtons ya actualiza el botón y el contador de la
-         tarjeta; volver a pintar toda la cuadrícula hacía parpadear el resto. */
-      bindAddButtons(grid);
-      bindAddToProjectButtons(grid);
-      watchCardConfig(grid, syncFolderButton);
-    }
+    /* Las dos vistas ofrecen las mismas acciones por cuenta y plan: un componente se solicita por separado. */
+    patchCardActionsForActiveProject(grid);
+    /* Sin callback: bindAddButtons ya actualiza el botón y el contador de la
+       tarjeta; volver a pintar toda la cuadrícula hacía parpadear el resto. */
+    bindAddButtons(grid);
+    bindAddToProjectButtons(grid);
+    watchCardConfig(grid, syncFolderButton);
     propagateCartLinks();
   }
 
@@ -1131,8 +1129,8 @@ runWithCatalog(() => {
             showToast("No se pudo añadir el producto. Intenta de nuevo.");
             return;
           }
-          if (!isCommercialProduct(product)){
-            showToast("Este producto solo se ofrece como componente.");
+          if (!isRequestableProduct(product)){
+            showToast("Este producto no se ofrece por separado.");
             return;
           }
           const configState = cardSelectState(product);

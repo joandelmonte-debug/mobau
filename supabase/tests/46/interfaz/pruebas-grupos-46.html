@@ -304,7 +304,7 @@ const sinCapturar = () => W().__sinCapturar;
       [true, ["Fuente", "Extras"], "radio", "checkbox", "Completa la configuración (off)", true, 0]);
     await pick("fuente", "calida"); await sleep(150);
     check("Q2 elegir «calida» (ajuste): completa; se comprueba una vez con la configuración exacta; se puede añadir; el precio es el del principal sin pedir cotización",
-      [status().startsWith("Configuración completa según el catálogo actual."), vals(w).length, norm(w, lastCfg(w)), abLabel(), doc().getElementById("cfg-price-note").textContent.includes("precio indicado en la ficha es el del producto principal"), doc().getElementById("cfg-price-note").textContent.includes("cotización")],
+      [status().startsWith("Elecciones registradas según el catálogo actual."), vals(w).length, norm(w, lastCfg(w)), abLabel(), doc().getElementById("cfg-price-note").textContent.includes("precio indicado en la ficha es el del producto principal"), doc().getElementById("cfg-price-note").textContent.includes("cotización")],
       [true, 1, norm(w, { choices: [CH("fuente", ["calida"])] }), "Añadir configuración", true, false]);
     await pick("fuente", "comp");
     check("Q3a elegir el componente: aparecen el grupo condicionado y los del componente (con su path); faltan elecciones: no se añade ni se consulta",
@@ -356,7 +356,7 @@ const sinCapturar = () => W().__sinCapturar;
       clearSel();
       w = await open({ validacion: modo }, FICHA); await settled();
       await pick("fuente", "calida"); await sleep(250);
-      const st = [status().includes("No pudimos verificar esta configuración"), status().includes("completa según"), abLabel(), !!doc().getElementById("cfg-retry-check")];
+      const st = [status().includes("No pudimos verificar esta configuración"), status().includes("registradas según"), abLabel(), !!doc().getElementById("cfg-retry-check")];
       await pick("fuente", "comp"); const local = abLabel();
       await pick("fuente", "calida"); await sleep(200);
       check(`Q9 ${modo}: «no se pudo verificar», nunca «completa»; se puede conservar para revisión; un requisito local sigue bloqueando`, [st, local], [[true, false, "Añadir configuración", true], "Completa la configuración (off)"]);
@@ -368,7 +368,7 @@ const sinCapturar = () => W().__sinCapturar;
     await pick("fuente", "calida"); await sleep(250);
     w.__grupos46.conf.validacion = "ok";
     doc().getElementById("cfg-retry-check").click(); await sleep(250);
-    check("Q9c «Reintentar la comprobación» con el servidor recuperado: pasa a «completa según el catálogo»", [status().startsWith("Configuración completa según el catálogo actual."), vals(w).length], [true, 2]);
+    check("Q9c «Reintentar la comprobación» con el servidor recuperado: pasa a «elecciones registradas según el catálogo»", [status().startsWith("Elecciones registradas según el catálogo actual."), vals(w).length], [true, 2]);
 
     w = await open({ validacion: "colgada" }, FICHA); await settled();
     await pick("fuente", "calida");
@@ -385,10 +385,10 @@ const sinCapturar = () => W().__sinCapturar;
     w = await open({ validacion: "ok", modosVal: ["pendiente", "ok"], retrasosVal: [700, 5] }, FICHA); await settled();
     await pick("fuente", "calida", [], 0); await pick("fuente", "comp", [], 0);
     await pick("carcasa", "x", COMP, 0); await pick("control", "dim", [], 0); await sleep(150);
-    const nuevo = [status().startsWith("Configuración completa"), abLabel()];
+    const nuevo = [status().startsWith("Elecciones registradas"), abLabel()];
     await sleep(900);
     check("Q12 una respuesta antigua (pendiente) de una elección anterior no sustituye el estado de la actual (completa)",
-      [nuevo, status().startsWith("Configuración completa"), abLabel(), vals(w).length], [[true, "Añadir configuración"], true, "Añadir configuración", 2]);
+      [nuevo, status().startsWith("Elecciones registradas"), abLabel(), vals(w).length], [[true, "Añadir configuración"], true, "Añadir configuración", 2]);
     w = await open({ validacion: "ok", modosVal: ["pendiente"], retrasosVal: [600] }, FICHA); await settled();
     await pick("fuente", "calida", [], 0); await pick("fuente", "comp", [], 0); await sleep(900);
     check("Q13 una respuesta antigua que llega con la elección ya incompleta no la desbloquea", [abLabel(), status().includes("Falta elegir"), status().includes("pendiente")], ["Completa la configuración (off)", true, false]);
@@ -491,7 +491,7 @@ const sinCapturar = () => W().__sinCapturar;
         [antes, legends(), abLabel(), REL.map(slot), doc().getElementById("cfg-body").innerText.includes("No pudimos cargar"), rel.replaced(), rel.mut, views(w)],
         [[true, "Configuración no disponible (off)", ["error", "error", "error"], 0], ["Fuente", "Extras"], "Completa la configuración (off)", ["configurable", "configurable", "plain"], false, 0, 0, 4]);
       await pick("fuente", "calida"); await sleep(200);
-      check(`Q24b tras el reintento desde ${via === "panel" ? "el panel" : "una tarjeta"} se puede configurar y añadir con normalidad`, [abLabel(), status().startsWith("Configuración completa")], ["Añadir configuración", true]);
+      check(`Q24b tras el reintento desde ${via === "panel" ? "el panel" : "una tarjeta"} se puede configurar y añadir con normalidad`, [abLabel(), status().startsWith("Elecciones registradas")], ["Añadir configuración", true]);
     }
 
     /* ===== Paso 0 · productos «solo componente» ===== */
@@ -523,22 +523,29 @@ const sinCapturar = () => W().__sinCapturar;
     w = await open({ roles: ROLES }, { page: "distribuidores.html", qs: QS_IND, cards: false });
     await until(() => doc().querySelectorAll(".provider-count, td").length > 0, 6000); await sleep(300);
     const cuentas = [...doc().querySelectorAll(".provider-count")].map(e => e.textContent.trim()).sort();
-    check("R5 listado comercial por distribuidor: no cuenta componentes ni roles desconocidos (spectro 1: demo-pub; altritempi 2: demo-pend y demo-nodisp)", cuentas, ["1 producto activo", "2 productos activos"]);
+    check("R5 listado comercial por distribuidor: no cuenta componentes ni roles desconocidos (spectro 1: demo-pub; altritempi 2: demo-pend y demo-nodisp)", cuentas, ["1 producto de catálogo", "2 productos de catálogo"]);
 
-    for (const [id, texto] of [["demo-cot", "Componente: se ofrece dentro de la configuración"], ["demo-sin", "Este producto no se ofrece por separado."]]){
-      clearSel();
-      w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id }); await sleep(1200);
-      const r = w.addToSelection(id, 1, "ud.", null);
-      check(`R6 ficha directa de ${id} (${id === "demo-cot" ? "componente" : "rol desconocido"}): accesible, identificada, sin cantidad ni añadir, sin invitación a la selección y sin vías de añadir por separado`,
-        [doc().getElementById("p-component-note") && doc().getElementById("p-component-note").textContent.startsWith(texto), doc().querySelector(".product-selection-actions").hidden,
-         doc().getElementById("p-price-actions").innerText.includes("Añádelo"), r.success, r.error, storedLines().length],
-        [true, true, false, false, "Este producto solo se ofrece como componente.", 0]);
-    }
+    /* La función (principal / componente / ambos) dice dónde aparece el artículo; un componente se solicita por separado.
+       Solo una función desconocida (dato anómalo) no se ofrece. */
     clearSel();
     w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1200);
-    check("R7 la ficha de un componente muestra sus opciones en solo lectura, identificadas como del componente, sin controles ni consultas", 
-      [!panel().hidden, doc().querySelectorAll("#cfg-body input").length, doc().getElementById("cfg-body").innerText.includes("opciones de configuración de este componente"), vals(w).length],
-      [true, 0, true, 0]);
+    const rCot = w.addToSelection("demo-cot", 1, "ud.", null);
+    check("R6 ficha directa de un componente: accesible, identificada como «Componente o accesorio» que también se puede solicitar por separado, con cantidad y botón de añadir visibles y sin impedimento en la selección",
+      [doc().getElementById("p-component-note") && doc().getElementById("p-component-note").textContent, doc().querySelector(".product-selection-actions").hidden, rCot.success, rCot.error || null, storedLines().map(l => l.productId)],
+      ["Componente o accesorio: también puedes solicitarlo por separado.", false, true, null, ["demo-cot"]]);
+    clearSel();
+    w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-sin" }); await sleep(1200);
+    const rSin = w.addToSelection("demo-sin", 1, "ud.", null);
+    check("R6b ficha de un artículo con función desconocida (dato anómalo): accesible, sin cantidad ni añadir y sin vías de añadirlo",
+      [doc().getElementById("p-component-note") && doc().getElementById("p-component-note").textContent, doc().querySelector(".product-selection-actions").hidden, rSin.success, rSin.error, storedLines().length],
+      ["Este producto no se ofrece por separado.", true, false, "Este producto no se ofrece por separado.", 0]);
+    clearSel();
+    w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1500);
+    check("R7 la ficha de un componente con grupos ofrece su configurador interactivo (Individual): el grupo necesario bloquea hasta elegirlo, y al elegirlo se añade UNA línea de ese componente, sin el producto padre",
+      [!panel().hidden, doc().querySelectorAll("#cfg-body input").length, abLabel()], [true, 2, "Completa la configuración (off)"]);
+    await pick("carcasa", "x"); await settled(); ab().click(); await sleep(800);
+    check("R7b la línea añadida es solo del componente, con su elección",
+      [storedLines().map(l => [l.productId, (l.configuration.choices || []).map(c => [c.group, c.options.join(",")])])], [[["demo-cot", [["carcasa", "x"]]]]]);
     w = await open({ roles: ROLES, validacion: "ok" }, { page: "producto.html", qs: QS_IND, id: "demo-pend" }); await sleep(1500);
     check("R8 un producto con rol «ambos» mantiene el uso normal en la ficha (cantidad y botón visibles, sin nota de componente)",
       [doc().querySelector(".product-selection-actions").hidden, !!doc().getElementById("p-component-note")], [false, false]);
@@ -604,13 +611,13 @@ const sinCapturar = () => W().__sinCapturar;
     }
 
     w = await open(CONF2, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1500);
-    check("V5 ficha del componente (módulo): migas hacia «Componentes y accesorios», solo lectura y «Ver ficha» de su driver",
+    check("V5 ficha del componente (módulo): migas hacia «Componentes y accesorios», «Ver ficha» de su driver y, con acceso profesional, cantidad y botón de añadir",
       [doc().body.innerHTML.includes('href="catalogo.html?vista=componentes"'), vHrefs(), doc().querySelector(".product-selection-actions").hidden, vWrites(w).length],
-      [true, ["producto.html?id=demo-nodisp"], true, 0]);
+      [true, ["producto.html?id=demo-nodisp"], false, 0]);
     w = await open(CONF2, { page: "producto.html", qs: QS_IND, id: "demo-nodisp" }); await sleep(1500);
-    check("V6 desde el módulo se llega a la ficha de su driver: se carga identificada como componente, sin añadir y sin escrituras",
+    check("V6 desde el módulo se llega a la ficha de su driver: se carga identificada como componente que también se solicita por separado, sin escrituras",
       [!!doc().getElementById("p-component-note"), doc().querySelector(".product-selection-actions").hidden, doc().getElementById("bc-name").textContent.trim(), vWrites(w).length],
-      [true, true, "Precio no disponible", 0]);
+      [true, false, "Precio no disponible", 0]);
 
     for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS], ["Individual", QS_IND]]){
       w = await open(CONF2, { qs }); await ready(w).catch(() => {}); await sleep(300);
@@ -622,11 +629,11 @@ const sinCapturar = () => W().__sinCapturar;
     w = await open(CONF2, { qs: QS_IND }); await ready(w); await sleep(200);
     const vAntesVista = { calls: nCalls(), escrituras: vWrites(w).length, precioPend: vCardPrice("demo-pend") };
     await vGoView("componentes");
-    check("V8 vista de componentes (Individual): lista «componente» y «ambos»; título, contador, rótulo y URL lo dicen; solo «Ver ficha», sin añadir ni configurar; sin consultas nuevas ni escrituras; el precio sigue las reglas de siempre",
+    check("V8 vista de componentes (Individual): lista «componente» y «ambos»; título, contador, rótulo y URL lo dicen; las tarjetas llevan las acciones normales de su estado (aquí «Configurar», sin botones de solo lectura); sin consultas nuevas ni escrituras; el precio sigue las reglas de siempre",
       [idsIn("#product-grid"), doc().getElementById("catalog-title").textContent, doc().getElementById("result-count").textContent.trim(), vLinks(), w.location.search.includes("vista=componentes"),
-       doc().querySelectorAll("#product-grid .btn-add-selection, #product-grid .btn-configure, #product-grid .btn-add-to-project, #product-grid .card-actions").length,
-       [...doc().querySelectorAll("#product-grid .card-actions-readonly a")].map(a => a.textContent.trim()).sort().join("|"), nCalls() - vAntesVista.calls, vWrites(w).length - vAntesVista.escrituras, vCardPrice("demo-pend") === vAntesVista.precioPend],
-      [["demo-cot", "demo-nodisp", "demo-pend"], "Componentes y accesorios", "3 componentes", [false, true], true, 0, "Ver ficha|Ver ficha|Ver ficha", 0, 0, true]);
+       doc().querySelectorAll("#product-grid .card-actions").length, doc().querySelectorAll("#product-grid .card-actions-readonly").length,
+       ["demo-cot", "demo-nodisp", "demo-pend"].map(id => card(id).querySelector("[data-select-slot]").dataset.configState), nCalls() - vAntesVista.calls, vWrites(w).length - vAntesVista.escrituras, vCardPrice("demo-pend") === vAntesVista.precioPend],
+      [["demo-cot", "demo-nodisp", "demo-pend"], "Componentes y accesorios", "3 componentes", [false, true], true, 3, 0, ["configurable", "configurable", "configurable"], 0, 0, true]);
     check("V9 cada tarjeta de componente dice su función con texto (no solo color)",
       Object.fromEntries(["demo-cot", "demo-pend", "demo-nodisp"].map(id => [id, card(id).querySelector(".card-role").textContent.trim()])),
       { "demo-cot": "Componente o accesorio", "demo-pend": "Principal y también componente", "demo-nodisp": "Componente o accesorio" });
@@ -651,6 +658,57 @@ const sinCapturar = () => W().__sinCapturar;
     check("V13 enlace directo ?vista=componentes (visitante): abre la vista de componentes, con el buscador adaptado y las seis categorías intactas",
       [idsIn("#product-grid"), doc().getElementById("search-input").placeholder, vLinks(), [...doc().querySelectorAll("#catalog-category-chips button")].some(b => /Componentes/i.test(b.textContent)), doc().getElementById("catalog-view-note").hidden],
       [["demo-cot", "demo-nodisp", "demo-pend"], "Buscar por nombre, referencia o marca…", [false, true], false, false]);
+
+    /* ===== Solicitar componentes por separado: grupos opcionales, textos de estado y permisos ===== */
+    const CONF3 = { roles: ROLES2, refs: REFS, validacion: "ok", profundo: true, carcasaOpcional: true };   // «carcasa» de demo-cot opcional: simula el grupo Driver del módulo cambiado a Opcional
+    const choicesOf = l => (l.configuration && l.configuration.choices || []).map(c => `${c.path.length ? c.path.map(x => x.group + ":" + x.option).join(">") + ">" : ""}${c.group}:${c.options.join(",")}`);
+
+    clearSel();
+    w = await open(CONF3, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1500);
+    check("W1 componente solo con su grupo opcional (Individual): se ofrece «Ninguna» marcada, no hay que elegir nada y se puede añadir sin consultas ni driver automático",
+      [!panel().hidden, legends().includes("Carcasa"), doc().querySelector("#cfg-body legend .cfg-hint").textContent, checked().filter(c => c.startsWith("carcasa")), abLabel(), status(), vals(w).length],
+      [true, true, "(opcional · elige una)", ["carcasa:—"], "Añadir configuración", "Sin opciones elegidas: el producto se añade sin configuración.", 0]);
+    ab().click(); await sleep(700);
+    check("W2 al añadirlo sin elegir nada queda UNA línea del componente, sin configuración y sin ningún otro artículo (ni padre ni accesorio añadido por su cuenta)",
+      [storedLines().map(l => [l.productId, l.configuration || null])], [[["demo-cot", null]]]);
+    w = await open(CONF3, { page: "producto.html", qs: QS_IND, id: "demo-cot" }); await sleep(1500);
+    await pick("carcasa", "x"); await settled(); ab().click(); await sleep(700);
+    check("W3 el mismo componente con una elección distinta es OTRA línea (no se fusionan ni se pierde la elección anterior)",
+      [storedLines().map(l => [l.productId, choicesOf(l)])], [[["demo-cot", []], ["demo-cot", ["carcasa:x"]]]]);
+
+    clearSel();
+    w = await open(CONF3, FICHA); await settled();
+    await pick("fuente", "comp"); await sleep(150);
+    check("W4 conjunto: mientras falte una elección que el catálogo exige se dice y no se puede añadir; el grupo opcional del componente no bloquea",
+      [abLabel(), status().includes("Falta una elección exigida para solicitar:"), status().includes("Falta elegir «Control»."), status().includes("Falta elegir «Carcasa»")],
+      ["Completa la configuración (off)", true, true, false]);
+    await pick("control", "dim"); await settled();
+    check("W5 conjunto sin elegir el grupo opcional del componente («Ninguna»): se registra solo lo elegido, sin añadir nada automáticamente",
+      [abLabel(), status().startsWith("Elecciones registradas según el catálogo actual."), checked().filter(c => c.startsWith("carcasa")), norm(w, lastCfg(w))],
+      ["Añadir configuración", true, ["carcasa:—"], norm(w, { choices: [CH("fuente", ["comp"]), CH("control", ["dim"])] })]);
+    ab().click(); await sleep(800);
+    check("W6 la línea del conjunto lleva solo las elecciones hechas (sin la «carcasa» opcional) y no hay otras líneas",
+      [storedLines().map(l => [l.productId, choicesOf(l)])], [[["demo-pub", ["control:dim", "fuente:comp"]]]]);   // la forma normal ordena las elecciones
+    check("W7 textos: el estado dice «elecciones registradas», la compatibilidad se aclara UNA vez como nota secundaria del bloque, y no se afirma conjunto completo ni compatibilidad validada",
+      [doc().getElementById("cfg-compat-note").textContent, (doc().body.innerText.match(/compatibilidad técnica/g) || []).length, /Configuración completa|conjunto completo|compatibles? entre|validad[oa]/i.test(doc().getElementById("cfg-body").innerText + doc().getElementById("cfg-status").innerText)],
+      ["Mobau no valida la compatibilidad técnica entre piezas.", 1, false]);
+
+    for (const [nombre, qs] of [["Visitante", QS_VISITANTE], ["Gratis", QS_GRATIS]]){
+      w = await open(CONF3, { qs: qs + "&vista=componentes" }); await sleep(400);
+      check(`W8 ${nombre}: en la vista de componentes solo «Ver ficha» (sin añadir ni configurar) y los precios por sus reglas; permisos sin cambios`,
+        [idsIn("#product-grid"), doc().querySelectorAll("#product-grid .card-actions").length, doc().querySelectorAll("#product-grid .card-actions-readonly a").length, doc().querySelectorAll("#product-grid .btn-add-selection, #product-grid .btn-configure, #product-grid .btn-add-to-project").length],
+        [["demo-cot", "demo-nodisp", "demo-pend"], 0, 3, 0]);
+      w = await open(CONF3, { page: "producto.html", qs, id: "demo-cot" }); await sleep(1500);
+      const rr = w.addToSelection("demo-cot", 1, "ud.", null);
+      check(`W9 ${nombre}: la ficha de un componente sigue sin bloque de componentes ni botón de añadir (los permisos por plan no cambian)`,
+        [panel().hidden, doc().querySelector(".product-selection-actions").hidden, vHrefs()], [true, true, []]);
+    }
+
+    for (const [nombre, qs] of [["Distribuidor dueño", QS_DUENO], ["Mobau", QS_MOBAU]]){
+      w = await open(CONF3, { page: "producto.html", qs, id: "demo-cot" }); await sleep(1500);
+      check(`W10 ${nombre}: conserva su panel de solo lectura y sin cantidad ni añadir (no es una cuenta con acceso profesional)`,
+        [!panel().hidden, doc().querySelectorAll("#cfg-body input").length, doc().querySelector(".product-selection-actions").hidden], [true, 0, true]);
+    }
 
     /* ===== Contrato de construcción (filas sintéticas) ===== */
     w = await open();

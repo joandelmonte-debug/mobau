@@ -15,7 +15,7 @@
 const UID = "aaaaaaaa-0000-4000-8000-00000000000a", KEY = "mobau_seleccion:" + UID;
 const QS = "rol=individual&pro=1&uid=a";
 const P = n => `0000000${n}-1111-4111-8111-111111111111`;
-const COMPLETAS = "Elecciones completas según el catálogo actual; se vuelven a comprobar al enviar la solicitud.";
+const COMPLETAS = "Elecciones registradas según el catálogo actual; se vuelven a comprobar al enviar la solicitud.";
 const SIN_COMPROBAR = "No pudimos comprobar la configuración con el catálogo actual. Se conserva lo guardado.";
 const COTIZACION = "El importe final de esta configuración requiere cotización.";
 const PRECIO = "El precio indicado es el del producto principal, no el del conjunto.";
@@ -101,6 +101,9 @@ const total = () => { const m = summaryText().match(/Total preliminar: (US\$ [\d
     check("D1d líneas sin configuración: sin textos nuevos", [noConfig(metasOf("l-sin")), noConfig(metasOf("l-cot"))], [true, true]);
     check("D1e resumen de precios: total del principal (6 × 120), nota del principal y cotización; una consulta de estado; sin errores sin capturar",
       [total(), summaryText().includes(`${NOTA} Su importe final requiere cotización.`), w().__estadosCalls, w().__sinCapturar], ["US$ 720.00", true, 1, []]);
+    check("D1f la aclaración sobre compatibilidad técnica sale UNA vez para todo el bloque de líneas (no por línea) y las líneas dicen «elecciones registradas», no «completas»",
+      [d().querySelectorAll(".line-compat-note").length, d().querySelector(".line-compat-note").textContent, (d().getElementById("project-products-list").innerText.match(/compatibilidad técnica/g) || []).length, /completas según/.test(d().getElementById("project-products-list").innerText)],
+      [1, "Mobau no valida la compatibilidad técnica entre piezas.", 0, false]);
 
     await click(d().querySelector('.dp-qty-increment[data-row-id="l-b"]'), 600);
     check("D2 «+» en B: solo se actualiza B; total actualizado; se vuelve a consultar el estado; las demás cantidades no cambian",

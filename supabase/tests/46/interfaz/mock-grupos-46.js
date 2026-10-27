@@ -25,6 +25,7 @@
      acabadoComp: true → la opción «comp» lleva el acabado «11» de demo-cot (C-11 · Negro)
      roles: { id: valor, … } → catalog_role de esos productos (el resto de filas no trae la columna, como antes de 46-01);
             valor puede ser "principal" | "componente" | "ambos" | un valor desconocido | null
+     carcasaOpcional: true → el grupo «carcasa» de demo-cot es opcional (simula un grupo Driver cambiado a opcional)
      refs: { id: "1.1122.0218", … } → reference_code de esos productos (el resto de filas no la trae)
      errorPorId: true → la lectura por identificadores falla; ausenteSiempre: true → tampoco devuelve los de «fuera»
      profundo: true → demo-cot con el grupo opcional «tapa» (t1 = componente demo-nodisp, aparte, 2 por unidad)
@@ -49,7 +50,7 @@
     g("g-fuente", "demo-pub", "fuente", "Fuente", "necesario", "una", 1, null, 2),
     g("g-extras", "demo-pub", "extras", "Extras", "opcional", "varias", 2, null, 1),
     g("g-control", "demo-pub", "control", "Control", "necesario", "una", 3, "o-comp", 2),
-    g("g-carcasa", "demo-cot", "carcasa", "Carcasa", "necesario", "una", 1, null, 2),
+    g("g-carcasa", "demo-cot", "carcasa", "Carcasa", conf.carcasaOpcional ? "opcional" : "necesario", "una", 1, null, 2),
     g("g-vacio", "demo-pend", "vacio", "Sin opciones", "necesario", "una", 1, null, 0)
   ];
   const options = conf.vacio ? [] : [

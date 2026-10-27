@@ -106,6 +106,7 @@
   .pl-name{ min-width:0; overflow-wrap:anywhere; }
   .pl-name .c-name{ font-weight:600; color: var(--ink); }
   .pl-kind{ margin-top:1px; font-size:12px; color: var(--ink-soft); }
+  .pl-role{ display:inline-block; margin-top:3px; padding:0 7px; font-size:11.5px; line-height:18px; color: var(--ink-soft); border:1px solid var(--line); border-radius:999px; }
   .pl-state{ display:flex; flex-wrap:wrap; gap:4px; }
   .pl-acts{ display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:0 2px; }
   .pl-acts .pd-link, .pl-acts .pl-toggle, .pl-acts .pp-withdraw-btn{ display:inline-flex; align-items:center; min-height:44px; margin:0; padding:0 8px; white-space:nowrap; }
@@ -165,7 +166,7 @@
     <h1>Mis productos</h1>
     <p style="margin-top:14px; max-width:62ch;">Consulta tus productos y propone productos nuevos o cambios para revisión. Mobau revisa cada propuesta antes de crear o actualizar el catálogo. Los productos que retires pasan a la papelera, desde donde puedes restaurarlos o eliminarlos definitivamente.</p>
     <div class="pl-head-actions">
-      <a class="btn btn-primary" href="distribuidor-propuestas.html?nueva=1">Crear nuevo producto</a>
+      <a class="btn btn-primary" href="distribuidor-propuestas.html?nueva=1">Crear producto o componente</a>
     </div>
   </div>
 </div>
@@ -227,7 +228,7 @@
     <!-- Sin productos ni productos propuestos: un único estado vacío. -->
     <div id="pl-first" class="cart-empty pl-empty" hidden>
       <p style="margin:0; color:var(--ink); font-weight:600;">Todavía no tienes productos en Mobau.</p>
-      <p style="margin:0;">Usa «Crear nuevo producto» para añadir el primero; Mobau lo revisará antes de publicarlo.</p>
+      <p style="margin:0;">Usa «Crear producto o componente» para añadir el primero; Mobau lo revisará antes de publicarlo.</p>
     </div>
 
     <section id="pl-view-catalog" class="pl-section" role="tabpanel" aria-labelledby="pl-tab-catalog">
@@ -344,7 +345,7 @@
    productos se hace con una propuesta, en
    el formulario de distribuidor-propuestas.html, que solo escribe en
    product_proposals:
-     Crear nuevo producto            → ?nueva=1
+     Crear producto o componente     → ?nueva=1
      tarjeta de producto (o su acción) → ?producto=ID: abre una propuesta
                                        nueva o la abierta editable;
      tarjeta de producto propuesto   → ?propuesta=ID (borrador o cambios
@@ -1011,6 +1012,7 @@
   /* ---------- Filas compactas (45) ----------
      selección | código comercial | marca | nombre | estado | acciones. Sin
      reference_code se muestra «—» (nunca el identificador interno). */
+  const ROLE_TAGS = { principal: "Principal", componente: "Componente", ambos: "Ambos" };
   function rowShell(entry, kind, states){
     const row = document.createElement("div");
     row.className = "pl-row";
@@ -1031,6 +1033,10 @@
     name.className = "pl-name";
     name.append(textDiv("c-name", entry.name));
     if (kind) name.append(textDiv("pl-kind", kind));
+    /* Función del artículo (46): solo informativa; dónde aparece, no si se puede solicitar. */
+    const roleKey = entry.product ? entry.product.catalog_role
+      : (entry.proposal && entry.proposal.proposed_components ? entry.proposal.proposed_components.catalog_role : null);
+    if (ROLE_TAGS[roleKey]) name.append(textDiv("pl-role", ROLE_TAGS[roleKey]));
     const state = document.createElement("div");
     state.className = "pl-state";
     state.append(...states);
@@ -1808,7 +1814,7 @@
   const HEAD = ["", "Código", "Marca", "Nombre", "Estado", "Acciones"];
   const EMPTY = {
     catalog: ["Todavía no tienes productos en el catálogo.", "Tus productos nuevos, borradores y retirados están en «Borradores y propuestas»."],
-    drafts:  ["No tienes borradores ni propuestas abiertas.", "Usa «Crear nuevo producto» o «Proponer cambios» en un producto."],
+    drafts:  ["No tienes borradores ni propuestas abiertas.", "Usa «Crear producto o componente» o «Proponer cambios» en un producto."],
     trash:   ["La papelera está vacía.", "Cuando retires un producto, aparecerá aquí."]
   };
   function countText(tab, shown, total){
@@ -1884,7 +1890,7 @@
 
       const [productsRes, categoriesRes, proposalsRes] = await Promise.all([
         supabaseClient.from("products")
-          .select("id, name, brand, reference_code, category_id, subcategory, availability, publication_status, updated_at")
+          .select("id, name, brand, reference_code, category_id, subcategory, availability, publication_status, updated_at, catalog_role")
           .eq("distributor_id", distributorId).order("updated_at", { ascending: false }),
         supabaseClient.from("categories").select("id, name").order("name"),
         supabaseClient.from("product_proposals")

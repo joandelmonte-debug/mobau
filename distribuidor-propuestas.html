@@ -47,10 +47,19 @@
   .pp-ct-range{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
   /* Punto 44: producto nuevo, primero la categoría; el resto aparece al elegirla. */
   .pp-category-first{ margin:0 0 12px; font-size:13.5px; color: var(--ink-soft); }
-  #pp-form.pp-needs-category > fieldset:not(#pf-fields),
+  #pp-form.pp-needs-category > fieldset:not(#pf-fields):not(#pf-kind-fields),
   #pp-form.pp-needs-category #pf-fields .field-grid > :not(.pp-step-category),
   #pp-form.pp-needs-category .pp-form-actions,
   #pp-form.pp-needs-category #pf-warning{ display:none !important; }
+  /* Punto 46: alta, primero qué se crea (Producto o Componente); el resto aparece al elegirlo. */
+  #pp-form.pp-needs-kind > :not(#pf-kind-fields):not(#pf-state):not(#pf-error){ display:none !important; }
+  .pp-link{ background:none; border:0; padding:0; font:inherit; font-size:13px; color: var(--ink-soft); text-decoration:underline; cursor:pointer; }
+  .pp-link:hover{ color: var(--ink); }
+  .pp-role-change{ margin:10px 0 0; padding:12px 14px; border:1px solid var(--line); border-radius: var(--radius); }
+  .pp-role-change .pp-check{ margin:6px 0 0; display:flex; gap:8px; align-items:center; font-size:13.5px; cursor:pointer; }
+  .pp-role-change .pp-check.is-disabled{ color: var(--ink-faint); cursor:not-allowed; }
+  .pp-kind{ display:flex; flex-wrap:wrap; gap:4px 24px; }
+  .pp-kind .pp-check{ margin:6px 0 0; }
   @media (max-width: 640px){
     .pp-row{ grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
     .pp-file-row{ grid-template-columns: 1fr; }
@@ -110,6 +119,16 @@
         <legend>Producto</legend>
         <p class="pp-product" id="pf-product-name"></p>
         <p class="pp-product-meta" id="pf-product-meta"></p>
+      </fieldset>
+
+      <!-- Punto 46: solo en el alta. Es la única fuente de la función (catalog_role). -->
+      <fieldset id="pf-kind-fields" hidden>
+        <legend>¿Qué quieres crear?</legend>
+        <div class="pp-kind" role="radiogroup" aria-label="¿Qué quieres crear?">
+          <label class="pp-check"><input type="radio" name="pf-kind" value="principal"> Producto</label>
+          <label class="pp-check"><input type="radio" name="pf-kind" value="componente"> Componente o accesorio</label>
+        </div>
+        <p class="card-meta" id="pf-kind-help" style="margin:10px 0 0;"></p>
       </fieldset>
 
       <fieldset id="pf-fields">
@@ -194,9 +213,21 @@
 
       <fieldset id="pf-components-fields">
         <legend>Componentes y accesorios <span class="hint">(opcional)</span></legend>
-        <p class="card-meta" style="margin:0 0 12px;">Indica para qué se usa este producto y, si procede, qué piezas, accesorios o ajustes puede elegir el cliente. Mobau organiza lo que declaras; no certifica la compatibilidad técnica.</p>
+        <p class="card-meta" style="margin:0 0 12px;">Si procede, indica qué piezas, accesorios o ajustes puede elegir el cliente. Mobau organiza lo que declaras; no certifica la compatibilidad técnica.</p>
         <p class="card-meta" id="pf-components-parent" style="margin:0 0 12px;" hidden></p>
-        <div class="field full"><label for="pf-role">Uso en el catálogo</label><select id="pf-role"></select><span class="pp-current" id="pf-role-help" style="display:block;"></span></div>
+        <div id="pf-role-box" style="margin:0 0 12px;" hidden>
+          <p class="card-meta" id="pf-role-info" style="margin:0 0 4px;"></p>
+          <p class="card-meta" id="pf-role-proposal" style="margin:0 0 4px; color:var(--ink);" hidden></p>
+          <p style="margin:0;">
+            <button type="button" class="pp-link" id="pf-role-change-btn" aria-expanded="false" aria-controls="pf-role-change">Cambiar función</button>
+            <button type="button" class="pp-link" id="pf-role-undo" style="margin-left:14px;" hidden>Deshacer</button>
+          </p>
+          <div class="pp-role-change" id="pf-role-change" hidden>
+            <div role="radiogroup" aria-label="Nueva función en el catálogo" id="pf-role-options"></div>
+            <p class="card-meta" id="pf-role-usage" style="margin:10px 0 0; color:var(--ink);" hidden></p>
+            <p class="card-meta" style="margin:10px 0 0;">Se propondrá a Mobau: el artículo publicado no cambia hasta que lo apruebe.</p>
+          </div>
+        </div>
         <div id="pf-components-editor"></div>
       </fieldset>
 
@@ -318,8 +349,8 @@
   const EDITABLE = ["draft", "changes_requested"];
   const HEADINGS = {
     create: {
-      title: "Crear nuevo producto",
-      subtitle: "Completa la información del producto que quieres añadir. Mobau revisará tu envío antes de publicarlo en el catálogo."
+      title: "Crear producto o componente",
+      subtitle: "Elige qué quieres crear y completa su información. Mobau revisará tu envío antes de publicarlo en el catálogo."
     },
     update: {
       title: "Proponer cambios",
@@ -379,6 +410,7 @@
   const presetNewComponent = params.get("componente"); // de vuelta en la propuesta padre, con el componente recién guardado
   let finishesByProduct = new Map();
   let compModel = MobauComponentes.emptyModel();
+  let kindChosen = true;    // alta: ¿ya se eligió Producto o Componente? (cambio: siempre)
   let compBaseline = null;  // cambio: { role, manifest } actuales del producto; null en un alta
   let compCtx = { products: [], finishesByProduct, proposals: [], selfProductId: null };
 
@@ -791,6 +823,115 @@
     $("pf-new-sub").value = on ? (value || "") : "";
   }
 
+  /* Punto 46: la función (catalog_role) se elige al empezar el alta y es la única fuente.
+     Las ayudas y mensajes hablan de «producto» o de «componente» según lo elegido. */
+  const noun = () => (compModel.role === "componente" ? "componente" : "producto");
+  function refreshKindTexts(){
+    $("pf-state").hidden = !editing;
+    if (editing){
+      const parts = [STATUS_LABELS[editing.status] || editing.status, `versión ${editing.version}`];
+      if (editing.submitted_at) parts.push(`enviada el ${formatDate(editing.submitted_at)}`);
+      if (mode === "create" && kindChosen) parts.push(MobauComponentes.ROLE_LABELS[compModel.role] || compModel.role);
+      $("pf-state").textContent = `Propuesta: ${parts.join(" · ")}`;
+    }
+    $("pf-note").placeholder = mode === "create"
+      ? (compModel.role === "componente" ? "Contexto del componente: para qué productos sirve, proveedor, variantes…" : "Contexto del producto: colección, proveedor, variantes…")
+      : "Contexto del cambio: nueva colección, corrección de medidas…";
+  }
+
+  /* Cambio de función de un artículo existente. La función actual es solo informativa; «Cambiar función» abre
+     una propuesta explícita y reversible que va por la moderación habitual (nada cambia hasta que se apruebe).
+     Aviso anticipado, solo de cliente: pasar de componente o «ambos» a Producto no se puede aprobar si otros
+     artículos propios lo usan en opciones activas (lo impide el servidor, que sigue siendo la garantía). */
+  const ROLE_CHOICES = [["principal", "Producto"], ["componente", "Componente o accesorio"], ["ambos", "Ambos (producto y también componente)"]];
+  let roleChangeOpen = false;
+  let roleUsage = null;   // null: sin consultar · { status: "loading" } · { status: "ok", names: [...] } · { status: "unknown" }
+  const baselineRole = () => (compBaseline ? compBaseline.role : compModel.role);
+  const roleLoses = () => ["componente", "ambos"].includes(baselineRole());   // desde estas funciones, Producto deja de ser componente
+
+  async function loadRoleUsage(){
+    if (roleUsage && (roleUsage.status === "ok" || roleUsage.status === "loading")) return;
+    roleUsage = { status: "loading" };
+    renderRoleBox();
+    try {
+      const { data: options, error } = await supabaseClient.from("product_component_options")
+        .select("group_id").eq("component_product_id", productId).eq("kind", "componente").eq("status", "activo");
+      if (error) throw error;
+      const groupIds = [...new Set((options || []).map(o => o.group_id))];
+      let parents = [];
+      if (groupIds.length){
+        const { data: groups, error: groupsError } = await supabaseClient.from("product_component_groups")
+          .select("id, product_id").in("id", groupIds).eq("status", "activo");
+        if (groupsError) throw groupsError;
+        parents = [...new Set((groups || []).map(g => g.product_id))].filter(id => id !== productId);
+      }
+      roleUsage = { status: "ok", names: parents.map(id => (productById(id) || {}).name || id).sort((a, b) => a.localeCompare(b, "es")) };
+    } catch (e){
+      roleUsage = { status: "unknown" };   // sin permiso o sin red: no se amplía nada, solo se avisa
+    }
+    renderRoleBox();
+  }
+
+  function renderRoleBox(){
+    const labels = MobauComponentes.ROLE_LABELS;
+    const current = baselineRole();
+    const changed = compModel.role !== current;
+    $("pf-role-info").textContent = `Función en el catálogo: ${labels[current] || current}.` + (current === "ambos" && !changed ? " Se conserva al guardar y enviar cambios." : "");
+    $("pf-role-proposal").hidden = !changed;
+    $("pf-role-undo").hidden = !changed;
+    if (changed) $("pf-role-proposal").textContent = `Propuesta de cambio de función: ${labels[current] || current} → ${labels[compModel.role] || compModel.role}. Se enviará con esta propuesta y Mobau la revisará.`;
+    $("pf-role-change-btn").setAttribute("aria-expanded", String(roleChangeOpen));
+    $("pf-role-change").hidden = !roleChangeOpen;
+
+    const blocked = roleLoses() && roleUsage && roleUsage.status === "ok" && roleUsage.names.length > 0;
+    const box = $("pf-role-options");
+    box.replaceChildren(...ROLE_CHOICES.map(([value, label]) => {
+      const wrap = document.createElement("label");
+      wrap.className = "pp-check";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "pf-role-new";
+      radio.value = value;
+      radio.checked = compModel.role === value;
+      radio.disabled = blocked && value === "principal" && compModel.role !== "principal";
+      if (radio.disabled) wrap.classList.add("is-disabled");
+      radio.addEventListener("change", () => { if (radio.checked){ compModel.role = value; renderRoleBox(); } });
+      wrap.append(radio, document.createTextNode(` ${label}`));
+      return wrap;
+    }));
+
+    const usage = $("pf-role-usage");
+    let note = "";
+    if (roleChangeOpen && roleLoses() && roleUsage){
+      if (roleUsage.status === "loading") note = "Comprobando si otros artículos lo usan como componente…";
+      else if (roleUsage.status === "unknown") note = "No pudimos comprobar si otros artículos lo usan como componente. Puedes proponer el cambio: Mobau lo validará al aprobarlo.";
+      else if (roleUsage.names.length) note = `Lo usan como componente: ${roleUsage.names.join(", ")}. Para reclasificarlo como Producto, retíralo antes de las opciones de esos productos.`;
+    }
+    usage.hidden = !note;
+    usage.textContent = note;
+  }
+
+  /* Alta: radios «¿Qué quieres crear?». Cambio: solo informa de la función actual (no se reclasifica aquí). */
+  function applyKind(){
+    const create = mode === "create";
+    $("pf-kind-fields").hidden = !create;
+    $("pf-role-box").hidden = create;
+    $("pp-form").classList.toggle("pp-needs-kind", create && !kindChosen);
+    if (create){
+      document.querySelectorAll('input[name="pf-kind"]').forEach(radio => {
+        radio.checked = kindChosen && radio.value === compModel.role;
+        radio.disabled = !!presetParentId;   // componente creado desde un producto: la elección ya viene fijada
+      });
+      const help = kindChosen ? (ROLE_HELP[compModel.role] || "") : "Elige una opción para continuar.";
+      $("pf-kind-help").textContent = kindChosen && compModel.role === "ambos"
+        ? `${help} Esta propuesta conserva esa función; si eliges Producto o Componente o accesorio, cambiará.`
+        : help;
+    } else {
+      renderRoleBox();
+    }
+    refreshKindTexts();
+  }
+
   /* Encabezado, producto fijo, estado de la propuesta y textos según el tipo. */
   function applyMode(){
     const heading = HEADINGS[mode];
@@ -805,12 +946,7 @@
       $("pf-product-meta").textContent = [categoryName(product.category_id), product.subcategory || "Sin subcategoría"].join(" · ");
     }
 
-    $("pf-state").hidden = !editing;
-    if (editing){
-      const parts = [STATUS_LABELS[editing.status] || editing.status, `versión ${editing.version}`];
-      if (editing.submitted_at) parts.push(`enviada el ${formatDate(editing.submitted_at)}`);
-      $("pf-state").textContent = `Propuesta: ${parts.join(" · ")}`;
-    }
+    refreshKindTexts();
     const note = editing && editing.status === "changes_requested" ? editing.rejection_reason : null;
     $("pf-mobau-note").hidden = !note;
     $("pf-mobau-note").textContent = note ? `Nota de Mobau: ${note}` : "";
@@ -819,9 +955,6 @@
     $("pf-price-current").hidden = mode !== "update";
     $("pf-price-none").textContent = mode === "create" ? "Sin precio por ahora" : "Sin cambios de precio";
     $("pf-description-hint").hidden = mode === "create";
-    $("pf-note").placeholder = mode === "create"
-      ? "Contexto del producto: colección, proveedor, variantes…"
-      : "Contexto del cambio: nueva colección, corrección de medidas…";
     $("pf-submit-btn").textContent = editing && editing.status === "changes_requested" ? "Reenviar a Mobau" : "Enviar a Mobau";
     $("pf-withdraw-btn").hidden = !(editing && EDITABLE.includes(editing.status));
   }
@@ -868,16 +1001,16 @@
   function applyTemplate(){
     const category = $("pf-category").value;
     document.querySelectorAll("[data-template]").forEach(el => { el.hidden = el.dataset.template !== category; });
-    const needsCategory = mode === "create" && !category;
+    const needsCategory = mode === "create" && kindChosen && !category;
     $("pp-form").classList.toggle("pp-needs-category", needsCategory);
     $("pf-category-first").hidden = !needsCategory;
   }
 
   /* ---------- punto 46: componentes y accesorios ---------- */
   const ROLE_HELP = {
-    principal: "Se muestra como producto en el catálogo.",
-    componente: "No se muestra como producto por sí solo: solo se ofrece dentro de otro producto, como pieza o accesorio.",
-    ambos: "Se muestra en el catálogo y también puede ofrecerse como pieza o accesorio de otro producto."
+    principal: "Aparece en «Productos». Los clientes con plan pueden solicitarlo y, si lo declaras, elegirlo dentro de otro producto.",
+    componente: "Aparece en «Componentes y accesorios», no en «Productos». Los clientes con plan pueden solicitarlo por separado (por ejemplo, como recambio) o elegirlo dentro de otro producto de tu empresa.",
+    ambos: "Aparece en «Productos» y en «Componentes y accesorios», sin duplicar el artículo. Se puede solicitar por separado o elegirlo dentro de otro producto."
   };
 
   /* Estructura actual del producto (lectura propia: grupos y opciones activas o no). */
@@ -923,21 +1056,16 @@
       compBaseline = { role, manifest: MobauComponentes.toManifest(MobauComponentes.fromStructure(rows, role)) };
       compModel = MobauComponentes.fromStructure(rows, role);
       if (saved && saved.catalog_role) compModel.role = saved.catalog_role;
+      kindChosen = true;
       if (saved && Array.isArray(saved.groups)) compModel.groups = MobauComponentes.fromManifest({ groups: saved.groups }).groups;
     } else {
       compBaseline = null;
       compModel = saved ? MobauComponentes.fromManifest(saved, "principal") : MobauComponentes.emptyModel();
       if (!saved && presetRole === "componente") compModel.role = "componente";
+      /* Una propuesta ya guardada (sin función guardada = producto) o un componente pedido desde otro producto tienen la elección hecha. */
+      kindChosen = !!editing || presetRole === "componente";
     }
-    const select = $("pf-role");
-    select.replaceChildren(...MobauComponentes.ROLES.map(([value, label]) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
-      return option;
-    }));
-    select.value = compModel.role;
-    $("pf-role-help").textContent = ROLE_HELP[compModel.role] || "";
+    applyKind();
     compCtx.baseline = compBaseline ? compBaseline.manifest : null;
     const note = $("pf-components-parent");
     if (mode === "create" && presetParentId){
@@ -1101,13 +1229,13 @@
   function validate(values, { submit }){
     const changes = values.proposed_changes;
     if (colorTempError && $("pf-category").value === "iluminacion") return colorTempError;
-    if (mode === "create" && !changes.name) return "Nombre: indica el nombre del producto.";
+    if (mode === "create" && !changes.name) return `Nombre: indica el nombre del ${noun()}.`;
     for (const f of FIELDS){
       if (!fieldActive(f)) continue;
       const has = Object.prototype.hasOwnProperty.call(changes, f.key);
       const v = has ? changes[f.key] : null;
       if (mode === "update" && has && f.required && !v) return `${f.label}: no puede quedar vacío.`;
-      if (mode === "create" && submit && f.requiredOnCreate && !v) return `${f.label}: es obligatorio para un producto nuevo.`;
+      if (mode === "create" && submit && f.requiredOnCreate && !v) return `${f.label}: es obligatorio para un ${noun()} nuevo.`;
       if (v && f.max && v.length > f.max) return `${f.label}: máximo ${f.max} caracteres.`;
       if (v && f.url && !URL_PATTERN.test(v)) return `${f.label}: ingresa un enlace que empiece con http:// o https://.`;
     }
@@ -1311,10 +1439,24 @@
     }
   }
 
-  $("pf-role").addEventListener("change", () => {
-    compModel.role = $("pf-role").value;
-    $("pf-role-help").textContent = ROLE_HELP[compModel.role] || "";
+  $("pf-role-change-btn").addEventListener("click", () => {
+    roleChangeOpen = !roleChangeOpen;
+    renderRoleBox();
+    if (roleChangeOpen && roleLoses()) loadRoleUsage();
   });
+  $("pf-role-undo").addEventListener("click", () => {
+    compModel.role = baselineRole();
+    roleChangeOpen = false;
+    renderRoleBox();
+  });
+  document.querySelectorAll('input[name="pf-kind"]').forEach(radio => radio.addEventListener("change", () => {
+    if (!radio.checked) return;
+    kindChosen = true;
+    compModel.role = radio.value;   // solo cambia la función: no se toca ningún dato introducido
+    applyKind();
+    applyTemplate();
+    updateWarning();
+  }));
   $("pf-category").addEventListener("change", () => { fillSubcategories($("pf-category").value, null); applyTemplate(); updateWarning(); });
   document.querySelectorAll('input[name="pf-ct-mode"]').forEach(r => r.addEventListener("change", () => { colorTempDirty = true; showColorTempMode(); }));
   ["pf-ct-values", "pf-ct-from", "pf-ct-to"].forEach(id => $(id).addEventListener("input", () => { colorTempDirty = true; }));

@@ -1,0 +1,421 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 46 · inicio del alta Producto / Componente (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:980px;height:760px;border:1px solid #ccc}</style>
+<h1>Punto 46 · inicio del alta «Producto o componente» (mocks)</h1>
+<p>Sin red ni Supabase; servir la raíz del repositorio. Ejecuta el <code>distribuidor-propuestas.html</code> y el <code>moderacion-propuesta.html</code> reales, servidos por <code>sw-paginas-46.js</code> (solo en un origen local), sobre el cliente simulado de CC1 y <code>mock-alta-46.js</code> (datos en memoria; las escrituras se registran y no salen del navegador).
+  No se prueba la subida de la portada (se simula con una propuesta que ya la tiene).</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<iframe id="marco" title="página bajo prueba"></iframe>
+<script>
+const frame = document.getElementById("marco");
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let ok = 0, ko = 0, n = 0, reg;
+
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+
+const FORM_QS = "rol=supplier&perfil=own";
+const MOD_QS = "rol=mobau&aal=2";
+const D = () => frame.contentDocument;
+const $ = id => D().getElementById(id);
+const W = () => frame.contentWindow;
+const shown = el => !!el && el.getClientRects().length > 0;
+const text = el => (el ? el.textContent.replace(/\s+/g, " ").trim() : null);
+const writes = () => JSON.parse(sessionStorage.getItem("__alta46_log") || "[]");
+const stored = () => JSON.parse(sessionStorage.getItem("__alta46") || "{}").proposals || [];
+const lastWrite = () => writes()[writes().length - 1];
+const payloads = () => writes().map(w => `${w.op}${w.payload.status ? ":" + w.payload.status : ""}`);
+
+/* Abre una página; `conf` = propuestas ya existentes (sembradas), `fresh` borra el registro de escrituras. */
+async function open(path, { conf = null, fresh = true, qs = FORM_QS, ready = "pp-form-view", cfg = null } = {}){
+  sessionStorage.setItem("__mockqs", qs);
+  if (cfg) sessionStorage.setItem("__alta46_cfg", JSON.stringify(cfg)); else sessionStorage.removeItem("__alta46_cfg");
+  if (conf !== null) sessionStorage.setItem("__alta46", JSON.stringify(conf));
+  if (fresh) sessionStorage.removeItem("__alta46_log");
+  await new Promise(res => { frame.onload = res; frame.src = `pagina/${path}`; });
+  const t0 = Date.now();
+  while (Date.now() - t0 < 6000){
+    await sleep(60);
+    const el = D().getElementById(ready);
+    if (el && !el.hidden && W().__alta46) { await sleep(120); return; }
+  }
+  throw new Error(`${path} no se mostró: ensayo detenido`);
+}
+const openForm = (query, opts) => open(`distribuidor-propuestas.html?${query}`, opts);
+const navigated = () => new Promise(res => { frame.onload = () => res(frame.contentWindow.location.href); });
+async function clickAndNavigate(el){ const p = navigated(); el.click(); return Promise.race([p, sleep(5000).then(() => "SIN NAVEGACIÓN")]); }
+async function afterPageLoad(){ await sleep(400); }
+
+function set(id, value){
+  const el = $(id);
+  el.value = value;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+function pick(kind){
+  const radio = D().querySelector(`input[name="pf-kind"][value="${kind}"]`);
+  radio.click();
+}
+const radios = () => [...D().querySelectorAll('input[name="pf-kind"]')];
+const kindState = () => radios().map(r => `${r.value}:${r.checked ? "x" : "-"}${r.disabled ? "!" : ""}`);
+function fillBasics(prefix, { category = "revestimientos", sub = "Pisos" } = {}){
+  set("pf-category", category);
+  set("pf-subcategory", sub);
+  set("pf-name", `${prefix} nombre`);
+  set("pf-brand", `${prefix} marca`);
+  set("pf-measurements", "10 × 10 cm");
+  set("pf-description", `${prefix}: descripción de prueba suficientemente larga`);
+  set("pf-reference", `${prefix}-REF`);
+}
+const basics = () => ["pf-category", "pf-subcategory", "pf-name", "pf-brand", "pf-measurements", "pf-description", "pf-reference"].map(id => $(id).value);
+const buttonByText = (t) => [...D().querySelectorAll("#pf-components-editor button")].find(b => b.textContent.trim().startsWith(t));
+function addGroup(label){
+  buttonByText("Añadir grupo").click();
+  const input = [...D().querySelectorAll("#pf-components-editor .pc-group input")].pop();
+  input.value = label;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+const groupLabels = () => [...D().querySelectorAll("#pf-components-editor .pc-group")].map(g => g.querySelector("input").value);
+/* Propuesta semilla (fila completa de product_proposals). */
+const seed = (id, kind, extra = {}) => Object.assign({
+  id, distributor_id: "spectro", proposal_kind: kind, product_id: null, status: "draft", version: 1,
+  created_at: "2026-10-27T10:00:00Z", updated_at: "2026-10-27T10:00:00Z", submitted_at: null, rejection_reason: null,
+  proposed_changes: {}, proposed_new_subcategory: null, proposed_price_status: null, proposed_price_amount: null,
+  internal_note: null, proposed_media: null, proposed_components: null, created_product_id: null
+}, extra);
+const COMPLETE = { category_id: "iluminacion", subcategory: "Decorativa", name: "Completo", brand: "Marca", availability: "en-stock", description: "Descripción completa", measurements: "10 cm" };
+const MEDIA_OK = { reference_code: "REF-OK", cover_asset_id: "asset-1", finishes: [], assets: [] };
+const ID = n => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+(async () => {
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Solo en un origen local de pruebas");
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    reg = await navigator.serviceWorker.register("sw-paginas-46.js");
+    while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await sleep(50);
+
+    /* ===== A · entrada ===== */
+    const productos = await (await fetch("../../../../distribuidor-productos.html", { cache: "reload" })).text();
+    check("A0 Mis productos: el acceso se llama «Crear producto o componente» y ya no «Crear nuevo producto»",
+      [productos.includes('>Crear producto o componente</a>'), productos.includes("Crear nuevo producto")], [true, false]);
+
+    await openForm("nueva=1", { conf: {} });
+    check("A1 el alta empieza con «¿Qué quieres crear?»: título, dos opciones, ninguna marcada",
+      [text($("pp-form-title")), text(D().querySelector("#pf-kind-fields legend")), radios().map(r => text(r.parentElement)), kindState(), shown($("pf-kind-fields"))],
+      ["Crear producto o componente", "¿Qué quieres crear?", ["Producto", "Componente o accesorio"], ["principal:-", "componente:-"], true]);
+    check("A2 antes de elegir no se muestran Categoría, Nombre ni los botones de guardar y enviar",
+      [shown($("pf-category")), shown($("pf-name")), shown($("pf-save-btn")), shown($("pf-submit-btn")), shown($("pf-components-fields"))], [false, false, false, false, false]);
+    check("A3 no existe selector de función («Uso en el catálogo») ni en el alta ni en el DOM; solo los dos radios",
+      [D().getElementById("pf-role"), /Uso en el catálogo/.test(D().body.textContent), radios().length], [null, false, 2]);
+
+    pick("principal");
+    check("A4 al elegir Producto aparecen Categoría y Subcategoría (primero la categoría); la ayuda explica dónde aparece",
+      [shown($("pf-category")), shown($("pf-subcategory")), shown($("pf-name")), shown($("pf-category-first")), text($("pf-kind-help")).startsWith("Aparece en «Productos»")], [true, true, false, true, true]);
+    set("pf-category", "revestimientos");
+    check("A5 con categoría elegida aparece el resto del formulario y los botones", [shown($("pf-name")), shown($("pf-save-btn")), shown($("pf-submit-btn")), shown($("pf-components-fields"))], [true, true, true, true]);
+
+    /* ===== B · Producto: alta, guardado, reapertura y envío ===== */
+    await openForm("nueva=1", { conf: {} });
+    pick("principal");
+    fillBasics("Prod");
+    let url = await clickAndNavigate($("pf-save-btn"));
+    let w1 = lastWrite();
+    check("B1 Producto: se guarda como borrador de alta (insert) y se vuelve a Mis productos; sin función guardada (queda principal)",
+      [/distribuidor-productos\.html/.test(url), payloads(), w1.payload.proposal_kind, w1.payload.proposed_components, w1.payload.proposed_changes.name, w1.payload.proposed_media.reference_code],
+      [true, ["insert"], "create", null, "Prod nombre", "Prod-REF"]);
+    const pid = stored()[0].id;
+    await openForm(`propuesta=${pid}`, { fresh: false });
+    check("B2 Producto: al reabrir, la elección y los datos se conservan y queda visible qué se crea",
+      [kindState(), shown($("pf-kind-fields")), text($("pf-state")), basics()], [["principal:x", "componente:-"], true, "Propuesta: Borrador · versión 1 · Producto", ["revestimientos", "Pisos", "Prod nombre", "Prod marca", "10 × 10 cm", "Prod: descripción de prueba suficientemente larga", "Prod-REF"]]);
+    /* La portada se sube con otro flujo: se simula una propuesta con portada. */
+    const conf1 = JSON.parse(sessionStorage.getItem("__alta46")); conf1.proposals[0].proposed_media.cover_asset_id = "asset-1"; sessionStorage.setItem("__alta46", JSON.stringify(conf1));
+    await openForm(`propuesta=${pid}`, { fresh: true });
+    url = await clickAndNavigate($("pf-submit-btn"));
+    check("B3 Producto: se envía (guarda y pasa a «en revisión»); sigue sin función guardada",
+      [/distribuidor-productos\.html/.test(url), payloads(), stored()[0].status, stored()[0].proposed_components], [true, ["update", "update:submitted"], "submitted", null]);
+
+    /* ===== C · Componente: alta, guardado, reapertura y envío ===== */
+    await openForm("nueva=1", { conf: {} });
+    pick("componente");
+    check("C0 al elegir Componente o accesorio la ayuda lo describe y aparecen los mismos campos (más abajo, sus grupos)",
+      [kindState(), text($("pf-kind-help")).startsWith("Aparece en «Componentes y accesorios»"), shown($("pf-category"))], [["principal:-", "componente:x"], true, true]);
+    fillBasics("Comp", { category: "iluminacion", sub: "Decorativa" });
+    url = await clickAndNavigate($("pf-save-btn"));
+    w1 = lastWrite();
+    check("C1 Componente: se guarda con catalog_role «componente» y sin grupos", [payloads(), w1.payload.proposed_components], [["insert"], { catalog_role: "componente" }]);
+    const cid = stored()[0].id;
+    await openForm(`propuesta=${cid}`, { fresh: false });
+    check("C2 Componente: al reabrir se conserva la elección, queda visible y los datos están",
+      [kindState(), text($("pf-state")), basics()[2], text($("pf-kind-help")).startsWith("Aparece en «Componentes y accesorios»")], [["principal:-", "componente:x"], "Propuesta: Borrador · versión 1 · Componente o accesorio", "Comp nombre", true]);
+    const conf2 = JSON.parse(sessionStorage.getItem("__alta46")); conf2.proposals[0].proposed_media.cover_asset_id = "asset-1"; sessionStorage.setItem("__alta46", JSON.stringify(conf2));
+    await openForm(`propuesta=${cid}`, { fresh: true });
+    url = await clickAndNavigate($("pf-submit-btn"));
+    check("C3 Componente: se envía conservando catalog_role «componente»", [payloads(), stored()[0].status, stored()[0].proposed_components], [["update", "update:submitted"], "submitted", { catalog_role: "componente" }]);
+
+    /* ===== D · cambio de elección antes de guardar, sin pérdida ===== */
+    await openForm("nueva=1", { conf: {} });
+    pick("principal");
+    fillBasics("Cambio", { category: "iluminacion", sub: "Arquitectónica" });
+    set("pf-light-source", "LED 10 W");
+    addGroup("Fuente de luz");
+    const antes = [basics(), $("pf-light-source").value, groupLabels()];
+    pick("componente");
+    const trasComp = [basics(), $("pf-light-source").value, groupLabels()];
+    pick("principal");
+    const trasProd = [basics(), $("pf-light-source").value, groupLabels()];
+    check("D1 cambiar de Producto a Componente y volver no borra ningún dato ni el grupo de componentes",
+      [JSON.stringify(trasComp) === JSON.stringify(antes), JSON.stringify(trasProd) === JSON.stringify(antes), antes[2]], [true, true, ["Fuente de luz"]]);
+    pick("componente");
+    check("D2 la corrección se refleja (radio, ayuda, categoría y plantilla de Iluminación siguen)", [kindState(), text($("pf-kind-help")).startsWith("Aparece en «Componentes y accesorios»"), shown($("pf-light-source"))], [["principal:-", "componente:x"], true, true]);
+    url = await clickAndNavigate($("pf-save-btn"));
+    w1 = lastWrite();
+    check("D3 se guarda con la última elección (componente) y con el grupo", [w1.payload.proposed_components.catalog_role, (w1.payload.proposed_components.groups || []).map(g => g.label), w1.payload.proposed_changes.light_source], ["componente", ["Fuente de luz"], "LED 10 W"]);
+
+    /* ===== E · Producto sin grupos queda principal; con grupos guarda principal + grupos ===== */
+    await openForm("nueva=1", { conf: {} });
+    pick("principal"); fillBasics("Sin"); await clickAndNavigate($("pf-save-btn"));
+    const sinGrupos = lastWrite().payload.proposed_components;
+    await openForm("nueva=1", { conf: {} });
+    pick("principal"); fillBasics("Con"); addGroup("Lente"); await clickAndNavigate($("pf-save-btn"));
+    const conGrupos = lastWrite().payload.proposed_components;
+    check("E1 Producto sin grupos: nada guardado (queda principal por defecto); con grupos: «principal» + grupos",
+      [sinGrupos, conGrupos.catalog_role, conGrupos.groups.map(g => g.label)], [null, "principal", ["Lente"]]);
+
+    /* ===== F · artículos existentes y «ambos» ===== */
+    await openForm("producto=ex-ambos", { conf: {} });
+    check("F1 «ambos» existente: sin radios; muestra su función actual como información y que se conserva",
+      [shown($("pf-kind-fields")), shown($("pf-role-info")), text($("pf-role-info")), D().getElementById("pf-role")],
+      [false, true, "Función en el catálogo: Principal y también componente. Se conserva al guardar y enviar cambios.", null]);
+    set("pf-description", "Descripción nueva del artículo ambos");
+    url = await clickAndNavigate($("pf-save-btn"));
+    w1 = lastWrite();
+    check("F2 «ambos» existente: al guardar solo viaja el cambio hecho; no se toca la función",
+      [payloads(), w1.payload.proposal_kind, w1.payload.product_id, Object.keys(w1.payload.proposed_changes), w1.payload.proposed_components], [["insert"], "update", "ex-ambos", ["description"], null]);
+    const aid = stored()[0].id;
+    await openForm(`propuesta=${aid}`, { fresh: false });
+    check("F3 «ambos» existente: al reabrir sigue igual (información, sin selector)", [shown($("pf-kind-fields")), text($("pf-role-info"))], [false, "Función en el catálogo: Principal y también componente. Se conserva al guardar y enviar cambios."]);
+    await openForm(`propuesta=${aid}`, { fresh: true });
+    url = await clickAndNavigate($("pf-submit-btn"));
+    check("F4 «ambos» existente: se envía sin reclasificar", [payloads(), stored()[0].status, stored()[0].proposed_components], [["update", "update:submitted"], "submitted", null]);
+
+    await openForm("producto=ex-componente", { conf: {} });
+    const infoComp = text($("pf-role-info"));
+    await openForm("producto=ex-principal", { conf: {} });
+    check("F5 componente y principal existentes: información de su función, sin radios",
+      [infoComp, text($("pf-role-info")), shown($("pf-kind-fields"))], ["Función en el catálogo: Componente o accesorio.", "Función en el catálogo: Producto.", false]);
+
+    await openForm(`propuesta=${ID(7)}`, { conf: { proposals: [seed(ID(7), "create", { proposed_changes: { name: "Legado ambos", category_id: "iluminacion", subcategory: "Decorativa" }, proposed_components: { catalog_role: "ambos" } })] } });
+    check("F6 borrador de alta anterior con «ambos»: no se convierte; ningún radio marcado y la ayuda lo explica",
+      [kindState(), text($("pf-kind-help")).includes("conserva esa función"), text($("pf-state"))], [["principal:-", "componente:-"], true, "Propuesta: Borrador · versión 1 · Principal y también componente"]);
+    url = await clickAndNavigate($("pf-save-btn"));
+    check("F7 ese borrador, al guardarlo sin tocar la elección, conserva «ambos»", [lastWrite().payload.proposed_components.catalog_role], ["ambos"]);
+
+    /* ===== G · componente creado desde un producto ===== */
+    await openForm("nueva=1", { conf: {} });
+    pick("principal");
+    fillBasics("Padre", { category: "iluminacion", sub: "Decorativa" });
+    set("pf-light-source", "LED 5 W");
+    addGroup("Fuente de luz");
+    url = await clickAndNavigate(buttonByText("Crear componente nuevo"));
+    const parent = stored()[0];
+    await afterPageLoad();
+    const q = new URL(url).searchParams;
+    check("G1 «Crear componente nuevo…»: guarda el borrador del padre y abre el alta del componente con la elección fijada y visible",
+      [stored().length, parent.proposed_components.catalog_role, q.get("rol"), q.get("padre") === parent.id, kindState(), shown($("pf-kind-fields")), text($("pf-components-parent")).startsWith("Estás creando un componente")],
+      [1, "principal", "componente", true, ["principal:-!", "componente:x!"], true, true]);
+    set("pf-category", "iluminacion"); set("pf-subcategory", "Decorativa");
+    set("pf-name", "Driver hijo"); set("pf-brand", "M"); set("pf-measurements", "5 cm"); set("pf-description", "Driver para el padre"); set("pf-reference", "DRV-1");
+    url = await clickAndNavigate($("pf-save-btn"));
+    await afterPageLoad();
+    const all = stored();
+    const hijo = all.find(p => p.id !== parent.id);
+    check("G2 al guardar el componente se vuelve al padre sin perder campos ni grupos, y avisa del componente guardado",
+      [new URL(url).searchParams.get("propuesta") === parent.id, new URL(url).searchParams.get("componente") === hijo.id, basics()[2], $("pf-light-source").value, groupLabels(), text($("pf-components-parent")), kindState()],
+      [true, true, "Padre nombre", "LED 5 W", ["Fuente de luz"], "Guardaste el componente nuevo «Driver hijo». Elígelo en la opción de un grupo; mientras no se apruebe, Mobau no aprobará esta propuesta.", ["principal:x", "componente:-"]]);
+    check("G3 el componente es un artículo independiente: alta propia con función «componente», sin producto ni padre, y el padre sigue siendo principal con su grupo",
+      [all.length, hijo.proposal_kind, hijo.product_id, hijo.proposed_components, Object.keys(hijo).includes("padre"), all.find(p => p.id === parent.id).proposed_components.catalog_role, all.find(p => p.id === parent.id).proposed_components.groups.map(g => g.label)],
+      [2, "create", null, { catalog_role: "componente" }, false, "principal", ["Fuente de luz"]]);
+
+    /* ===== H · sin selectores duplicados; seis categorías sin cambios ===== */
+    const dup = [];
+    await openForm("nueva=1", { conf: {} });
+    pick("principal"); set("pf-category", "mobiliario");
+    dup.push(D().querySelectorAll("#pf-role, select[id*=role]").length, D().querySelectorAll('input[name="pf-kind"]').length, [...D().querySelectorAll("label")].filter(l => /Uso en el catálogo|función/i.test(l.textContent)).length);
+    const cats = () => [...$("pf-category").options].map(o => o.value).filter(Boolean).sort();
+    const seis = ["accesorios-decorativos", "bano", "cocina", "iluminacion", "mobiliario", "revestimientos"];
+    const catsProd = cats();
+    pick("componente");
+    const catsComp = cats();
+    check("H1 sin selectores duplicados de función (ningún select de función, 2 radios, ninguna etiqueta «Uso en el catálogo»)", dup, [0, 2, 0]);
+    check("H2 las seis categorías no cambian, ni con Producto ni con Componente", [catsProd, catsComp], [seis, seis]);
+    const luz = [];
+    for (const kind of ["principal", "componente"]){
+      pick(kind);
+      set("pf-category", "iluminacion"); luz.push(shown($("pf-light-source")));
+      set("pf-category", "revestimientos"); luz.push(shown($("pf-light-source")));
+    }
+    check("H3 los campos específicos de categoría siguen igual en ambos recorridos (Iluminación sí, otra no)", luz, [true, false, true, false]);
+
+    /* ===== I · moderación ===== */
+    const modSeeds = [
+      seed(ID(21), "create", { status: "submitted", proposed_changes: { name: "Mod componente", category_id: "iluminacion" }, proposed_media: MEDIA_OK, proposed_components: { catalog_role: "componente" } }),
+      seed(ID(22), "create", { status: "submitted", proposed_changes: { name: "Mod producto", category_id: "iluminacion" }, proposed_media: MEDIA_OK, proposed_components: { catalog_role: "principal", groups: [{ code: "fuente", label: "Fuente", requirement: "opcional", choice: "una", depends_on: null, options: [{ code: "led", kind: "ajuste", setting_label: "LED", attributes: [] }] }] } }),
+      seed(ID(23), "create", { status: "submitted", proposed_changes: { name: "Mod ambos", category_id: "iluminacion" }, proposed_media: MEDIA_OK, proposed_components: { catalog_role: "ambos" } })
+    ];
+    const verModeracion = async (id) => { await open(`moderacion-propuesta.html?id=${id}`, { conf: { proposals: modSeeds }, qs: MOD_QS, ready: "mod-detail" }); await sleep(300); return text($("mod-detail")); };
+    const mComp = await verModeracion(ID(21));
+    check("I1 moderación, alta de componente: «Función en el catálogo: Componente o accesorio» y el aviso de componente nuevo",
+      [mComp.includes("Función en el catálogo: Componente o accesorio"), mComp.includes("Es un componente nuevo")], [true, true]);
+    const mProd = await verModeracion(ID(22));
+    check("I2 moderación, alta de producto con grupos: «Función en el catálogo: Producto», sin aviso de componente",
+      [mProd.includes("Función en el catálogo: Producto"), mProd.includes("Es un componente nuevo")], [true, false]);
+    const mAmb = await verModeracion(ID(23));
+    check("I3 moderación, alta «ambos» anterior: «Función en el catálogo: Principal y también componente»", [mAmb.includes("Función en el catálogo: Principal y también componente")], [true]);
+
+    /* ===== J · «Cambiar función» en artículos existentes ===== */
+    const roleBtn = () => $("pf-role-change-btn");
+    const roleRadio = v => D().querySelector(`input[name="pf-role-new"][value="${v}"]`);
+    const roleRadios = () => [...D().querySelectorAll('input[name="pf-role-new"]')].map(x => `${x.value}:${x.checked ? "x" : "-"}${x.disabled ? "!" : ""}`);
+    const pickRole = v => roleRadio(v).click();
+    const roleSaved = () => lastWrite().payload.proposed_components;
+    const infoNoChange = (t) => `Función en el catálogo: ${t}.`;
+
+    await openForm("producto=ex-componente", { conf: {} });
+    check("J1 sin pulsar «Cambiar función»: función informativa, acción secundaria visible, bloque cerrado y sin radios visibles",
+      [text($("pf-role-info")), shown(roleBtn()), text(roleBtn()), shown($("pf-role-change")), shown($("pf-role-proposal")), shown($("pf-role-undo"))],
+      [infoNoChange("Componente o accesorio"), true, "Cambiar función", false, false, false]);
+    set("pf-name", "Nombre nuevo del componente");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J2 sin pulsar «Cambiar función», al guardar no viaja ninguna función (solo el cambio hecho)",
+      [Object.keys(lastWrite().payload.proposed_changes), roleSaved()], [["name"], null]);
+
+    await openForm("producto=ex-principal", { conf: {} });
+    roleBtn().click();
+    check("J3 al pulsar se abren las tres opciones (Producto, Componente o accesorio y Ambos) con la actual marcada, y el texto de que se propone a Mobau",
+      [shown($("pf-role-change")), roleRadios(), [...D().querySelectorAll("#pf-role-options label")].map(l => text(l)), text($("pf-role-change")).includes("el artículo publicado no cambia hasta que lo apruebe")],
+      [true, ["principal:x", "componente:-", "ambos:-"], ["Producto", "Componente o accesorio", "Ambos (producto y también componente)"], true]);
+    pickRole("componente");
+    check("J4 Producto → Componente: texto de la propuesta y «Deshacer» visibles; no se envía nada todavía",
+      [text($("pf-role-proposal")), shown($("pf-role-undo")), writes().length], ["Propuesta de cambio de función: Producto → Componente o accesorio. Se enviará con esta propuesta y Mobau la revisará.", true, 0]);
+    await clickAndNavigate($("pf-save-btn"));
+    check("J5 Producto → Componente: se guarda solo catalog_role «componente» (sin tocar los grupos) como propuesta de cambio",
+      [lastWrite().payload.proposal_kind, lastWrite().payload.product_id, roleSaved(), Object.keys(lastWrite().payload.proposed_changes)], ["update", "ex-principal", { catalog_role: "componente" }, []]);
+
+    await openForm("producto=ex-componente", { conf: {} });
+    roleBtn().click(); await sleep(150);
+    check("J6 Componente → Producto sin usos: la opción Producto está habilitada y no hay aviso", [roleRadios(), shown($("pf-role-usage"))], [["principal:-", "componente:x", "ambos:-"], false]);
+    pickRole("principal");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J7 Componente → Producto: viaja catalog_role «principal»", [roleSaved()], [{ catalog_role: "principal" }]);
+
+    await openForm("producto=ex-componente", { conf: {} });
+    roleBtn().click(); pickRole("ambos");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J8 Componente → Ambos: viaja catalog_role «ambos» (el valor sigue en el modelo; solo se asigna al elegirlo)", [roleSaved()], [{ catalog_role: "ambos" }]);
+
+    await openForm("producto=ex-ambos", { conf: {} });
+    roleBtn().click(); await sleep(150);
+    const ambosOpciones = roleRadios();
+    pickRole("componente");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J9 Ambos existente → Componente sin usos: opciones con «ambos» marcada y habilitadas; viaja «componente»", [ambosOpciones, roleSaved()], [["principal:-", "componente:-", "ambos:x"], { catalog_role: "componente" }]);
+
+    await openForm("producto=ex-principal", { conf: {} });
+    roleBtn().click(); pickRole("componente");
+    $("pf-role-undo").click();
+    check("J10 Deshacer: vuelve a la función actual, se cierra el bloque y desaparece el texto de la propuesta", [text($("pf-role-info")), shown($("pf-role-proposal")), shown($("pf-role-change")), shown($("pf-role-undo"))], [infoNoChange("Producto"), false, false, false]);
+    set("pf-description", "Otro cambio distinto de la función");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J11 tras Deshacer no viaja función: solo el otro cambio", [Object.keys(lastWrite().payload.proposed_changes), roleSaved()], [["description"], null]);
+
+    await openForm("producto=ex-principal", { conf: {} });
+    roleBtn().click(); pickRole("ambos");
+    set("pf-description", "Descripción junto con el cambio de función");
+    set("pf-name", "Nombre junto con el cambio de función");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J12 cambio de función junto con otros cambios: viajan todos en la misma propuesta", [Object.keys(lastWrite().payload.proposed_changes).sort(), roleSaved()], [["description", "name"], { catalog_role: "ambos" }]);
+
+    await openForm("producto=ex-principal", { conf: {} });
+    roleBtn().click(); pickRole("componente");
+    await clickAndNavigate($("pf-submit-btn"));
+    check("J13 un cambio de función por sí solo se puede enviar a moderación (no es «sin cambios»)", [payloads(), stored()[0].status, stored()[0].proposed_components], [["insert", "update:submitted"], "submitted", { catalog_role: "componente" }]);
+
+    /* --- aviso anticipado por usos activos --- */
+    const USO = [{ parent: "ex-principal", component: "ex-componente" }];
+    await openForm("producto=ex-componente", { conf: {}, cfg: { uses: USO } });
+    roleBtn().click(); await sleep(250);
+    check("J14 Componente con un uso activo: Producto deshabilitada, aviso con el producto que lo usa; Componente y Ambos intactas",
+      [roleRadios(), text($("pf-role-usage"))], [["principal:-!", "componente:x", "ambos:-"], "Lo usan como componente: Principal existente. Para reclasificarlo como Producto, retíralo antes de las opciones de esos productos."]);
+    check("J15 el resto del formulario no se bloquea: se puede editar, guardar y enviar", [$("pf-name").disabled, $("pf-save-btn").disabled, shown($("pf-save-btn")), shown($("pf-submit-btn"))], [false, false, true, true]);
+    pickRole("ambos");
+    await clickAndNavigate($("pf-save-btn"));
+    check("J16 con el uso activo, Componente → Ambos sí se puede proponer", [roleSaved()], [{ catalog_role: "ambos" }]);
+
+    await openForm("producto=ex-ambos", { conf: {}, cfg: { uses: [{ parent: "ex-principal", component: "ex-ambos" }, { parent: "ex-componente", component: "ex-ambos" }] } });
+    roleBtn().click(); await sleep(250);
+    check("J17 Ambos con usos de varios productos propios: Producto deshabilitada y se listan todos (orden alfabético)",
+      [roleRadios(), text($("pf-role-usage"))], [["principal:-!", "componente:-", "ambos:x"], "Lo usan como componente: Componente existente, Principal existente. Para reclasificarlo como Producto, retíralo antes de las opciones de esos productos."]);
+
+    await openForm("producto=ex-componente", { conf: {}, cfg: { uses: [{ parent: "ex-principal", component: "ex-componente", status: "retirado" }, { parent: "ex-ambos", component: "ex-componente", groupStatus: "retirado" }] } });
+    roleBtn().click(); await sleep(250);
+    check("J18 usos retirados (opción o grupo inactivo) no cuentan: Producto habilitada y sin aviso", [roleRadios(), shown($("pf-role-usage"))], [["principal:-", "componente:x", "ambos:-"], false]);
+
+    await openForm("producto=ex-componente", { conf: {}, cfg: { uses: USO, usageError: true } });
+    roleBtn().click(); await sleep(250);
+    check("J19 si no se puede leer el uso: Producto queda habilitada y se avisa de que Mobau validará el cambio al aprobar",
+      [roleRadios(), text($("pf-role-usage"))], [["principal:-", "componente:x", "ambos:-"], "No pudimos comprobar si otros artículos lo usan como componente. Puedes proponer el cambio: Mobau lo validará al aprobarlo."]);
+
+    await openForm("producto=ex-principal", { conf: {}, cfg: { uses: [{ parent: "ex-componente", component: "ex-principal" }] } });
+    roleBtn().click(); await sleep(250);
+    check("J20 desde Producto no se consulta ni se avisa de usos (no los hay por definición del modelo): las tres opciones habilitadas", [roleRadios(), shown($("pf-role-usage"))], [["principal:x", "componente:-", "ambos:-"], false]);
+
+    /* --- borradores y «ambos» conservados --- */
+    const draftPending = seed(ID(31), "update", { product_id: "ex-ambos", proposed_components: { catalog_role: "componente" } });
+    await openForm(`propuesta=${draftPending.id}`, { conf: { proposals: [draftPending] } });
+    check("J21 borrador con un cambio de función ya pedido: lo muestra como propuesta (con Deshacer) y no abre el bloque",
+      [text($("pf-role-proposal")), shown($("pf-role-undo")), shown($("pf-role-change"))], ["Propuesta de cambio de función: Principal y también componente → Componente o accesorio. Se enviará con esta propuesta y Mobau la revisará.", true, false]);
+    await clickAndNavigate($("pf-save-btn"));
+    check("J22 abrir y guardar ese borrador sin tocar la función conserva la que pidió el usuario", [roleSaved()], [{ catalog_role: "componente" }]);
+    const draftPlain = seed(ID(32), "update", { product_id: "ex-ambos", proposed_changes: { description: "Solo descripción" } });
+    await openForm(`propuesta=${draftPlain.id}`, { conf: { proposals: [draftPlain] } });
+    await clickAndNavigate($("pf-save-btn"));
+    check("J23 borrador de un «ambos» sin cambio de función: abrir y guardar no lo reclasifica", [roleSaved(), Object.keys(lastWrite().payload.proposed_changes)], [null, ["description"]]);
+
+    /* --- moderación --- */
+    const modUpd = [
+      seed(ID(41), "update", { status: "submitted", product_id: "ex-ambos", proposed_components: { catalog_role: "principal" } }),
+      seed(ID(42), "update", { status: "submitted", product_id: "ex-componente", proposed_changes: { description: "Otra descripción" }, proposed_components: { catalog_role: "ambos" } }),
+      seed(ID(43), "update", { status: "submitted", product_id: "ex-principal", proposed_components: { catalog_role: "componente" } })
+    ];
+    const verMod = async (id) => { await open(`moderacion-propuesta.html?id=${id}`, { conf: { proposals: modUpd }, qs: MOD_QS, ready: "mod-detail" }); await sleep(300); return text($("mod-detail")); };
+    const m1 = await verMod(ID(41)), m2 = await verMod(ID(42)), m3 = await verMod(ID(43));
+    check("J24 moderación muestra el cambio con la función actual real: Ambos → Producto, Componente → Ambos (con otros cambios) y Producto → Componente",
+      [m1.includes("Función en el catálogo: Principal y también componente → Producto"), m2.includes("Función en el catálogo: Componente o accesorio → Principal y también componente") && m2.includes("Otra descripción"), m3.includes("Función en el catálogo: Producto → Componente o accesorio")], [true, true, true]);
+    const modSrc = await (await fetch("../../../../moderacion-propuesta.html", { cache: "reload" })).text();
+    check("J25 la moderación pide la columna catalog_role del producto actual (si no, mostraría siempre «Producto» como función actual); columna ya legible por authenticated (46-01)",
+      [/const PRODUCT_COLUMNS = "[^"]*, catalog_role";/.test(modSrc)], [true]);
+  } catch (e) {
+    check("Ensayo detenido por un error del propio ensayo", String(e && e.stack || e), "sin errores");
+  } finally {
+    /* Limpieza: sin registro del service worker, sin cachés, sin datos de las pruebas. */
+    try {
+      await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+      sessionStorage.clear(); localStorage.clear();
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+      check("Limpieza: service worker eliminado, sin cachés y almacenamiento vacío",
+        [(await navigator.serviceWorker.getRegistrations()).length, (await caches.keys()).length, localStorage.length, sessionStorage.length], [0, 0, 0, 0]);
+    } catch (e) { check("Limpieza", String(e), "sin errores"); }
+    document.getElementById("sum").textContent = `${ok}/${ok + ko} correctos`;
+    document.title = `46 alta · ${ok}/${ok + ko}`;
+  }
+})();
+</script>

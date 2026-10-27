@@ -572,6 +572,22 @@ async function informativeConfigurationQuery(run, fallback){
    Resultado: { lines, status, reasons, needsQuote }; status es
    "no_requiere" | "completa" | "pendiente" | "sin_comprobar". */
 const MobauLineConfig = {
+  /* Nota secundaria del bloque (una vez por lista, no por línea): lo registrado son elecciones, no una validación. */
+  COMPAT_NOTE: "Mobau no valida la compatibilidad técnica entre piezas.",
+  compatNote(afterEl, show){
+    if (!afterEl || !afterEl.parentNode) return;
+    const id = `compat-note-${afterEl.id || "bloque"}`;
+    let el = document.getElementById(id);
+    if (!show){ if (el) el.remove(); return; }
+    if (!el){
+      el = document.createElement("p");
+      el.id = id;
+      el.className = "card-meta line-compat-note";
+      el.style.margin = "8px 0 0";
+      el.textContent = this.COMPAT_NOTE;
+      afterEl.after(el);
+    }
+  },
   rawChoices(configuration){
     const choices = configuration && Array.isArray(configuration.choices) ? configuration.choices : null;
     if (!choices || !choices.every(c => c && typeof c.group === "string" && Array.isArray(c.options))) return null;
@@ -604,7 +620,7 @@ const MobauLineConfig = {
       lines.push(`Elegido: ${raw}`, `Revisar: ${reasons.join(" ")}`);
     } else {
       if (state.review === "revisar") lines.push("Revisar: el catálogo cambió esta configuración desde que se guardó.");
-      lines.push("Elecciones completas según el catálogo actual; se vuelven a comprobar al enviar la solicitud.");
+      lines.push("Elecciones registradas según el catálogo actual; se vuelven a comprobar al enviar la solicitud.");
     }
     (state.notices || []).forEach(n => lines.push(n.message));
     const needsQuote = state.status === "pendiente" || components.some(i => i.supply === "aparte" || i.quantity_mode === "a_calcular");

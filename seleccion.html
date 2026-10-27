@@ -312,7 +312,7 @@
       parts.push(meta(`Elegido: ${raw}`));
       parts.push(meta(`Revisar: ${(state.reasons || []).map(r => r.message).join(" ")}`));
     } else {
-      parts.push(meta("Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto."));
+      parts.push(meta("Elecciones registradas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto."));
     }
     (state.notices || []).forEach(n => parts.push(meta(n.message)));
     return parts.join("") + howToChange;
@@ -411,6 +411,7 @@
           </div>
         </div>`;
     }).join("");
+    MobauLineConfig.compatNote(listEl, items.some(item => item.configuration));
 
     /* No se suman cantidades de unidades distintas (ud. + m² no es un
        total con sentido) — el resumen cuenta piezas y distribuidores,

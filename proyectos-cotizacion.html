@@ -457,6 +457,7 @@
         + (config.needsQuote ? `<p class="card-meta" style="margin:-2px 0 6px;">El importe final de esta configuración requiere cotización.</p>` : "");
       return `<p style="margin:0 0 6px;">${escapeHtml(p.nombre)}${detail ? ` — ${escapeHtml(detail)}` : ""} (${escapeHtml(dist.nombre)}) × ${quantity} ${escapeHtml(unit)}</p>${configHtml}`;
     }).join("");
+    MobauLineConfig.compatNote(listEl, productRows.some(row => row.configuration));
     const pieceCount = getCommercialPieceCount(availableProductRows());
     document.getElementById(countId).textContent =
       `${pieceCount} ${pieceCount === 1 ? "pieza" : "piezas"}`;

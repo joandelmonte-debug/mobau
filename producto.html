@@ -110,6 +110,7 @@
       <p class="cfg-note" id="cfg-price-note"></p>
       <div id="cfg-body"></div>
       <div class="cfg-status" id="cfg-status" role="status" aria-live="polite"></div>
+      <p class="cfg-meta cfg-compat-note" id="cfg-compat-note">Mobau no valida la compatibilidad técnica entre piezas.</p>
     </section>
 
     <div class="product-actions product-selection-actions" hidden>
@@ -208,7 +209,7 @@ function priceActionsHtml(info, product){
   if (info.kind === "plan-required") return `<a class="btn btn-primary btn-sm" href="planes.html">Ver planes</a>`;
   if (info.kind === "distributor-unverified") return `<a class="btn btn-outline btn-sm" href="perfil-distribuidor.html">Ver mi empresa</a>`;
   if (info.kind === "error") return `<button type="button" class="btn btn-outline btn-sm" id="p-price-retry">Reintentar</button>`;
-  if (MobauAccess.hasProfessionalTools() && product.status !== "archived" && isCommercialProduct(product) && PRICE_REQUEST_KINDS.includes(info.kind)){
+  if (MobauAccess.hasProfessionalTools() && product.status !== "archived" && isRequestableProduct(product) && PRICE_REQUEST_KINDS.includes(info.kind)){
     return `<span class="resource-note" style="margin:0;">Añádelo a tu selección para solicitar cotización</span>`;
   }
   return "";
@@ -454,13 +455,14 @@ runWithCatalog(async function renderProductPage(){
     note.textContent = "No disponible actualmente";
     document.getElementById("p-desc").after(note);
   }
-  /* 46: un producto «solo componente» se consulta (ficha, opciones, archivos) pero no se añade ni se solicita aparte. */
-  if (!isCommercialProduct(product)){
+  /* 46: la función (principal, componente, ambos) dice dónde aparece el artículo, no si se solicita: un componente se
+     solicita por separado con las reglas normales. Solo una función desconocida (dato anómalo) no se ofrece. */
+  if (productCatalogRole(product) === "componente" || !isRequestableProduct(product)){
     const note = document.createElement("p");
     note.className = "price-line";
     note.id = "p-component-note";
-    note.textContent = productCatalogRole(product) === "componente"
-      ? "Componente: se ofrece dentro de la configuración de otros productos y no se añade ni se solicita por separado."
+    note.textContent = isRequestableProduct(product)
+      ? "Componente o accesorio: también puedes solicitarlo por separado."
       : "Este producto no se ofrece por separado.";
     document.getElementById("p-desc").after(note);
     /* Un «solo componente» se encuentra en la vista «Componentes y accesorios»: las migas llevan a ella. */
@@ -727,10 +729,10 @@ runWithCatalog(async function renderProductPage(){
     const reasons = () => ((cfg.result && cfg.result.data && Array.isArray(cfg.result.data.reasons)) ? cfg.result.data.reasons : []).map(r => r && r.message).filter(m => typeof m === "string");
     const notices = () => ((cfg.result && cfg.result.data && Array.isArray(cfg.result.data.notices)) ? cfg.result.data.notices : []).map(r => r && r.message).filter(m => typeof m === "string");
     let html = "", bad = false;
-    if (cfg.state === "incomplete") html = cfgMissing().map(m => `<div>${escapeHtml(m)}</div>`).join(""), bad = true;
+    if (cfg.state === "incomplete") html = `<div>Falta una elección exigida para solicitar:</div>${cfgMissing().map(m => `<div>${escapeHtml(m)}</div>`).join("")}`, bad = true;
     else if (cfg.state === "checking") html = "Comprobando la configuración…";
     else if (cfg.state === "pending") html = `<div>Configuración pendiente de revisar: no se puede añadir todavía.</div>${reasons().map(m => `<div>${escapeHtml(m)}</div>`).join("")}`, bad = true;
-    else if (cfg.state === "ok") html = `Configuración completa según el catálogo actual.${notices().map(m => `<div>${escapeHtml(m)}</div>`).join("")}`;
+    else if (cfg.state === "ok") html = `Elecciones registradas según el catálogo actual.${notices().map(m => `<div>${escapeHtml(m)}</div>`).join("")}`;
     else if (cfg.state === "unverified") html = `<div>No pudimos verificar esta configuración con el catálogo actual. Puedes añadirla a tu selección: se volverá a comprobar antes de enviar la solicitud.</div>${retry}`;
     else if (cfg.state === "empty") html = "Sin opciones elegidas: el producto se añade sin configuración.";
     el.className = "cfg-status" + (bad ? " cfg-status--bad" : "");
@@ -789,7 +791,7 @@ runWithCatalog(async function renderProductPage(){
 
   /* Lo que puede hacer el botón de añadir según la configuración: null = sin configuración (como antes). */
   function cfgAddState(){
-    if (!MobauAccess.hasProfessionalTools() || !isCommercialProduct(product)) return null;
+    if (!MobauAccess.hasProfessionalTools() || !isRequestableProduct(product)) return null;
     if (cfg.failed) return { allow: false, label: "Configuración no disponible" };
     const c = componentConfigFor(product.id);
     if (c.status !== "ready") return { allow: false, label: COMPONENT_CONFIG.status === "error" ? "Configuración no disponible" : "Comprobando…" };
@@ -837,7 +839,7 @@ runWithCatalog(async function renderProductPage(){
       const accessNow = await MobauAccess.access();
       if (accessNow === "anon" || accessNow === "gratis" || accessNow === "unknown"){ cfgPanel.hidden = true; refreshAddButton(); return; }
       const result = await whenComponentConfig();
-      cfg.interactive = MobauAccess.hasProfessionalTools() && product.status !== "archived" && isCommercialProduct(product);
+      cfg.interactive = MobauAccess.hasProfessionalTools() && product.status !== "archived" && isRequestableProduct(product);
       if (result !== "ready"){ cfgShowLoadError(); refreshAddButton(); return; }
       if (!cfgGroups(product.id).length){ cfg.failed = false; cfgPanel.hidden = true; refreshAddButton(); return; }
       if (!(await cfgComponentProductsReady())){ cfgShowLoadError(); refreshAddButton(); return; }
@@ -852,7 +854,7 @@ runWithCatalog(async function renderProductPage(){
       cfgChanged();
     } else {
       document.getElementById("cfg-body").innerHTML =
-        `<p class="cfg-meta">${isCommercialProduct(product) ? "Estas son las opciones de configuración de este producto. Para configurarlo y añadirlo a tu selección se necesita un plan Individual o Estudio." : "Estas son las opciones de configuración de este componente."}</p>${cfgReadOnlyHtml(product.id, [])}`;
+        `<p class="cfg-meta">${isRequestableProduct(product) ? "Estas son las opciones de configuración de este producto. Para configurarlo y añadirlo a tu selección se necesita un plan Individual o Estudio." : "Estas son las opciones de configuración de este componente."}</p>${cfgReadOnlyHtml(product.id, [])}`;
       cfgRenderStatus();
     }
     if (window.location.hash === "#configurar") cfgPanel.scrollIntoView();
@@ -982,7 +984,7 @@ runWithCatalog(async function renderProductPage(){
       renderPriceBlock();
       renderRelated();
     });
-    document.querySelector(".product-selection-actions").hidden = !MobauAccess.hasProfessionalTools() || !isCommercialProduct(product);
+    document.querySelector(".product-selection-actions").hidden = !MobauAccess.hasProfessionalTools() || !isRequestableProduct(product);
   }
 
   (async () => {

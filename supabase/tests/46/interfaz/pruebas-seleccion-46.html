@@ -83,12 +83,16 @@ const click = async el => { el.click(); await sleep(120); };
     check("S2a línea sin configuración: sin textos nuevos", m[0], ["Spectro Lighting · Demo · En stock habitual"]);
     check("S2b A: resumen, suministro aparte, estado sin validar y aviso de cotización",
       [m[1][0], m[1][1], m[1][2], m[1].includes("Precio del producto principal (no es el total del conjunto):"), m[1].includes("El importe final de esta configuración requiere cotización.")],
-      ["Configuración: Fuente: Módulo LED", "Módulo LED: aparte · 1 por unidad", "Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.", true, true]);
+      ["Configuración: Fuente: Módulo LED", "Módulo LED: aparte · 1 por unidad", "Elecciones registradas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.", true, true]);
     check("S2c B (solo ajuste): resumen y estado, sin aviso de cotización",
-      [m[2][0], m[2][1], m[2].some(t => /requiere cotización/.test(t))], ["Configuración: Fuente: Cálida", "Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.", false]);
+      [m[2][0], m[2][1], m[2].some(t => /requiere cotización/.test(t))], ["Configuración: Fuente: Cálida", "Elecciones registradas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.", false]);
     check("S2d pendiente: se muestra lo elegido y el motivo, sin «completas»",
       [m[3][0], m[3][1], m[3].some(t => /completas/.test(t))], ["Elegido: fuente: zzz", "Revisar: Una opción elegida en «Fuente» ya no está disponible.", false]);
     check("S2e formato no válido: se conserva y se indica revisar", m[4][0], "Revisar: la configuración guardada no tiene el formato esperado. Se conserva tal cual.");
+    check("S2f la aclaración «Mobau no valida la compatibilidad técnica entre piezas» sale UNA vez para todo el bloque (no por línea) y el resto del texto no afirma conjunto completo ni compatibilidad validada",
+      [frame.contentDocument.querySelectorAll(".line-compat-note").length, frame.contentDocument.querySelector(".line-compat-note").textContent,
+       (frame.contentDocument.querySelector(".selection-layout__main").innerText.match(/compatibilidad técnica/g) || []).length, /conjunto completo|Configuración completa|validad[oa]/i.test(frame.contentDocument.getElementById("selection-list").innerText.replace("Mobau no valida la compatibilidad técnica entre piezas.", ""))],
+      [1, "Mobau no valida la compatibilidad técnica entre piezas.", 1, false]);
     const ids = rows().map(r => r.querySelector(".qty-input").id);
     check("S2f ids de campo únicos; las configuradas con sufijo propio; 3 consultas (no la de formato no válido)",
       [new Set(ids).size === ids.length, ids, w.__resolveCalls.length],
@@ -138,7 +142,7 @@ const click = async el => { el.click(); await sleep(120); };
 
     /* S10 Una consulta se rechaza y las demás responden */
     const SEED3 = [L(1), L(2, CFG_A), L(3, CFG_B)];
-    const COMPLETAS = "Elecciones completas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.";
+    const COMPLETAS = "Elecciones registradas según el catálogo actual; se vuelven a comprobar al añadirlas al proyecto.";
     w = await open(SEED3, { porOpcion: { comp: { modo: "rechazo" } } });
     const m10 = w && rows().map(metas);
     check("S10 una consulta se rechaza: esa línea sin comprobar; la otra con su estado; sin errores sin capturar",

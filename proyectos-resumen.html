@@ -582,6 +582,7 @@
     if (!MobauAccess.hasProfessionalTools()) return showPlanGate();
     document.getElementById("ps-table-body").innerHTML = rows.map(renderRow).join("");
     renderTotals(rows);
+    MobauLineConfig.compatNote(document.getElementById("ps-totals"), rows.some(row => row.configuration || (row.requested && row.requested.configuration)));
 
     document.getElementById("summary-content").style.display = "block";
     injectIconSprite();

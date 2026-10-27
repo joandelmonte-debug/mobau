@@ -298,7 +298,7 @@ runWithCatalog(() => {
       </div>
       <p style="margin-bottom:2px;">${escapeHtml(d.descripcion)}</p>
       ${contactMarkup(d)}
-      <p class="provider-count">${count} ${count === 1 ? "producto activo" : "productos activos"}</p>
+      <p class="provider-count">${count} ${count === 1 ? "producto de catálogo" : "productos de catálogo"}</p>
       <a href="catalogo.html?distribuidor=${escapeHtml(encodeURIComponent(key))}" class="btn btn-outline">Ver productos</a>
     </article>`;
   }

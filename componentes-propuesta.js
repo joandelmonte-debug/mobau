@@ -27,8 +27,8 @@
    ============================================================ */
 const MobauComponentes = (() => {
   const ROLES = [
-    ["principal", "Producto principal"],
-    ["componente", "Solo componente o accesorio"],
+    ["principal", "Producto"],
+    ["componente", "Componente o accesorio"],
     ["ambos", "Principal y también componente"]
   ];
   const ROLE_LABELS = Object.fromEntries(ROLES);
@@ -359,8 +359,8 @@ const MobauComponentes = (() => {
   /* ---------- resumen en texto (Mis productos, moderación) ---------- */
   function summary(manifest, role){
     const lines = [];
-    if (manifest && manifest.catalog_role) lines.push(`Uso en el catálogo: ${ROLE_LABELS[manifest.catalog_role] || manifest.catalog_role}`);
-    else if (role) lines.push(`Uso en el catálogo: ${ROLE_LABELS[role] || role}`);
+    if (manifest && manifest.catalog_role) lines.push(`Función en el catálogo: ${ROLE_LABELS[manifest.catalog_role] || manifest.catalog_role}`);
+    else if (role) lines.push(`Función en el catálogo: ${ROLE_LABELS[role] || role}`);
     const groups = manifest && Array.isArray(manifest.groups) ? manifest.groups : null;
     if (groups){
       if (!groups.length) lines.push("Grupos de componentes: se retiran todos");
