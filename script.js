@@ -1073,6 +1073,30 @@ async function loadPriceState(productIds){
   return PRICE_STATE;
 }
 
+/* Punto 46: precios de artículos que no estaban en la consulta de la página (los componentes de un configurador).
+   Misma función de servidor, mismo permiso y mismas reglas que loadPriceState; suma al mapa ya cargado sin
+   sustituirlo. Devuelve true si todos los precios pedidos quedaron cargados; false si no hay acceso o la lectura
+   falló (el llamador no debe mostrar importes: un precio sin cargar no es «sin precio»). */
+async function loadPricesFor(productIds){
+  if (!MobauAccess.hasPriceAccess()) return false;
+  const ids = [...new Set((productIds || []).filter(Boolean))];
+  const pending = ids.filter(id => !Object.prototype.hasOwnProperty.call(PRICE_STATE.map, id));
+  if (!pending.length) return true;
+  try {
+    const added = {};
+    for (let i = 0; i < pending.length; i += PRICE_IN_LIMIT){
+      const { data, error } = await supabaseClient.rpc("catalog_published_prices", { p_product_ids: pending.slice(i, i + PRICE_IN_LIMIT) });
+      if (error) throw error;
+      (data || []).forEach(row => { added[row.product_id] = row; });
+    }
+    PRICE_STATE.map = Object.assign({}, PRICE_STATE.map, added);
+    return true;
+  } catch (e) {
+    if (e && e.code === "42501" && PRICE_DENIED_HINTS.includes(e.hint)) MobauAccess.downgradeAccess(e.hint);
+    return false;
+  }
+}
+
 function formatUSD(amount){
   return "US$ " + Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

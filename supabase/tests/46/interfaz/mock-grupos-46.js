@@ -31,12 +31,18 @@
      profundo: true → demo-cot con el grupo opcional «tapa» (t1 = componente demo-nodisp, aparte, 2 por unidad)
                  y demo-nodisp con el grupo necesario «tono» (warm, cool): un componente dentro de un componente
      conNuevo: true → añade un grupo a demo-sin (grupo nuevo en la base)
+     precios: { id: { amount, status? }, … } → responde catalog_published_prices con estas filas (status por defecto «published»; un id sin fila = sin precio);
+              preciosError: true → la segunda consulta de precios (la de los componentes) falla
+     conPrecios: true → demo-pub gana el grupo «Driver» (opcional, una): d-sin (demo-sin, aparte, 1), d-dos (demo-nodisp, aparte, 2),
+              d-inc (demo-pend, incluido, 1) y d-calc (demo-cot, aparte, cantidad a calcular)
+     nombres: { id: "Nombre", … } → name de esos productos (para ver nombres reales en una captura)
+     cotQty: "3" → la opción «comp» (demo-cot) lleva esta cantidad por unidad
      vacio: true → sin ningún grupo
    Registro: window.__grupos46 = { calls: [], tardias: [], validaciones: [], conf }, window.__sinCapturar. */
 (() => {
   let conf = {};
   try { conf = JSON.parse(sessionStorage.getItem("__grupos46") || "{}"); } catch (e) { conf = {}; }
-  const log = window.__grupos46 = { calls: [], tardias: [], validaciones: [], productosPorId: [], conf }; // conf se puede cambiar en caliente (p. ej. modo) para probar la recuperación
+  const log = window.__grupos46 = { calls: [], tardias: [], validaciones: [], productosPorId: [], precios: [], conf }; // conf se puede cambiar en caliente (p. ej. modo) para probar la recuperación
   window.__sinCapturar = [];
   window.addEventListener("unhandledrejection", e => window.__sinCapturar.push(String(e.reason)));
   window.addEventListener("error", e => window.__sinCapturar.push(String(e.message)));
@@ -63,6 +69,14 @@
     o("o-x", "g-carcasa", "demo-cot", "x", "ajuste", 1, { setting_label: "Blanca" }),
     o("o-y", "g-carcasa", "demo-cot", "y", "ajuste", 2, { setting_label: "Negra" })
   ];
+  if (conf.conPrecios){
+    groups.push(g("g-driver", "demo-pub", "driver", "Driver", "opcional", "una", 4, null, 4));
+    options.push(o("o-d1", "g-driver", "demo-pub", "d-sin", "componente", 1, { component_product_id: "demo-sin", supply: "aparte", quantity: "1", quantity_mode: "fija" }),
+                 o("o-d2", "g-driver", "demo-pub", "d-dos", "componente", 2, { component_product_id: "demo-nodisp", supply: "aparte", quantity: "2", quantity_mode: "fija" }),
+                 o("o-d3", "g-driver", "demo-pub", "d-inc", "componente", 3, { component_product_id: "demo-pend", supply: "incluido", quantity: "1", quantity_mode: "fija" }),
+                 o("o-d4", "g-driver", "demo-pub", "d-calc", "componente", 4, { component_product_id: "demo-cot", supply: "aparte", quantity_mode: "a_calcular" }));
+  }
+  if (conf.cotQty) options.find(x => x.id === "o-comp").quantity = conf.cotQty;
   if (conf.acabadoComp) options.find(x => x.id === "o-comp").component_finish_code = "11";
   if (conf.profundo){
     groups.push(g("g-tapa", "demo-cot", "tapa", "Tapa", "opcional", "una", 2, null, 1),
@@ -118,6 +132,7 @@
     let rows = res.data;
     if (conf.fuera && (!st.filtered || (st.ids && conf.ausenteSiempre))) rows = rows.filter(r => !conf.fuera.includes(r.id));
     if (conf.refs) rows = rows.map(r => (Object.prototype.hasOwnProperty.call(conf.refs, r.id) ? Object.assign({}, r, { reference_code: conf.refs[r.id] }) : r));
+    if (conf.nombres) rows = rows.map(r => (Object.prototype.hasOwnProperty.call(conf.nombres, r.id) ? Object.assign({}, r, { name: conf.nombres[r.id] }) : r));
     if (conf.roles) rows = rows.map(r => (Object.prototype.hasOwnProperty.call(conf.roles, r.id) ? Object.assign({}, r, { catalog_role: conf.roles[r.id] }) : r));
     rows = rows.map(r => (r.id === "demo-pub" && conf.acabados ? Object.assign({}, r, { finish_options: FINISHES })
       : r.id === "demo-cot" && conf.acabadoComp ? Object.assign({}, r, { finish_options: [{ code: "11", name: "Negro", reference_code: "C-11", is_default: true }] }) : r));
@@ -134,11 +149,21 @@
   } });
   const originalFrom = supabaseClient.from.bind(supabaseClient);
   supabaseClient.from = (name) => (name === "catalog_component_groups" || name === "catalog_component_options") ? query(name)
-    : (name === "catalog_products" && (conf.acabados || conf.fuera || conf.acabadoComp || conf.errorPorId || conf.roles || conf.refs)) ? productsProxy(originalFrom(name)) : originalFrom(name);
+    : (name === "catalog_products" && (conf.acabados || conf.fuera || conf.acabadoComp || conf.errorPorId || conf.roles || conf.refs || conf.nombres)) ? productsProxy(originalFrom(name)) : originalFrom(name);
 
   /* line_configuration_resolve controlable (cancelable como en supabase-js). */
   const originalRpc = supabaseClient.rpc.bind(supabaseClient);
   supabaseClient.rpc = (fn, args) => {
+    if (fn === "catalog_published_prices" && conf.precios){
+      log.precios.push(args && args.p_product_ids ? args.p_product_ids.slice() : null);
+      const fail = conf.preciosError && log.precios.length > 1;
+      const ids = args && args.p_product_ids;
+      const rows = Object.keys(conf.precios).filter(id => !ids || ids.includes(id)).map(id => {
+        const c = conf.precios[id], status = c.status || "published";
+        return { product_id: id, price_amount: status === "published" ? c.amount : null, currency: "USD", price_status: status, includes_itbis: true, itbis_rate: 0.18, es_demo: false };
+      });
+      return { then: (a, c) => Promise.resolve(fail ? { data: null, error: { message: "Fallo simulado de precios" } } : { data: rows, error: null }).then(a, c) };
+    }
     if (fn !== "line_configuration_resolve" || !conf.validacion) return originalRpc(fn, args);
     log.validaciones.push(JSON.parse(JSON.stringify(args)));
     const n = log.validaciones.length;

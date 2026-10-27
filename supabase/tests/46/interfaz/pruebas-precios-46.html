@@ -1,0 +1,154 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 46 · precio de cada opción del configurador (mocks)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}iframe{width:900px;height:900px;border:0}</style>
+<h1>Punto 46 · precio de cada opción de componente en el configurador (mocks)</h1>
+<p>Sin red ni Supabase; servir la raíz del repositorio (solo en un origen local). Ejecuta el <code>producto.html</code> real a través de <code>sw-paginas-46.js</code> sobre el cliente simulado de CC1 y <code>mock-grupos-46.js</code> (opciones <code>conPrecios</code>, <code>precios</code>, <code>cotQty</code>, <code>nombres</code>). Los importes son datos sintéticos.</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<div id="marco"></div>
+<script>
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const QS_IND = "rol=individual&pro=1&uid=a";
+const QS_GRATIS = "rol=individual&pro=0&uid=a";
+const QS_DUENO = "rol=supplier&perfil=own";
+const frame = document.createElement("iframe");
+document.getElementById("marco").appendChild(frame);
+let reg, ok = 0, ko = 0, n = 0;
+
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+
+const PRECIOS = { "demo-pub": { amount: 120 }, "demo-cot": { amount: 24 }, "demo-nodisp": { amount: 24 }, "demo-pend": { amount: 9 } };
+const BASE = { precios: PRECIOS, conPrecios: true };
+const W = () => frame.contentWindow;
+const doc = () => frame.contentDocument;
+async function open(conf, qs = QS_IND, { ro = false } = {}){
+  sessionStorage.setItem("__grupos46", JSON.stringify(conf));
+  ["mobau_catalog_v5", "mobau_distributors_v5", "mobau_categories_v5"].forEach(k => sessionStorage.removeItem(k));
+  sessionStorage.removeItem("__mockqs");
+  await new Promise(res => { frame.onload = res; frame.src = `pagina/producto.html?id=demo-pub&${qs}`; });
+  const w = W();
+  if (!w || !w.__mock || !w.__grupos46) throw new Error("producto.html no cargó el simulador: ensayo detenido");
+  const sel = ro ? "#cfg-body .cfg-ro-list" : "#cfg-body input";
+  const t0 = Date.now();
+  while (Date.now() - t0 < 8000){ await sleep(80); if (doc().querySelector(sel)) { await sleep(200); return w; } }
+  throw new Error("el configurador no se pintó: ensayo detenido");
+}
+const inp = (group, option, path = []) => doc().querySelector(`#cfg-body input[data-cfg-group="${group}"][data-cfg-option="${option}"][data-cfg-path='${JSON.stringify(path)}']`);
+const lab = (group, option, path = []) => inp(group, option, path).closest("label");
+const priceOf = l => { const p = l.querySelector(".cfg-price"); return p ? p.firstChild.textContent.trim() : null; };
+const taxOf = l => { const t = l.querySelector(".cfg-price small"); return t ? t.textContent.trim() : null; };
+const metaOf = l => [...l.querySelectorAll(".cfg-meta")].map(x => x.textContent.trim());
+const click = i => i.click();
+const prices = () => [...doc().querySelectorAll("#cfg-body label.cfg-option")].map(l => `${l.querySelector(".cfg-option__text").firstChild.textContent.trim()}=${priceOf(l)}`);
+const note = () => doc().getElementById("cfg-price-note").textContent;
+
+(async () => {
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Solo en un origen local de pruebas");
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    reg = await navigator.serviceWorker.register("sw-paginas-46.js");
+    while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await sleep(50);
+
+    /* ===== 1 · aparte con precio (el ejemplo del módulo LED) ===== */
+    let w = await open(Object.assign({ nombres: { "demo-cot": "MALTA 8–12 GEN 3 CTT SWITCH | MÓDULO LED" } }, BASE));
+    let l = lab("fuente", "comp");
+    check("P1 componente aparte con precio: el importe real se ve junto al nombre ANTES de elegir nada, con ITBIS incluido y su suministro",
+      [inp("fuente", "comp").checked, l.querySelector(".cfg-option__text").firstChild.textContent.trim(), priceOf(l), taxOf(l), metaOf(l)[0].startsWith("Se suministra aparte · "), metaOf(l)[0].includes("Potencia: 24 W")],
+      [false, "MALTA 8–12 GEN 3 CTT SWITCH | MÓDULO LED", "+US$ 24.00", "ITBIS incluido", true, true]);
+    const antes = prices();
+    click(inp("fuente", "comp")); await sleep(150);
+    check("P2 el precio se conserva al seleccionar la opción (y el de las demás opciones no cambia)", [inp("fuente", "comp").checked, prices().slice(0, 1).join() === antes.slice(0, 1).join(), prices().filter(x => x.includes("MALTA"))[0]], [true, true, "MALTA 8–12 GEN 3 CTT SWITCH | MÓDULO LED=+US$ 24.00"]);
+    check("P3 el precio del producto principal no cambia ni se presenta como total: la nota lo dice y el aviso de cotización final se mantiene",
+      [doc().getElementById("p-price").textContent.includes("US$ 120.00"), note().includes("El precio indicado en la ficha es el del producto principal, no el del conjunto."), note().includes("El importe final del conjunto requiere cotización."), note().includes("no forman un total del conjunto")], [true, true, true, true]);
+
+    /* ===== 2 · driver aparte con precio y cantidad mayor que uno ===== */
+    l = lab("driver", "d-dos");
+    check("P4 driver aparte con precio y 2 por unidad: «+US$ 48.00» y «2 × US$ 24.00 por unidad del producto»", [priceOf(l), metaOf(l).includes("2 × US$ 24.00 por unidad del producto")], ["+US$ 48.00", true]);
+    /* ===== 3 · incluido con precio de venta independiente ===== */
+    l = lab("driver", "d-inc");
+    check("P5 componente incluido con precio de venta propio: «Incluido» y no se suma su precio como extra", [priceOf(l), taxOf(l), l.textContent.includes("9.00"), l.textContent.includes("+US$")], ["Incluido", null, false, false]);
+    /* ===== 4 · aparte sin precio ===== */
+    l = lab("driver", "d-sin");
+    check("P6 componente aparte sin precio: «Precio bajo cotización», nunca +0 ni gratis", [priceOf(l), l.textContent.includes("+US$"), /(^|[^0-9.])0([.,]00)?(?![0-9])/.test(priceOf(l)), taxOf(l)], ["Precio bajo cotización", false, false, null]);
+    /* ===== 5 · «Ninguna» y ajustes ===== */
+    check("P7 «Ninguna» y los ajustes no muestran importe ni recargo", [priceOf(inp("driver", "").closest("label")), priceOf(lab("fuente", "calida")), priceOf(lab("control", "dim"))], [null, null, null]);
+    /* ===== 6 · cantidad a calcular ===== */
+    l = lab("driver", "d-calc");
+    check("P8 aparte con precio y cantidad a calcular: el precio por unidad («US$ 24.00 c/u») con «Cantidad por determinar», sin multiplicar ni «+»", [priceOf(l), metaOf(l)[0].includes("cantidad a calcular"), metaOf(l).includes("Cantidad por determinar"), l.textContent.includes("+US$")], ["US$ 24.00 c/u", true, true, false]);
+    l = lab("extras", "cable");
+    check("P9 incluido con cantidad a calcular: «Incluido»", [priceOf(l)], ["Incluido"]);
+    const pedidos = new Set(w.__grupos46.precios.flat().filter(Boolean));
+    check("P10 una sola consulta adicional de precios, solo de los componentes que aún no estaban cargados (sin repetirla al elegir)",
+      [w.__grupos46.precios.length, ["demo-cot", "demo-nodisp", "demo-pend", "demo-sin"].every(id => pedidos.has(id)), w.__grupos46.precios[1].includes("demo-pub")], [2, true, false]);
+    const llamadas = w.__grupos46.precios.length;
+    click(inp("driver", "d-dos")); await sleep(150);
+    check("P11 elegir un driver conserva su importe y no vuelve a consultar precios", [priceOf(lab("driver", "d-dos")), w.__grupos46.precios.length === llamadas], ["+US$ 48.00", true]);
+
+    /* ===== 7 · anidado, con cantidades que se multiplican ===== */
+    w = await open(Object.assign({ profundo: true }, BASE));
+    click(inp("fuente", "comp")); await sleep(200);
+    l = lab("tapa", "t1", [{ group: "fuente", option: "comp" }]);
+    check("P12 componente anidado (dentro del componente elegido): su importe y la cantidad también se ven", [doc().querySelectorAll("#cfg-body .cfg-nested").length > 0, priceOf(l), metaOf(l).includes("2 × US$ 24.00 por unidad del producto")], [true, "+US$ 48.00", true]);
+    w = await open(Object.assign({ profundo: true, cotQty: "3" }, BASE));
+    click(inp("fuente", "comp")); await sleep(200);
+    check("P13 anidado con el componente de arriba ×3: 3 × 24 y 6 × 24 por unidad del producto",
+      [priceOf(lab("fuente", "comp")), metaOf(lab("fuente", "comp")).includes("3 × US$ 24.00 por unidad del producto"), priceOf(lab("tapa", "t1", [{ group: "fuente", option: "comp" }])), metaOf(lab("tapa", "t1", [{ group: "fuente", option: "comp" }])).includes("6 × US$ 24.00 por unidad del producto")],
+      ["+US$ 72.00", true, "+US$ 144.00", true]);
+
+    /* ===== 8 · otros estados de precio y errores ===== */
+    await open({ precios: Object.assign({}, PRECIOS, { "demo-nodisp": { status: "unavailable" }, "demo-cot": { status: "pending_confirmation" } }), conPrecios: true });
+    check("P14 precio no disponible o pendiente de confirmación: texto del catálogo, nunca un importe", [priceOf(lab("driver", "d-dos")), priceOf(lab("fuente", "comp"))], ["Precio no disponible", "Precio pendiente de confirmación"]);
+    w = await open({ precios: PRECIOS, conPrecios: true, preciosError: true });
+    const SIN = "Precio no disponible · se confirmará en la cotización";
+    check("P15 si falla la lectura de precios de los componentes: los aparte dicen «Precio no disponible · se confirmará en la cotización» (distinto de «Precio bajo cotización»), los incluidos siguen «Incluido», sin importes inventados ni ajustes con importe",
+      [priceOf(lab("fuente", "comp")), priceOf(lab("driver", "d-dos")), priceOf(lab("driver", "d-sin")), priceOf(lab("driver", "d-calc")), priceOf(lab("driver", "d-inc")), priceOf(lab("extras", "cable")),
+       priceOf(lab("fuente", "calida")), doc().querySelectorAll("#cfg-body .cfg-price small").length, doc().querySelector("#cfg-body").textContent.includes("+US$")],
+      [SIN, SIN, SIN, SIN, "Incluido", "Incluido", null, 0, false]);
+    check("P15b esa caída no bloquea la configuración: se puede elegir una opción, la ficha conserva su precio y la nota de cotización final sigue",
+      [doc().querySelectorAll("#cfg-body input").length > 0, (click(inp("fuente", "comp")), await sleep(150), inp("fuente", "comp").checked), doc().getElementById("p-price").textContent.includes("US$ 120.00"), note().includes("es el del producto principal, no el del conjunto"), note().includes("no forman un total")],
+      [true, true, true, true, false]);
+    await open({ conPrecios: true });
+    check("P16 con los precios por defecto del catálogo simulado (sin precios propios del ensayo): aparte en cotización → «Precio bajo cotización»", [priceOf(lab("fuente", "comp")), priceOf(lab("extras", "cable"))], ["Precio bajo cotización", "Incluido"]);
+
+    /* ===== 9 · solo lectura (dueño) y sin acceso a precios ===== */
+    await open(BASE, "rol=supplier&perfil=unverified", { ro: true }).catch(() => null);
+    const sinAcceso = [...doc().querySelectorAll("#cfg-body .cfg-ro-list li")].find(li => li.textContent.includes("Potencia: 24 W"));
+    check("P16b sin acceso a precios (distribuidor sin verificar): los aparte dicen «Precio no disponible · se confirmará en la cotización»; ningún importe",
+      [sinAcceso ? sinAcceso.querySelector(".cfg-price").firstChild.textContent.trim() : null, doc().querySelector("#cfg-body") ? doc().querySelector("#cfg-body").textContent.includes("+US$") : null], [SIN, false]);
+    await open(Object.assign({ nombres: {} }, BASE), QS_DUENO, { ro: true });
+    const roItem = [...doc().querySelectorAll("#cfg-body .cfg-ro-list li")].find(li => li.textContent.includes("Potencia: 24 W"));
+    check("P17 vista de solo lectura (distribuidor dueño con precios): también muestra el importe de la opción", [roItem && roItem.querySelector(".cfg-price").firstChild.textContent.trim()], ["+US$ 24.00"]);
+    w = await open(BASE, QS_GRATIS).catch(() => null);
+    await sleep(500);
+    check("P18 Gratis: no hay configurador ni consulta de precios de componentes", [doc().getElementById("configurar").hidden, doc().querySelectorAll("#cfg-body .cfg-price").length, (W().__grupos46.precios || []).length], [true, 0, 0]);
+
+    /* ===== captura: ejemplo MALTA ===== */
+    await open(Object.assign({ nombres: { "demo-cot": "MALTA 8–12 GEN 3 CTT SWITCH | MÓDULO LED" } }, BASE));
+    doc().getElementById("cfg-body").scrollIntoView({ block: "start" });
+  } catch (e) {
+    check("Ensayo detenido por un error del propio ensayo", String(e && e.stack || e), "sin errores");
+  } finally {
+    /* Con #captura se deja la última página abierta (para la captura visual); sin él, limpieza como en las demás series. */
+    if (location.hash !== "#captura"){
+      try {
+        await new Promise(res => { frame.onload = res; frame.src = "about:blank"; });
+        sessionStorage.clear(); localStorage.clear();
+        for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+        for (const k of await caches.keys()) await caches.delete(k);
+        check("Limpieza: service worker eliminado, sin cachés y almacenamiento vacío",
+          [(await navigator.serviceWorker.getRegistrations()).length, (await caches.keys()).length, localStorage.length, sessionStorage.length], [0, 0, 0, 0]);
+      } catch (e) { check("Limpieza", String(e), "sin errores"); }
+    }
+    document.getElementById("sum").textContent = `${ok}/${ok + ko} correctos`;
+    document.title = `46 precios · ${ok}/${ok + ko}`;
+  }
+})();
+</script>

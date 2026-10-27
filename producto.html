@@ -20,7 +20,12 @@
   .cfg-ficha-link{ color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
   .cfg-ficha-link:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
   .cfg-option--on{ border-color: var(--ink); }
-  .cfg-option__text{ min-width: 0; overflow-wrap: anywhere; }
+  .cfg-option__text{ min-width: 0; overflow-wrap: anywhere; flex: 1 1 auto; }
+  /* Punto 46: importe de referencia de cada componente, a la derecha de su nombre (no es un total). */
+  .cfg-price{ flex: 0 0 auto; max-width: 42%; text-align: right; font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.3; }
+  .cfg-price small{ display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-soft); }
+  .cfg-price--incl, .cfg-price--text{ font-weight: 400; color: var(--ink-soft); }
+  .cfg-price--ro{ display: block; text-align: left; max-width: none; margin-top: 2px; }
   .cfg-ro-list{ list-style: none; margin: 0 0 6px; padding: 0; }
   .cfg-ro-list > li{ padding: 6px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
   .cfg-nested{ margin: 4px 0 8px 14px; padding-left: 12px; border-left: 2px solid var(--line); }
@@ -590,7 +595,8 @@ runWithCatalog(async function renderProductPage(){
        pending     el servidor la confirma pendiente; no se añade
        unverified  no se pudo comprobar (error, rechazo, límite o respuesta desconocida): nunca se
                    muestra como completa; se puede conservar en la selección para revisarla. */
-  const cfg = { booted: false, booting: false, failed: false, interactive: false, choices: [], state: "idle", result: null, seq: 0, results: new Map() };
+  const cfg = { booted: false, booting: false, failed: false, interactive: false, choices: [], state: "idle", result: null, seq: 0, results: new Map(), pricesOk: false };
+  let pricePromise = Promise.resolve();   // carga de precios de la página (los componentes se piden después, en cfgLoadPrices)
   const cfgPanel = document.getElementById("configurar");
   const cfgPathKey = path => JSON.stringify(path.map(s => [s.group, s.option]));
   const cfgGroups = productId => { const c = componentConfigFor(productId); return c.status === "ready" ? c.groups : []; };
@@ -654,6 +660,58 @@ runWithCatalog(async function renderProductPage(){
     return `<div class="cfg-ficha"><a class="cfg-ficha-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="Ver ficha de ${escapeHtml(cfgOptionLabel(o))} (se abre en otra pestaña)" title="Se abre en otra pestaña">Ver ficha <span aria-hidden="true">↗</span></a></div>`;
   }
 
+  /* Punto 46 · importe de referencia de cada opción de componente, antes y después de elegirla. Reutiliza el precio, la
+     moneda y el criterio de impuestos del catálogo (getPriceInfo / formatUSD: US$ con ITBIS incluido). Solo informa para
+     comparar: no suma un total del conjunto.
+       aparte con precio      «+US$ X» = precio × cantidad por unidad del producto que se configura (en un componente
+                              anidado, la cantidad de los componentes de arriba también cuenta)
+       incluido               «Incluido» (su precio de venta independiente no se suma)
+       aparte sin precio      «Precio bajo cotización» (nunca +0 ni gratis); pendiente o no disponible, con el texto del catálogo
+       aparte, lectura caída  «Precio no disponible · se confirmará en la cotización» (la lectura falló o no hay acceso a precios:
+                              distinto de «sin precio» tras una lectura correcta); sin importes inventados y sin bloquear nada
+       cantidad a calcular    el precio por unidad («US$ X c/u») con «Cantidad por determinar», sin multiplicar
+       ajustes y «Ninguna»    sin importe */
+  function cfgComponentIds(){
+    const ids = new Set();
+    (function collect(productId, depth){
+      cfgGroups(productId).forEach(g => g.options.forEach(o => {
+        if (o.kind !== "componente" || !o.componentProductId) return;
+        ids.add(o.componentProductId);
+        if (depth < 2) collect(o.componentProductId, depth + 1);
+      }));
+    })(product.id, 0);
+    return [...ids];
+  }
+  async function cfgLoadPrices(){ cfg.pricesOk = await loadPricesFor(cfgComponentIds()); }
+  /* Unidades de cada componente de este nivel por unidad del producto: producto de las cantidades fijas de los pasos del camino. */
+  function cfgPathFactor(path){
+    let productId = product.id, factor = 1;
+    for (const step of path){
+      const g = cfgGroups(productId).find(x => x.code === step.group);
+      const o = g && g.options.find(x => x.code === step.option);
+      if (!o || !o.componentProductId || o.quantityMode !== "fija" || !(Number(o.quantity) > 0)) return null;
+      factor *= Number(o.quantity);
+      productId = o.componentProductId;
+    }
+    return factor;
+  }
+  function cfgPriceInfo(o, path){
+    if (o.kind !== "componente" || !o.componentProductId) return null;
+    if (o.supply === "incluido") return { label: "Incluido", cls: " cfg-price--incl", tax: false, note: "" };
+    if (!cfg.pricesOk || priceAccessInfo()) return { label: "Precio no disponible · se confirmará en la cotización", cls: " cfg-price--text", tax: false, note: "" };
+    const info = getPriceInfo(o.componentProductId);
+    if (info.kind !== "published"){
+      return { label: info.kind === "pending" || info.kind === "unavailable" ? info.text : "Precio bajo cotización", cls: " cfg-price--text", tax: false, note: "" };
+    }
+    const factor = cfgPathFactor(path);
+    const per = o.quantityMode === "fija" ? Number(o.quantity) : NaN;
+    if (factor === null || !Number.isFinite(per) || per <= 0) return { label: `${formatUSD(info.amount)} c/u`, cls: "", tax: true, note: "Cantidad por determinar" };
+    const qty = Math.round(per * factor * 1000) / 1000;
+    return { label: `+${formatUSD(info.amount * qty)}`, cls: "", tax: true, note: qty === 1 ? "" : `${qty} × ${formatUSD(info.amount)} por unidad del producto` };
+  }
+  const cfgPriceHtml = (pi, extra) => pi ? `<span class="cfg-price${pi.cls}${extra || ""}">${escapeHtml(pi.label)}${pi.tax ? "<small>ITBIS incluido</small>" : ""}</span>` : "";
+  const cfgPriceNoteHtml = pi => pi && pi.note ? `<br><span class="cfg-meta">${escapeHtml(pi.note)}</span>` : "";
+
   /* Textos de una opción (todo escapado al incorporarlo al HTML). */
   function cfgOptionLabel(o){ return o.kind === "ajuste" ? (o.settingLabel || o.code) : cfgProductName(o.componentProductId); }
   function cfgOptionMeta(o){
@@ -686,10 +744,11 @@ runWithCatalog(async function renderProductPage(){
       const options = group.options.map(o => {
         const on = chosen.includes(o.code);
         const meta = cfgOptionMeta(o);
+        const pi = cfgPriceInfo(o, path);
         const nested = on && o.kind === "componente" && o.componentProductId && path.length < 2
           ? cfgGroupHtml(o.componentProductId, path.concat([{ group: group.code, option: o.code }]), ctr) : "";
         return `<label class="cfg-option${on ? " cfg-option--on" : ""}"><input type="${type}" name="${name}" data-cfg-id="${idOf(o.code)}" data-cfg-path="${escapeHtml(JSON.stringify(path))}" data-cfg-group="${escapeHtml(group.code)}" data-cfg-option="${escapeHtml(o.code)}" ${on ? "checked" : ""}>
-          <span class="cfg-option__text">${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}</span></label>${cfgFichaLinkHtml(o)}${nested ? `<div class="cfg-nested">${nested}</div>` : ""}`;
+          <span class="cfg-option__text">${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}${cfgPriceNoteHtml(pi)}</span>${cfgPriceHtml(pi)}</label>${cfgFichaLinkHtml(o)}${nested ? `<div class="cfg-nested">${nested}</div>` : ""}`;
       }).join("");
       return `<fieldset class="cfg-group"><legend>${escapeHtml(group.label)} <span class="cfg-hint">(${escapeHtml(cfgHint(group))})</span></legend>${group.options.length ? none + options : `<p class="cfg-meta">No hay opciones disponibles por ahora.</p>`}</fieldset>`;
     }).join("");
@@ -707,9 +766,10 @@ runWithCatalog(async function renderProductPage(){
       }
       const items = group.options.map(o => {
         const meta = cfgOptionMeta(o);
+        const pi = cfgPriceInfo(o, path);
         const nestedGroups = o.kind === "componente" && o.componentProductId && path.length < 2
           ? cfgReadOnlyHtml(o.componentProductId, path.concat([{ group: group.code, option: o.code }])) : "";
-        return `<li>${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}${cfgFichaLinkHtml(o)}${nestedGroups ? `<div class="cfg-nested"><p class="cfg-conditional">Con este componente:</p>${nestedGroups}</div>` : ""}</li>`;
+        return `<li>${escapeHtml(cfgOptionLabel(o))}${meta ? `<br><span class="cfg-meta">${escapeHtml(meta)}</span>` : ""}${cfgPriceNoteHtml(pi)}${cfgPriceHtml(pi, " cfg-price--ro")}${cfgFichaLinkHtml(o)}${nestedGroups ? `<div class="cfg-nested"><p class="cfg-conditional">Con este componente:</p>${nestedGroups}</div>` : ""}</li>`;
       }).join("");
       return `<fieldset class="cfg-group"><legend>${escapeHtml(group.label)} <span class="cfg-hint">(${escapeHtml(cfgHint(group))})</span></legend>${condition}${items ? `<ul class="cfg-ro-list">${items}</ul>` : `<p class="cfg-meta">No hay opciones disponibles por ahora.</p>`}</fieldset>`;
     }).join("");
@@ -737,7 +797,7 @@ runWithCatalog(async function renderProductPage(){
     else if (cfg.state === "empty") html = "Sin opciones elegidas: el producto se añade sin configuración.";
     el.className = "cfg-status" + (bad ? " cfg-status--bad" : "");
     el.innerHTML = html;
-    document.getElementById("cfg-price-note").textContent = "El precio indicado en la ficha es el del producto principal, no el del conjunto." + (cfg.interactive && cfgNeedsQuote() ? " El importe final del conjunto requiere cotización." : "");
+    document.getElementById("cfg-price-note").textContent = "El precio indicado en la ficha es el del producto principal, no el del conjunto." + (cfg.interactive && cfgNeedsQuote() ? " El importe final del conjunto requiere cotización." : "") + (cfg.pricesOk && !priceAccessInfo() ? " Los importes de cada componente son informativos, para comparar opciones: no forman un total del conjunto." : "");
   }
   function cfgRenderBody(){
     const active = document.activeElement;
@@ -843,6 +903,10 @@ runWithCatalog(async function renderProductPage(){
       if (result !== "ready"){ cfgShowLoadError(); refreshAddButton(); return; }
       if (!cfgGroups(product.id).length){ cfg.failed = false; cfgPanel.hidden = true; refreshAddButton(); return; }
       if (!(await cfgComponentProductsReady())){ cfgShowLoadError(); refreshAddButton(); return; }
+      /* Importes de los componentes: tras los precios de la página (que los sustituirían) y con la misma consulta de siempre.
+         Si no se pueden cargar, las opciones salen sin importe (como antes), nunca con uno inventado. */
+      await pricePromise;
+      await cfgLoadPrices();
       cfg.failed = false;
       cfgShowBoot();
     } finally { cfg.booting = false; }
@@ -983,6 +1047,7 @@ runWithCatalog(async function renderProductPage(){
       await loadPriceState(priceIds);
       renderPriceBlock();
       renderRelated();
+      if (cfg.booted){ await cfgLoadPrices(); cfg.interactive ? cfgRenderBody() : cfgShowBoot(); cfgRenderStatus(); }
     });
     document.querySelector(".product-selection-actions").hidden = !MobauAccess.hasProfessionalTools() || !isRequestableProduct(product);
   }
@@ -991,7 +1056,8 @@ runWithCatalog(async function renderProductPage(){
     /* 46: con herramientas profesionales, la configuración se carga a la vez que
        los precios para que los relacionados ya sepan qué ofrecer al pintarse. */
     MobauAccess.access().then(access => { if (access === "pro") loadComponentConfig(); }, () => {});
-    await loadPriceState(priceIds);
+    pricePromise = loadPriceState(priceIds);
+    await pricePromise;
     renderPriceBlock();
     refreshAddButton();
     renderRelated();
