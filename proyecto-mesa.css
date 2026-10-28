@@ -141,6 +141,13 @@ body.pagina-mesa{ background:#FAFAF8; }
 .mesa .flag.quiet{ color:var(--ink-3); }
 .mesa .tile.open .ph{ background:var(--stone-on); }
 .mesa .tile.open .foot{ border-top-color:var(--ink); }
+.mesa .tile-more{ position:absolute; top:6px; right:6px; z-index:3; }
+.mesa .tile-more .more-btn{ width:34px; height:34px; background:rgba(255,255,255,.9); color:var(--ink); opacity:0; transition:opacity .15s; }
+.mesa .tile:hover .tile-more .more-btn, .mesa .tile:focus-within .tile-more .more-btn, .mesa .tile-more .more-btn[aria-expanded="true"]{ opacity:1; }
+.mesa .tile-more .more-btn:hover{ background:#fff; }
+@media (hover:none){ .mesa .tile-more .more-btn{ opacity:1; width:40px; height:40px; } }
+.mesa .pop.pm{ min-width:230px; }
+.mesa .pop.pm .pm-back{ color:var(--ink-2); font-size:14px; }
 .mesa .tile .tick{ position:absolute; top:10px; left:10px; z-index:2; width:26px; height:26px; border-radius:50%; border:1.5px solid var(--ink-2); background:rgba(255,255,255,.88); display:none; align-items:center; justify-content:center; pointer-events:none; }
 .mesa.selecting .tile .tick{ display:flex; }
 .mesa .tile.picked .tick{ background:var(--ink); border-color:var(--ink); color:#fff; }
@@ -149,17 +156,19 @@ body.pagina-mesa{ background:#FAFAF8; }
 .mesa .tile.picked .tick svg{ opacity:1; }
 
 /* Ficha gris bajo la fila, con la muesca hacia su pieza */
-.mesa .ficha{ grid-column:1 / -1; position:relative; margin:-10px 0 0; padding:26px 32px 22px; background:var(--panel); border-radius:3px; }
+.mesa .ficha{ grid-column:1 / -1; position:relative; margin:-10px 0 0; padding:20px 28px 16px; background:var(--panel); border-radius:3px; }
 .mesa .ficha::before{ content:""; position:absolute; top:-9px; left:var(--nx, 40px); width:18px; height:18px; background:var(--panel); transform:translateX(-50%) rotate(45deg); border-radius:2px 0 0 0; }
 @media (prefers-reduced-motion:no-preference){ .mesa .ficha{ animation:mesa-open .22s ease-out; } }
 @keyframes mesa-open{ from{ opacity:0; transform:translateY(-6px); } to{ opacity:1; transform:none; } }
 .mesa .ficha.still{ animation:none; }
-.mesa .ficha-close{ position:absolute; top:14px; right:14px; }
-.mesa .fg{ display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,.95fr) minmax(0,1.15fr); grid-template-areas:"head head head" "info qty note" "cfg cfg cfg" "foot foot foot"; gap:18px 40px; }
+.mesa .ficha-tools{ position:absolute; top:10px; right:12px; z-index:2; display:flex; align-items:center; gap:2px; }
+.mesa .ficha-tools .f-more{ display:inline-flex; }
+.mesa .fg{ display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,.95fr) minmax(0,1.15fr); grid-template-areas:"top top top" "info qty note" "cfg cfg cfg"; gap:14px 36px; }
 .mesa .f-cfg{ grid-area:cfg; min-width:0; }
 .mesa .f-cfg .cfg{ margin-top:0; }
 .mesa .fg.long{ grid-template-columns:minmax(0,.75fr) minmax(260px,.85fr) minmax(0,1.7fr); }
-.mesa .f-head{ grid-area:head; margin:0; padding-right:48px; font-size:22px; line-height:1.28; font-weight:500; letter-spacing:-.012em; }
+.mesa .f-top{ grid-area:top; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 22px; padding-right:96px; }
+.mesa .f-head{ margin:0; font-size:22px; line-height:1.28; font-weight:500; letter-spacing:-.012em; }
 .mesa .f-head:focus{ outline:none; }
 .mesa .f-info{ grid-area:info; min-width:0; }
 .mesa .f-qty{ grid-area:qty; min-width:0; }
@@ -172,7 +181,6 @@ body.pagina-mesa{ background:#FAFAF8; }
 .mesa .photo-src{ margin:14px 0 0; font-size:14.5px; line-height:1.45; color:var(--ink-2); }
 .mesa .more{ display:inline-block; font-size:15px; color:var(--ink); text-decoration:underline; text-decoration-color:var(--rule-2); text-underline-offset:4px; }
 .mesa .more:hover{ text-decoration-color:currentColor; }
-.mesa .more-in{ display:none; }
 .mesa .sec{ display:block; margin:0 0 8px; font-size:14px; color:var(--ink-3); }
 .mesa .stepper{ display:inline-flex; align-items:center; height:46px; border:1px solid var(--rule-2); border-radius:23px; background:#fff; }
 .mesa .stepper button{ width:44px; height:44px; border:0; background:none; border-radius:50%; font-size:20px; line-height:1; color:var(--ink-2); }
@@ -183,7 +191,7 @@ body.pagina-mesa{ background:#FAFAF8; }
 .mesa .stepper:focus-within{ border-color:var(--ink); }
 .mesa .stepper:has(input:disabled){ background:transparent; }
 .mesa .unit{ margin-left:12px; font-size:16px; color:var(--ink-2); }
-.mesa .money{ margin:20px 0 0; font-size:15px; }
+.mesa .money{ margin:12px 0 0; font-size:15px; }
 .mesa .money div{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:7px 0; border-top:1px solid var(--rule); }
 .mesa .money div:first-child{ border-top:0; }
 .mesa .money div span:last-child{ white-space:nowrap; text-align:right; }
@@ -214,12 +222,9 @@ body.pagina-mesa{ background:#FAFAF8; }
 .mesa .row-btns .cnt{ margin-left:auto; font-size:13.5px; color:var(--ink-3); }
 .mesa .row-btns .dirty{ font-size:14px; color:var(--ochre); }
 .mesa .note-status{ margin:8px 0 0; font-size:14px; color:var(--danger); }
-.mesa .f-foot{ grid-area:foot; display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:6px; padding-top:16px; border-top:1px solid var(--rule); }
-.mesa .f-area{ margin-right:6px; font-size:15px; color:var(--ink-2); }
+.mesa .f-area{ font-size:15px; color:var(--ink-2); }
 .mesa .f-area b{ font-weight:500; color:var(--ink); }
-.mesa .f-sp{ flex:1 1 auto; }
-.mesa .f-foot .more-foot{ margin:0 14px 0 0; }
-.mesa .f-foot .btn{ height:40px; }
+.mesa .f-top .more{ margin-left:auto; }
 
 /* Columna del proyecto */
 .mesa .ledger{ position:sticky; top:var(--ledger-top, 0px); align-self:start; padding:28px 0 20px 28px; border-left:1px solid var(--rule); }
@@ -297,9 +302,45 @@ body.pagina-mesa{ background:#FAFAF8; }
 .mesa .bulk .btn:hover{ border-color:#fff; color:#fff; }
 .mesa .bulk .btn-light{ background:#fff; color:var(--ink); border-color:#fff; }
 .mesa .bulk .btn-light:hover{ color:var(--ink); }
-.mesa .bulk select{ height:40px; max-width:200px; padding:0 12px; border-radius:20px; border:1px solid rgba(255,255,255,.35); background:var(--ink); color:#fff; font-size:15px; }
 /* Escritorio: la barra se centra sobre los productos, no sobre toda la ventana. */
 @media (min-width:1180px){ .mesa .bulk{ flex-wrap:nowrap; left:calc((min(100vw, 1680px) - 328px) / 2 + max(0px, (100vw - 1680px) / 2)); max-width:calc(100vw - 360px); } }
+
+.mesa .bulk .menu-wrap .pop{ color:var(--ink); }
+.mesa.selecting .tile-more{ display:none; }
+.mesa.is-busy{ cursor:progress; }
+/* Por categoría (columna del proyecto) */
+.mesa .bycat{ margin:14px 0 0; }
+.mesa .bycat-t{ display:inline-flex; align-items:center; gap:6px; font-size:15px; }
+.mesa .bycat-t .n{ color:var(--ink-3); font-size:13.5px; }
+.mesa .bycat ul{ list-style:none; margin:8px 0 0; padding:0; }
+.mesa .bycat li{ border-top:1px solid var(--rule); }
+.mesa .bycat li > button, .mesa .bycat li > .row{ display:flex; width:100%; gap:10px; align-items:flex-start; justify-content:space-between; padding:8px 0; border:0; background:none; text-align:left; font-size:14px; color:var(--ink); }
+.mesa .bycat li > button:hover{ background:var(--panel); }
+.mesa .bycat li > button[aria-pressed="true"]{ box-shadow:inset 2px 0 0 var(--ink); padding-left:8px; }
+.mesa .bycat .cn{ display:flex; flex-direction:column; min-width:0; }
+.mesa .bycat .ca{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; white-space:nowrap; }
+.mesa .bycat small{ font-size:12.5px; color:var(--ink-3); }
+.mesa .bycat .muted{ color:var(--ink-3); }
+.mesa .bulk .menu-wrap .btn{ gap:6px; }
+/* Tableta y móvil: la lista de destinos ocupa el ancho de la barra, para no salirse de la pantalla. */
+@media (max-width:1179px){ .mesa .bulk .menu-wrap{ position:static; } .mesa .bulk .pop{ left:0; right:0; min-width:0; max-width:none; max-height:50vh; overflow:auto; } }
+.mesa .bulk .menu-wrap .btn:disabled{ opacity:.5; }
+.mesa .bulk .btn:disabled{ opacity:.5; }
+
+/* Panel «Desde mi selección», en la página bajo las herramientas */
+.mesa .addpanel{ margin:20px 0 0; padding:18px 22px 20px; background:var(--panel); border-radius:3px; }
+.mesa .addpanel header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.mesa .addpanel h2{ margin:0; font-size:19px; font-weight:500; }
+.mesa .addpanel h2:focus{ outline:none; }
+.mesa .addpanel .lead{ margin:4px 0 12px; font-size:15px; color:var(--ink-2); }
+.mesa .addpanel .optf{ display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; margin:0 0 12px; font-size:15px; color:var(--ink-2); }
+.mesa .addpanel .optf select{ height:40px; padding:0 10px; border:1px solid var(--rule-2); border-radius:6px; background:#fff; font-size:15px; }
+.mesa .addpanel table.sum{ width:100%; border-collapse:collapse; font-size:14.5px; }
+.mesa .addpanel table.sum th{ text-align:left; font-weight:400; font-size:13.5px; color:var(--ink-3); padding:4px 6px; border-bottom:1px solid var(--rule-2); }
+.mesa .addpanel table.sum td{ padding:7px 6px; border-bottom:1px solid var(--rule); vertical-align:top; background:transparent; }
+.mesa .addpanel .small{ margin:10px 0 0; }
+.mesa .addpanel .bar{ display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 0; }
+.mesa .addpanel .bar .btn{ height:44px; }
 
 /* Ventanas (las mismas de antes, con el lenguaje de la mesa) */
 .mesa .veil{ position:fixed; inset:0; z-index:60; display:flex; align-items:flex-start; justify-content:center; padding:6vh 12px; overflow:auto; background:rgba(28,31,34,.42); }
@@ -349,17 +390,16 @@ body.pagina-mesa{ background:#FAFAF8; }
   .mesa .dock .menu-wrap{ flex:none; }
   .mesa .dock .dock-areas{ width:44px; height:44px; border:1px solid var(--rule-2); }
   .mesa .dock .pop{ left:0; max-height:60vh; overflow:auto; }
-  /* Mientras se escribe en la ficha (teclado abierto en móvil), la barra se retira para no tapar el campo. */
-  body:has(.mesa .ficha input:focus, .mesa .ficha textarea:focus) .mesa .dock{ display:none; }
-  .mesa .bulk{ bottom:84px; }
+  /* Mientras se escribe en la ficha (teclado abierto en móvil), la barra se oculta para no tapar el campo, sin quitarla del diseño
+     (visibility, no display): así no cambia el alto reservado ni se mueve el contenido. */
+  body:has(.mesa .ficha input:focus, .mesa .ficha textarea:focus) .mesa .dock{ visibility:hidden; pointer-events:none; }
+  .mesa .bulk{ bottom:16px; }   /* mientras se selecciona, la barra inferior del proyecto no se muestra */
   .mesa .grid{ grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); }
 }
 @media (min-width:720px) and (max-width:1179px){
-  .mesa .fg, .mesa .fg.long{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"head head" "info qty" "note note" "cfg cfg" "foot foot"; }
-  .mesa .fg:not(.long){ grid-template-areas:"head head" "info qty" "note qty" "cfg cfg" "foot foot"; align-items:start; }
+  .mesa .fg, .mesa .fg.long{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-areas:"top top" "info qty" "note note" "cfg cfg"; }
+  .mesa .fg:not(.long){ grid-template-areas:"top top" "info qty" "note qty" "cfg cfg"; align-items:start; }
   .mesa .fg:not(.long) .f-note{ padding-top:16px; border-top:1px solid var(--rule); }
-  .mesa .more-in{ display:inline-block; margin:14px 0 0; }
-  .mesa .f-foot .more-foot{ display:none; }
 }
 
 /* ---------- Móvil: cada pieza es una fila con la muestra a la izquierda ---------- */
@@ -398,18 +438,16 @@ body.pagina-mesa{ background:#FAFAF8; }
   .mesa .tile.open .tile-btn{ box-shadow:inset 3px 0 0 var(--ink); padding-left:12px; margin-left:-12px; width:calc(100% + 12px); }
   .mesa .flag{ margin-top:2px; font-size:13.5px; }
   .mesa .tile .tick{ top:18px; left:8px; }
-  .mesa .ficha{ margin:0 calc(var(--gut) * -1); padding:22px var(--gut) 24px; border-radius:0; }
+  .mesa .ficha{ margin:0 calc(var(--gut) * -1); padding:18px var(--gut) 18px; border-radius:0; }
   .mesa .ficha::before{ display:none; }
-  .mesa .fg, .mesa .fg.long{ grid-template-columns:minmax(0,1fr); grid-template-areas:"head" "qty" "note" "info" "cfg" "foot"; gap:22px; }
+  .mesa .fg, .mesa .fg.long{ grid-template-columns:minmax(0,1fr); grid-template-areas:"top" "qty" "note" "info" "cfg"; gap:18px; }
   .mesa .f-head{ font-size:19px; }
   .mesa .f-info{ padding-top:16px; border-top:1px solid var(--rule); }
   .mesa .spec{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px 16px; }
   .mesa .spec > div{ display:block; }
   .mesa .spec dt{ font-size:13.5px; }
-  .mesa .f-sp{ display:none; }
-  .mesa .f-area{ flex:1 1 100%; }
-  .mesa .f-foot{ gap:10px 16px; }
-  .mesa .f-foot .more-foot, .mesa .f-foot .textbtn.danger{ margin:6px 0 0; }
+  .mesa .f-top{ flex-direction:column; align-items:flex-start; gap:4px; }
+  .mesa .f-top .more{ margin-left:0; }
   .mesa .ledger{ grid-template-columns:minmax(0,1fr); margin-top:56px; }
   .mesa .ledger .l-a, .mesa .ledger .l-b{ grid-column:1; }
   .mesa .ledger .index{ margin-top:36px; padding-top:22px; border-top:1px solid var(--rule); }

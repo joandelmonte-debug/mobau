@@ -32,7 +32,9 @@ const ProyectoVista = (() => {
     isRequested: false, fromCopy: false, pricesOn: false, busy: false,
     collapsed: new Set(), selected: new Set(), filters: { q: "", areas: new Set(), cats: new Set() },
     noteEdit: null, pop: null, renaming: null, infoOpen: false, infoEdit: false, infoError: "", canReactivate: false, reactivateWhy: "",
-    open: null, selecting: false, current: null   /* mesa: ficha abierta, modo de selección y área que se está leyendo */
+    open: null, selecting: false, current: null,  /* mesa: ficha abierta, modo de selección y área que se está leyendo */
+    adding: null,                                 /* panel «Desde mi selección» abierto: { area } */
+    catOpen: false                                /* bloque «Por categoría» de la columna del proyecto desplegado */
   };
   let loadSeq = 0;
   const hooks = { onPlanGate: null, onLoaded: null };
@@ -169,6 +171,22 @@ const ProyectoVista = (() => {
     if (!l.configuration && info && info.status === "pendiente") return `<span class="flag">Configuración pendiente</span>`;
     return "";
   }
+  /* Acciones de una línea (⋯): ver en el catálogo, mover, copiar y quitar. Orden: acción → destino. La clave de S.pop
+     es «pm:<dónde>:<id>[:move|copy]» (dónde: t = miniatura, f = ficha). */
+  const pmKey = (where, id, step) => `pm:${where}:${id}${step ? ":" + step : ""}`;
+  const pmOpen = (where, id) => typeof S.pop === "string" && (S.pop === pmKey(where, id) || S.pop === pmKey(where, id, "move") || S.pop === pmKey(where, id, "copy"));
+  const canAct = l => !ro() && !l.requested;
+  function moreMenu(l, where){
+    const p = prod(l.productId), open = pmOpen(where, l.id), step = open ? S.pop.split(":")[3] || "" : "";
+    const btn = `<button class="iconbtn more-btn" data-act="pop" data-key="${pmKey(where, l.id)}" aria-haspopup="menu" aria-expanded="${open}" aria-label="Acciones de ${esc(p ? p.nombre : "este producto")}">${ICON.more}</button>`;
+    if (!open) return `<span class="menu-wrap">${btn}</span>`;
+    const targets = hasAreas() ? targetList(l) : [];
+    const d = `data-where="${where}" data-id="${esc(l.id)}"`;
+    const body = step
+      ? `<button class="pm-back" data-act="pm-back" ${d}>‹ Volver</button><p class="h">${step === "move" ? "Mover a" : "Copiar a"}</p>${targets.map(a => `<button data-act="${step === "move" ? "move1" : "copy1"}" data-id="${esc(l.id)}" data-area="${esc(idOfTarget(a))}">${esc(a.name)}</button>`).join("")}`
+      : `${p ? `<a class="popitem" href="producto.html?id=${encodeURIComponent(p.id)}">Ver en el catálogo</a>` : ""}${targets.length ? `<button data-act="pm-step" data-step="move" ${d}>Mover a otra área…</button><button data-act="pm-step" data-step="copy" ${d}>Copiar a otra área…</button>` : ""}<hr><button class="danger" data-act="remove" data-id="${esc(l.id)}">Quitar del proyecto</button>`;
+    return `<span class="menu-wrap">${btn}<div class="pop right pm" role="menu">${body}</div></span>`;
+  }
   function tileHtml(l){
     const p = prod(l.productId), open = S.open === l.id, picked = S.selected.has(l.id);
     const name = p ? p.nombre : "Producto no disponible";
@@ -177,6 +195,7 @@ const ProyectoVista = (() => {
     const act = S.selecting && !ro() ? `data-act="pick" aria-pressed="${picked}"` : `data-act="open" aria-expanded="${open}" aria-controls="ficha"`;
     return `<li class="tile${open ? " open" : ""}${picked ? " picked" : ""}" data-id="${esc(l.id)}">
       <span class="tick" aria-hidden="true">${ICON.check}</span>
+      ${canAct(l) && !S.selecting ? `<span class="tile-more">${moreMenu(l, "t")}</span>` : ""}
       <button class="tile-btn" ${act} data-id="${esc(l.id)}">
         ${photoHtml(l)}
         <span class="nm" title="${esc(name)}">${esc(name)}</span>
@@ -247,9 +266,9 @@ const ProyectoVista = (() => {
     const dis = ro() || l.requested || S.busy ? "disabled" : "";
     const name = prod(l.productId) ? prod(l.productId).nombre : l.productId;
     const qtyVal = isU ? String(Math.round(l.qty)) : String(r2(l.qty));
-    return `<label class="sec" for="qty-${esc(l.id)}">Cantidad</label>
-      <div style="display:flex;align-items:center"><span class="stepper"><button data-act="dec" data-id="${esc(l.id)}" aria-label="Reducir cantidad" ${dis}>−</button><input id="qty-${esc(l.id)}" type="number" class="dp-qty-input" data-act="qty" data-id="${esc(l.id)}" value="${qtyVal}" min="${isU ? 1 : 0.01}" step="${isU ? 1 : 0.01}" inputmode="decimal" aria-label="Cantidad de ${esc(name)}" ${dis}><button data-act="inc" data-id="${esc(l.id)}" aria-label="Aumentar cantidad" ${dis}>+</button></span><span class="unit">${esc(unit)}</span></div>
-      ${moneyBlock(l)}`;
+    return `<div class="f-qtyctl"><label class="sec" for="qty-${esc(l.id)}">Cantidad</label>
+      <div style="display:flex;align-items:center"><span class="stepper"><button data-act="dec" data-id="${esc(l.id)}" aria-label="Reducir cantidad" ${dis}>−</button><input id="qty-${esc(l.id)}" type="number" class="dp-qty-input" data-act="qty" data-id="${esc(l.id)}" value="${qtyVal}" min="${isU ? 1 : 0.01}" step="${isU ? 1 : 0.01}" inputmode="decimal" aria-label="Cantidad de ${esc(name)}" ${dis}><button data-act="inc" data-id="${esc(l.id)}" aria-label="Aumentar cantidad" ${dis}>+</button></span><span class="unit">${esc(unit)}</span></div></div>
+      <div class="f-money">${moneyBlock(l)}</div>`;
   }
   function noteBlock(l){
     if (S.noteEdit && S.noteEdit.id === l.id){
@@ -274,38 +293,77 @@ const ProyectoVista = (() => {
     const photoSrc = !ph.url ? `<p class="photo-src">Este producto no tiene foto.</p>` : "";
     const general = ph.general ? `<span class="finish-photo">Foto general del producto: puede no mostrar este acabado.</span>` : "";
     const spec = p ? `<dl class="spec">${p.referencia ? `<div><dt>Referencia</dt><dd>${esc(p.referencia)}</dd></div>` : ""}${finishText(l) ? `<div><dt>Acabado</dt><dd>${esc(finishText(l))}${general}</dd></div>` : ""}<div><dt>Marca</dt><dd>${esc(LABELS.marca[p.marca] || "—")}</dd></div>${p.status === "archived" ? `<div><dt>Estado</dt><dd>No disponible actualmente</dd></div>` : ""}</dl>` : `<dl class="spec"><div><dt>Producto</dt><dd>ID: ${esc(l.productId)}</dd></div></dl>`;
-    const more = ficha ? `<a class="more" href="${ficha}">Ver ficha del producto</a>` : "";
-    const targets = editable && hasAreas() ? targetList(l) : [];
-    const menu = (kind, label) => `<span class="menu-wrap"><button class="btn" data-act="pop" data-key="${kind}:${esc(l.id)}" aria-haspopup="menu" aria-expanded="${S.pop === `${kind}:${l.id}`}">${label} ${ICON.chev}</button>
-      ${S.pop === `${kind}:${l.id}` ? `<div class="pop up"><p class="h">${kind === "mv" ? "Mover a" : "Copiar a"}</p>${targets.map(a => `<button data-act="${kind === "mv" ? "move1" : "copy1"}" data-id="${esc(l.id)}" data-area="${esc(idOfTarget(a))}">${esc(a.name)}</button>`).join("")}</div>` : ""}</span>`;
-    const place = hasAreas() ? `<span class="f-area">En <b>${esc(areaName(l.areaId))}</b></span>${targets.length ? menu("mv", "Mover") + menu("cp", "Copiar") : ""}` : "";
-    return `<li class="ficha" id="ficha" role="region" aria-label="Detalle de ${esc(name)}">
-      <button class="iconbtn ficha-close" data-act="close-ficha" aria-label="Cerrar el detalle">${ICON.close}</button>
+    const catalog = ficha ? `<a class="more" href="${ficha}">Ver en el catálogo</a>` : "";
+    const area = hasAreas() ? `<span class="f-area">En <b>${esc(areaName(l.areaId))}</b></span>` : "";
+    return `<li class="ficha" id="ficha" data-id="${esc(l.id)}" role="region" aria-label="Detalle de ${esc(name)}">
+      <div class="ficha-tools">${editable ? `<span class="f-more">${moreMenu(l, "f")}</span>` : ""}<button class="iconbtn ficha-close" data-act="close-ficha" aria-label="Cerrar el detalle">${ICON.close}</button></div>
       <div class="fg${long ? " long" : ""}${l.configuration ? " has-cfg" : ""}">
-        <h3 class="f-head" id="ficha-title" tabindex="-1">${esc(name)}</h3>
-        <div class="f-info">${spec}${photoSrc}${more ? more.replace('class="more"', 'class="more more-in"') : ""}</div>
+        <div class="f-top"><h3 class="f-head" id="ficha-title" tabindex="-1">${esc(name)}</h3>${area}${catalog}</div>
+        <div class="f-info">${spec}${photoSrc}</div>
         ${l.configuration || cfgInfo(l).status === "pendiente" ? `<div class="f-cfg">${cfgBlock(l)}</div>` : ""}
         <div class="f-qty">${qtyBlock(l)}</div>
         <div class="f-note">${noteBlock(l)}</div>
-        <div class="f-foot">${place}<span class="f-sp"></span>${more.replace('class="more"', 'class="more more-foot"')}${editable ? `<button class="textbtn danger" data-act="remove" data-id="${esc(l.id)}">Quitar del proyecto</button>` : ""}</div>
       </div></li>`;
   }
   /* La ficha va justo después de la última pieza de la fila de la pieza abierta, a todo el ancho, con la muesca
      sobre su pieza. Si ya estaba abierta (otro pintado), no repite la animación. */
-  let shownFicha = null;
+  let shownFicha = null, keptFicha = null;
+  /* La ficha abierta se retira antes de repintar la lista y se vuelve a colocar: si su contenido no cambió se conserva el mismo
+     nodo (cantidad, nota en edición, foco y menú); si cambió solo en algunas zonas, solo se sustituyen esas zonas. */
+  function detachFicha(){
+    const f = $("#ficha");
+    if (!f){ keptFicha = null; return; }
+    const a = document.activeElement;
+    keptFicha = { node: f, id: f.dataset.id, focus: a && f.contains(a) && a !== f ? { el: a, start: a.selectionStart, end: a.selectionEnd } : null };
+    f.remove();
+  }
+  const FICHA_ZONES = [".ficha-tools", ".f-top", ".f-info", ".f-cfg", ".f-qtyctl", ".f-money", ".f-note"];
+  const noValue = html => html.replace(/ value="[^"]*"/g, "");
+  function syncFicha(oldEl, newEl, focus){
+    if (oldEl.dataset.id !== newEl.dataset.id) return false;
+    const fa = oldEl.querySelector(".fg"), fb = newEl.querySelector(".fg");
+    if (!fa || !fb || fa.className !== fb.className) return false;
+    for (const z of FICHA_ZONES){
+      const a = oldEl.querySelector(z), b = newEl.querySelector(z);
+      if (!a && !b) continue;
+      if (!a || !b) return false;
+      if (noValue(a.outerHTML) === noValue(b.outerHTML)) continue;
+      if (focus && a.contains(focus.el) && focus.el.matches("textarea, .dp-qty-input") && b.querySelector(focus.el.tagName === "TEXTAREA" ? "textarea" : ".dp-qty-input")){
+        /* se está escribiendo: no se toca el campo; solo se actualiza el mensaje de estado y el botón de guardar */
+        const sa = a.querySelector(".note-status"), sb = b.querySelector(".note-status");
+        if (sa && sb) sa.textContent = sb.textContent;
+        const ba = a.querySelector('[data-act="note-save"]'), bb = b.querySelector('[data-act="note-save"]');
+        if (ba && bb) ba.disabled = bb.disabled;
+        continue;
+      }
+      a.replaceWith(b);
+      if (focus && focus.el && !oldEl.contains(focus.el)) focus.el = null;
+    }
+    const ia = oldEl.querySelector(".dp-qty-input"), ib = newEl.querySelector(".dp-qty-input");
+    if (ia && ib && ia !== (focus && focus.el) && ia.value !== ib.value) ia.value = ib.value;
+    return true;
+  }
   function placeFicha(){
-    const old = $("#ficha"); if (old) old.remove();
+    if ($("#ficha")) detachFicha();
+    const kept = keptFicha; keptFicha = null;
     if (!S.open){ shownFicha = null; return; }
     const tile = document.querySelector(`.tile[data-id="${CSS.escape(S.open)}"]`), l = lineById(S.open);
     if (!tile || !l){ S.open = null; shownFicha = null; return; }
     const grid = tile.parentElement;
     let last = tile;
     [...grid.children].forEach(t => { if (t.classList.contains("tile") && Math.abs(t.offsetTop - tile.offsetTop) < 4) last = t; });
-    last.insertAdjacentHTML("afterend", fichaHtml(l));
-    const f = $("#ficha");
+    const tpl = document.createElement("template");
+    tpl.innerHTML = fichaHtml(l).trim();
+    let f = tpl.content.firstElementChild, reused = false;
+    if (kept && kept.id === S.open && syncFicha(kept.node, f, kept.focus)){ f = kept.node; reused = true; }
+    last.after(f);
     if (shownFicha === S.open) f.classList.add("still");
     shownFicha = S.open;
     f.style.setProperty("--nx", (tile.offsetLeft - grid.offsetLeft + tile.offsetWidth / 2) + "px");
+    if (reused && kept.focus && kept.focus.el && kept.focus.el.isConnected){
+      kept.focus.el.focus({ preventScroll: true });
+      try { if (kept.focus.start !== null && kept.focus.start !== undefined) kept.focus.el.setSelectionRange(kept.focus.start, kept.focus.end); } catch (e) {}
+    }
   }
 
   /* ---------- posición de lectura ---------- */
@@ -315,9 +373,11 @@ const ProyectoVista = (() => {
   const headH = () => { const h = document.querySelector(".site-header"); return h && /sticky|fixed/.test(getComputedStyle(h).position) ? h.offsetHeight : 0; };
   const topH = () => { const s = $("#strip"); return headH() + (s && s.offsetHeight && getComputedStyle(s).position === "sticky" ? s.offsetHeight : 0); };
   /* Ejecuta fn y compensa el desplazamiento para que la pieza siga en el mismo sitio de la pantalla. */
+  let anchoring = false;
   function anchored(id, fn){
     const el = id ? tileEl(id) : null, before = el ? el.getBoundingClientRect().top : null;
-    fn();
+    const was = anchoring; anchoring = true;
+    try { fn(); } finally { anchoring = was; }
     const now = id ? tileEl(id) : null;
     if (before === null || !now) return;
     if (before < -now.offsetHeight + 40){ scrollBy(0, now.getBoundingClientRect().top - topH() - 24); return; }
@@ -347,6 +407,17 @@ const ProyectoVista = (() => {
       if (t.getBoundingClientRect().top < topH() + 8) scrollBy(0, t.getBoundingClientRect().top - topH() - 24);
       t.querySelector(".tile-btn").focus({ preventScroll: true });
     }
+  }
+  /* Pieza que se está leyendo: la ficha abierta o, si la página está desplazada, la primera pieza visible. */
+  function readingTile(){
+    if (S.open && tileEl(S.open)) return S.open;
+    if (scrollY < 4) return null;
+    const top = topH();
+    for (const t of document.querySelectorAll(".tile")){
+      const r = t.getBoundingClientRect();
+      if (r.bottom > top + 8 && r.top < innerHeight) return t.dataset.id;
+    }
+    return null;
   }
   /* Mientras la ficha está abierta, cualquier repintado conserva la posición de su pieza. */
   const keepPlace = fn => (S.open ? anchored(S.open, fn) : fn());
@@ -399,6 +470,33 @@ const ProyectoVista = (() => {
     return `<div class="cov" role="img" aria-label="Cobertura de importes">${seg("completa", "c1")}${seg("parcial", "c2")}${seg("sin", "c3")}${seg("pendiente", "c4")}</div>
       <ul class="covtxt"><li class="c1"><i></i><span>${t.completa} con importe completo</span></li><li class="c2"><i></i><span>${t.parcial} parciales</span></li><li class="c3"><i></i><span>${t.sin} sin precio</span></li><li class="c4"><i></i><span>${t.pendiente} con configuración pendiente</span></li>${t.nodisp ? `<li class="c5"><i></i><span>${t.nodisp} no disponibles</span></li>` : ""}</ul>`;
   }
+  /* Con la columna al final de la página (menos de 1180 px), tras elegir una categoría solo se desplaza si el resultado filtrado no se
+     ve; entonces lo justo para colocar su inicio (la fila de filtros) bajo la cabecera. Si ya se ve, la página no se mueve. */
+  function ensureResultVisible(){
+    if (!matchMedia("(max-width: 1179px)").matches) return;
+    const first = document.querySelector("#list .tile") || $("#list");
+    if (!first) return;
+    const top = topH(), bottom = innerHeight - dockH(), r = first.getBoundingClientRect();
+    if (r.bottom > top + 8 && r.top < bottom - 8) return;
+    const chips = $("#chips"), anchor = chips && chips.children.length ? chips : $("#list");
+    scrollBy({ top: anchor.getBoundingClientRect().top - top - 12, behavior: reduced() ? "auto" : "smooth" });
+  }
+  /* «Por categoría»: el importe conocido de cada categoría, con las mismas reglas de importes que el resto (sin totales inventados:
+     lo parcial, sin precio o pendiente se indica y no se suma). Pulsar una categoría aplica el filtro de categoría de siempre. */
+  function categoryBlock(){
+    const by = new Map();
+    S.lines.forEach(l => { const p = prod(l.productId), k = p && LABELS.categoria[p.categoria] ? p.categoria : "otros"; (by.get(k) || by.set(k, []).get(k)).push(l); });
+    const keys = Object.keys(LABELS.categoria).filter(k => by.has(k)).concat(by.has("otros") ? ["otros"] : []);
+    if (!keys.length) return "";
+    const rows = keys.map(k => {
+      const ls = by.get(k), t = aggregate(ls), label = k === "otros" ? "Producto no disponible" : LABELS.categoria[k];
+      const flags = [t.pend ? `+ ${t.pend} pendiente${t.pend > 1 ? "s" : ""}` : "", t.nodisp ? `${t.nodisp} no disponible${t.nodisp > 1 ? "s" : ""}` : ""].filter(Boolean).join(" · ");
+      const inner = `<span class="cn">${esc(label)}<small>${plural(ls.length, "línea", "líneas")}</small></span><span class="ca">${t.known > 0 ? esc(money(t.known)) : `<span class="muted">Sin importe</span>`}${flags ? `<small>${esc(flags)}</small>` : ""}</span>`;
+      return k === "otros" ? `<li><div class="row">${inner}</div></li>` : `<li><button data-act="fc-only" data-v="${esc(k)}" aria-pressed="${S.filters.cats.size === 1 && S.filters.cats.has(k)}" title="Ver solo esta categoría">${inner}</button></li>`;
+    }).join("");
+    return `<div class="bycat"><button class="textbtn bycat-t" data-act="cat-toggle" aria-expanded="${S.catOpen}" aria-controls="bycat-list">Por categoría <span class="n">${keys.length}</span> ${ICON.chev}</button>
+      ${S.catOpen ? `<ul id="bycat-list">${rows}</ul><p class="tnote">Solo importes conocidos: lo pendiente no se suma.</p>` : ""}</div>`;
+  }
   function renderLedger(){
     const pr = S.project, archived = pr.status === "archived", failed = !!S.loadError, empty = !S.lines.length;
     let amounts = "";
@@ -413,6 +511,7 @@ const ProyectoVista = (() => {
           ${t.known > 0 ? `<p class="known">${esc(ent)}<small>.${esc(cents)}</small></p>` : `<p class="known" style="font-size:20px;color:var(--ink-2)">Sin importes conocidos todavía</p>`}
           <p class="known-sub">dólares, ITBIS incluido. Suma de ${t.completa + t.parcial} de ${t.n === 1 ? "1 línea" : `las ${t.n} líneas`}.</p>
           ${coverage(t)}
+          ${categoryBlock()}
           <p class="tnote">Importe preliminar: suma parcial de los importes conocidos. No es una cotización final.</p>
           ${filtering() ? `<p class="filtered">Resultado filtrado: <b>${esc(money(tv.known))}</b> conocidos en ${vis.length} de ${S.lines.length} líneas.</p>` : ""}`;
       }
@@ -463,10 +562,9 @@ const ProyectoVista = (() => {
 
   function popFilter(kind){
     if (kind === "org"){
-      if (!hasAreas()) return `<div class="pop right"><p class="hint">Agrupa tus productos por habitación o zona. Es opcional: puedes trabajar siempre como lista normal.</p><button data-act="organize">Crear la primera área…</button></div>`;
       const unassigned = S.lines.filter(l => !l.areaId).length;
       const items = S.areas.concat(unassigned ? [{ id: "none", name: "Sin área" }] : []);
-      return `<div class="pop right"><p class="h">Filtrar por áreas</p>${items.map(a => `<label><input type="checkbox" data-act="fa" data-v="${esc(a.id)}" ${S.filters.areas.has(a.id) ? "checked" : ""}> ${esc(a.name)}<span class="count">${S.lines.filter(l => (l.areaId || "none") === a.id).length}</span></label>`).join("")}${S.filters.areas.size ? `<button data-act="fa-clear">Quitar filtro de áreas</button>` : ""}<hr>${ro() ? "" : `<button data-act="areas">Gestionar áreas…</button>`}<button data-act="collapse-all">Plegar todas</button><button data-act="expand-all">Desplegar todas</button></div>`;
+      return `<div class="pop right">${ro() ? "" : `<button data-act="areas-new">${ICON.plus}<span>Crear área</span></button><button data-act="areas">Gestionar áreas…</button><hr>`}<p class="h">Filtrar por áreas</p>${items.map(a => `<label><input type="checkbox" data-act="fa" data-v="${esc(a.id)}" ${S.filters.areas.has(a.id) ? "checked" : ""}> ${esc(a.name)}<span class="count">${S.lines.filter(l => (l.areaId || "none") === a.id).length}</span></label>`).join("")}${S.filters.areas.size ? `<button data-act="fa-clear">Quitar filtro de áreas</button>` : ""}<hr><button data-act="collapse-all">Plegar todas</button><button data-act="expand-all">Desplegar todas</button></div>`;
     }
     const codes = Object.keys(LABELS.categoria).filter(c => S.lines.some(l => prod(l.productId) && prod(l.productId).categoria === c));
     return `<div class="pop"><p class="h">Filtrar por categoría</p>${codes.map(c => `<label><input type="checkbox" data-act="fc" data-v="${esc(c)}" ${S.filters.cats.has(c) ? "checked" : ""}> ${esc(LABELS.categoria[c])}<span class="count">${S.lines.filter(l => prod(l.productId) && prod(l.productId).categoria === c).length}</span></label>`).join("")}<hr><button data-act="fc-clear">Quitar filtro</button></div>`;
@@ -483,8 +581,9 @@ const ProyectoVista = (() => {
     const n = (k) => k ? ` <span class="n">${k}</span>` : "";
     tb.innerHTML = `<div class="search">${ICON.search}<input id="q" type="search" value="${esc(f.q)}" placeholder="Buscar en el proyecto" aria-label="Buscar en el proyecto"></div>
       <span class="menu-wrap"><button class="pill${f.cats.size ? " on" : ""}" data-act="pop" data-key="catF" aria-haspopup="menu" aria-expanded="${S.pop === "catF"}">Categoría${n(f.cats.size)} ${ICON.chev}</button>${S.pop === "catF" ? popFilter("catF") : ""}</span>
-      ${canOrganize || (ro() && hasAreas()) ? `<span class="menu-wrap"><button class="pill${f.areas.size ? " on" : ""}" data-act="pop" data-key="org" aria-haspopup="menu" aria-expanded="${S.pop === "org"}">${hasAreas() ? "Áreas" : `Organizar<span class="long"> por áreas</span>`}${n(f.areas.size)} ${ICON.chev}</button>${S.pop === "org" ? popFilter("org") : ""}</span>` : ""}
-      ${!ro() ? `<button class="pill" data-act="select-mode" aria-pressed="${S.selecting}">${S.selecting ? "Terminar selección" : "Seleccionar"}</button>` : ""}
+      ${canOrganize && !hasAreas() ? `<button class="pill" data-act="organize">Organizar<span class="long"> por áreas</span></button>` : ""}
+      ${hasAreas() && (canOrganize || ro()) ? `<span class="menu-wrap"><button class="pill${f.areas.size ? " on" : ""}" data-act="pop" data-key="org" aria-haspopup="menu" aria-expanded="${S.pop === "org"}">Áreas${n(f.areas.size)} ${ICON.chev}</button>${S.pop === "org" ? popFilter("org") : ""}</span>` : ""}
+      ${!ro() && !S.selecting ? `<button class="pill" data-act="select-mode">Seleccionar</button>` : ""}
       ${!ro() ? `<span class="menu-wrap push"><button class="pill" data-act="pop" data-key="add" aria-haspopup="menu" aria-expanded="${S.pop === "add"}" ${failed ? "disabled" : ""}>${ICON.plus}<span>Añadir<span class="long"> productos</span></span></button>
         ${S.pop === "add" ? `<div class="pop right"><button data-act="from-selection">Desde mi selección <span class="count">${selCount}</span></button><hr><p class="h">Catálogo por categoría</p>${cats.map(c => `<a class="popitem" href="catalogo.html?categoria=${encodeURIComponent(c)}&project_id=${encodeURIComponent(pr.id)}">${esc(LABELS.categoria[c])}</a>`).join("")}<hr><a class="popitem" href="catalogo.html?project_id=${encodeURIComponent(pr.id)}">Buscar en todo el catálogo</a></div>` : ""}</span>` : ""}`;
     if (keepQ){ const q = $("#q"); q.focus({ preventScroll: true }); q.setSelectionRange(q.value.length, q.value.length); }
@@ -495,6 +594,36 @@ const ProyectoVista = (() => {
     const vis = S.lines.filter(visible).length;
     chipsBox.innerHTML = chips.length ? chips.join("") + `<span>${vis} de ${S.lines.length} líneas</span><button class="textbtn" data-act="clear-all">Limpiar filtros</button>` : "";
   }
+  /* «Desde mi selección»: panel en la página, entre las herramientas y la lista. Las mismas reglas de siempre. */
+  function renderAddPanel(){
+    const slot = $("#add-slot"); if (!slot) return;
+    const items = getSelection().filter(i => isProductAvailable(i.productId));
+    if (!S.adding || ro() || S.loadError || !items.length){ S.adding = null; slot.innerHTML = ""; return; }
+    const area = S.areas.some(a => a.id === S.adding.area) ? S.adding.area : "none";
+    slot.innerHTML = `<section class="addpanel" id="add-panel" aria-labelledby="add-title">
+      <header><h2 id="add-title" tabindex="-1">Añadir desde mi selección</h2><button class="iconbtn" data-act="add-close" aria-label="Cerrar">${ICON.close}</button></header>
+      <p class="lead">Se añadirán ${items.length} ${items.length === 1 ? "producto" : "productos"} al proyecto.</p>
+      ${hasAreas() ? `<div class="optf"><label for="sel-area">Asignar a un área (opcional):</label><select id="sel-area"><option value="none">Sin asignar</option>${S.areas.map(a => `<option value="${esc(a.id)}" ${a.id === area ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>` : ""}
+      <table class="sum"><thead><tr><th>Producto</th><th>Acabado</th><th style="text-align:right">Cantidad</th></tr></thead><tbody>${items.map(x => { const p = prod(x.productId); return `<tr><td>${esc(p ? p.nombre : x.productId)}${x.configuration ? `<br><span style="color:var(--ink-3)">${esc(MobauLineConfig.rawChoices(x.configuration) || "Configurado")}</span>` : ""}</td><td>${esc(p && x.finish ? finishLabel(p, x.finish) : "—")}</td><td class="n" style="text-align:right">${x.quantity} ${esc(x.unit)}</td></tr>`; }).join("")}</tbody></table>
+      <p class="small">Si el proyecto ya tiene el mismo producto, acabado y configuración en esa área, se suman las cantidades.</p>
+      <div class="bar"><button class="btn btn-primary" data-act="do-selection" ${S.busy ? "disabled" : ""}>Añadir al proyecto</button><button class="btn" data-act="add-close">Cancelar</button></div></section>`;
+  }
+  /* Abre el panel justo bajo la barra desde la que se pidió. Cierra la ficha para que nada se desplace por debajo; solo se
+     desplaza lo mínimo si el panel no queda a la vista. */
+  function openAddPanel(){
+    const items = getSelection().filter(i => isProductAvailable(i.productId));
+    if (!items.length){ toast("Tu selección está vacía."); render(); return; }
+    if (S.noteEdit && !leaveNote()){ render(); return; }
+    S.open = null; S.noteEdit = null; S.adding = S.adding || { area: null };
+    render();
+    const panel = $("#add-panel"); if (!panel) return;
+    const h = $("#add-title"); if (h) h.focus({ preventScroll: true });
+    const r = panel.getBoundingClientRect(), top = topH(), bottom = innerHeight - dockH();
+    if (r.top < top + 8) scrollBy(0, r.top - top - 16);
+    else if (r.bottom > bottom) scrollBy({ top: Math.min(r.bottom - bottom + 16, r.top - top - 16), behavior: reduced() ? "auto" : "smooth" });
+  }
+  function exitSelection(){ S.selecting = false; S.selected.clear(); S.pop = null; render(); }
+
   function boardSummary(lines){
     const head = productos(lines.length);
     if (!S.pricesOn) return esc(head) + ".";
@@ -521,19 +650,17 @@ const ProyectoVista = (() => {
     if (a && !ro()) menuItems.push(`<hr><button data-act="del-area" data-id="${esc(a.id)}" class="danger">Eliminar área…</button>`);
     const menu = menuItems.length ? `<span class="menu-wrap"><button class="iconbtn" data-act="pop" data-key="${esc(popKey)}" aria-haspopup="menu" aria-expanded="${S.pop === popKey}" aria-label="Acciones de ${esc(name)}">${ICON.more}</button>${S.pop === popKey ? `<div class="pop right">${menuItems.join("")}</div>` : ""}</span>` : "";
     const allSel = vis.length && vis.every(l => S.selected.has(l.id));
-    /* «Añadir aquí»: abre «Desde mi selección» con esta área ya elegida (mismo flujo y mismas validaciones). */
-    const addHere = a && !ro() && !S.selecting ? `<button class="addhere" data-act="from-selection" data-area="${esc(a.id)}" aria-label="Añadir a «${esc(a.name)}» desde mi selección">${ICON.plus}<span>Añadir aquí</span></button>` : "";
     const selAll = S.selecting && !ro() && vis.length ? `<label class="selall"><input type="checkbox" data-act="sel-area" data-key="${esc(flat ? "all" : key)}" ${allSel ? "checked" : ""}> Todo${flat ? "" : " el área"}</label>` : "";
     const sum = filtering() ? `${cap(word(vis.length))} de ${all.length} coinciden.` : boardSummary(all);
     const body = col ? `<p class="unfold"><button class="textbtn" data-act="toggle" data-key="${esc(key)}">Desplegar ${plural(all.length, "producto", "productos")}</button></p>`
       : `<ul class="grid" data-grid="${esc(key)}">${vis.map(tileHtml).join("")}</ul>`;
     return `<section class="board${col ? " collapsed" : ""}" ${flat ? "" : `data-area="${esc(key)}" id="board-${esc(key)}"`} data-board="${esc(key)}">
-      <header class="board-head"><span class="tail">${addHere}${selAll}${menu}</span><h2>${title}<span class="sum">${sum}</span>${why}</h2></header>${body}</section>`;
+      <header class="board-head"><span class="tail">${selAll}${menu}</span><h2>${title}<span class="sum">${sum}</span>${why}</h2></header>${body}</section>`;
   }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-  const areaOptionsAll = () => `<option value="none">Sin área</option>` + S.areas.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("");
   function renderList(){
     const list = $("#list");
+    detachFicha();
     if (S.loadError){
       list.innerHTML = `<div class="alert bad" role="alert"><b>${S.loadError.areasFailed ? "No pudimos cargar las áreas de este proyecto." : "No pudimos cargar las líneas de este proyecto."}</b>
         No se muestra el contenido porque podría estar incompleto, y no se permite modificar nada hasta recuperarlo. Tus datos no se han tocado.
@@ -558,9 +685,12 @@ const ProyectoVista = (() => {
     /* Selección múltiple: un modo explícito; al salir no quedan líneas seleccionadas sin verse. */
     const bulk = $("#bulk"), n = S.selected.size, on = S.selecting && !ro();
     bulk.hidden = !on;
+    /* Orden: acción → destino → (confirmación). Una sola salida: «Cancelar». */
+    const bulkMenu = (kind, label) => `<span class="menu-wrap"><button class="btn" data-act="pop" data-key="b${kind}" aria-haspopup="menu" aria-expanded="${S.pop === `b${kind}`}" ${n ? "" : "disabled"}>${label} ${ICON.chev}</button>
+      ${S.pop === `b${kind}` ? `<div class="pop up"><p class="h">${label} ${n === 1 ? "la selección" : `las ${n} seleccionadas`} a…</p>${S.areas.concat([{ id: null, name: "Sin área" }]).map(a => `<button data-act="bulk-go" data-kind="${kind === "mv" ? "move" : "copy"}" data-area="${esc(idOfTarget(a))}">${esc(a.name)}</button>`).join("")}</div>` : ""}</span>`;
     bulk.innerHTML = on ? `<span class="grow">${n ? `<b>${n} seleccionada${n > 1 ? "s" : ""}</b>` : "Toca los productos que quieras"}</span>
-      ${hasAreas() ? `<select id="bulk-area" aria-label="Área de destino">${areaOptionsAll()}</select><button class="btn" data-act="bulk-move" ${n ? "" : "disabled"}>Mover</button><button class="btn" data-act="bulk-copy" ${n ? "" : "disabled"}>Copiar</button>` : ""}
-      <button class="btn" data-act="bulk-remove" ${n ? "" : "disabled"}>Quitar del proyecto</button>${n ? `<button class="btn" data-act="bulk-clear">Deseleccionar</button>` : ""}<button class="btn btn-light" data-act="select-mode">Terminar</button>` : "";
+      ${hasAreas() ? bulkMenu("mv", "Mover") + bulkMenu("cp", "Copiar") : ""}
+      <button class="btn" data-act="bulk-remove" ${n ? "" : "disabled"}>Quitar del proyecto</button><button class="btn btn-light" data-act="sel-exit">Cancelar</button>` : "";
   }
   /* El índice y la franja marcan el área que se está leyendo. */
   let io = null;
@@ -578,9 +708,25 @@ const ProyectoVista = (() => {
     const strip = $("#strip"), on = strip.querySelector('button[aria-current="true"]');
     if (slide && on && strip.scrollWidth > strip.clientWidth) strip.scrollTo({ left: strip.scrollLeft + on.getBoundingClientRect().left - strip.getBoundingClientRect().left - 16, behavior: reduced() ? "auto" : "smooth" });
   }
+  /* El menú de una miniatura se abre hacia la izquierda; si la miniatura está en la primera columna, se alinea con su borde izquierdo. */
+  function placePops(){
+    document.querySelectorAll(".tile .pop.pm").forEach(pop => {
+      pop.style.left = ""; pop.style.right = "";
+      if (getComputedStyle(pop).position !== "absolute" || pop.getBoundingClientRect().left >= 8) return;
+      const tile = pop.closest(".tile"), wrap = pop.parentElement;
+      pop.style.right = "auto"; pop.style.left = (tile.getBoundingClientRect().left - wrap.getBoundingClientRect().left) + "px";
+    });
+  }
+  /* Todo repintado conserva la posición de lectura (la ficha abierta o la primera pieza visible). */
   function render(){
+    if (anchoring || !S.project){ paint(); return; }
+    anchored(readingTile(), paint);
+  }
+  function paint(){
+    busyMark(false);      // devuelve su estado a los controles desactivados mientras se guardaba (antes de comparar la ficha)
     $("#project-view").style.setProperty("--head-h", headH() + "px");
-    renderHeader(); renderToolbar(); renderList(); renderStrip(); renderLedger(); observe(); markCurrent(false);
+    renderHeader(); renderToolbar(); renderAddPanel(); renderList(); renderStrip(); renderLedger(); observe(); markCurrent(false);
+    placePops();
     if (S.noteEdit && S.noteEdit.focus){ const t = $(`#ne-${CSS.escape(S.noteEdit.id)}`); if (t){ t.focus({ preventScroll: true }); t.setSelectionRange(t.value.length, t.value.length); } S.noteEdit.focus = false; }
     if (S.renaming){ const r = $("#ren"); if (r && !r.dataset.done){ r.focus(); r.select(); r.dataset.done = 1; } }
   }
@@ -596,11 +742,20 @@ const ProyectoVista = (() => {
   const toast = msg => showToast(msg);
   const targetOf = v => (v === "none" || v === "null" || !v ? null : v);
   /* Ejecuta una operación del servidor con la pantalla bloqueada; al terminar (bien o mal) vuelve a leer lo guardado. */
+  /* Mientras se guarda, los controles de la ficha se desactivan en su sitio (sin repintar): así no se recrea la ficha ni el campo de cantidad. */
+  const BUSY_CONTROLS = ".dp-qty-input, #ficha [data-act='dec'], #ficha [data-act='inc'], [data-act='note-save'], [data-act='do-selection'], [data-act='info-save']";
+  function busyMark(on){
+    document.querySelectorAll(BUSY_CONTROLS).forEach(el => {
+      if (on){ el.dataset.wasDisabled = el.disabled ? "1" : ""; el.disabled = true; }
+      else if ("wasDisabled" in el.dataset){ el.disabled = el.dataset.wasDisabled === "1"; delete el.dataset.wasDisabled; }
+    });
+    const v = $("#project-view"); if (v) v.classList.toggle("is-busy", on);
+  }
   async function run(fn){
     if (S.busy) return;
-    S.busy = true; render();
+    S.busy = true; busyMark(true);       // sin repintar: la ficha y el campo de cantidad no se recrean al guardar
     try { return await fn(); }
-    finally { S.busy = false; await touchAndLoad(); }
+    finally { S.busy = false; await touchAndLoad(); busyMark(false); }   // los controles siguen desactivados hasta que se pinta lo recargado
   }
   async function touchAndLoad(touch){
     if (touch){
@@ -644,12 +799,13 @@ const ProyectoVista = (() => {
     });
   }
   async function removeLines(ids, message){
-    await run(async () => {
+    return await run(async () => {
       const { error } = await MobauProjects.removeProductsFromProject(ids);
-      if (error){ toast(MobauAreas.explain(error)); return; }
+      if (error){ toast(MobauAreas.explain(error)); return false; }
       ids.forEach(id => S.selected.delete(id));
       await MobauProjects.touchProject(S.project.id);
       toast(message);
+      return true;
     });
   }
 
@@ -685,6 +841,7 @@ const ProyectoVista = (() => {
       toast(`«${areaName(target)}»: ${parts.join(" · ") || "sin cambios"}.`);
     }
     await load();
+    return !!outcome;      // true solo si el servidor completó la operación; cancelar un conflicto o un error no cuentan
   }
   /* Pregunta, línea a línea, qué hacer con cada conflicto: devuelve { [lineId]: resolución } o null si se cancela. */
   async function resolveTransferConflicts(conflicts, target, kind){
@@ -737,18 +894,14 @@ const ProyectoVista = (() => {
       });
     });
   }
-  function organizeModal(){
-    modal("Organizar por áreas", `<p style="margin:0 0 12px;font-size:14px">Crea la primera área, por ejemplo una habitación o una zona de obra. <b>No se reparte nada automáticamente</b>: tus productos quedan en «Sin área» hasta que quieras moverlos, y puedes seguir añadiendo productos sin asignarlos.</p>
-      <div class="field47"><label for="first-area">Nombre de la primera área</label><input id="first-area" type="text" maxlength="60" placeholder="Ej. Sala, Cocina, Habitación 1" style="width:100%"></div>`,
-      `<button class="btn btn-outline" data-act="close">Cancelar</button><button class="btn btn-primary" data-act="create-first">Crear área</button>`);
-  }
-  function areasModal(){
-    modal("Gestionar áreas", `<p style="margin:0 0 10px;font-size:14px">Crea, renombra y ordena las áreas. Al eliminar un área sus líneas pasan a «Sin área»; nunca se elimina ningún producto. Si eliminas todas, el proyecto vuelve a ser una lista sencilla.</p>
+  function areasModal(focusNew){
+    modal("Gestionar áreas", `<p style="margin:0 0 10px;font-size:14px">${S.areas.length ? "" : "Agrupa tus productos por habitación o zona; es opcional. <b>No se reparte nada automáticamente</b>: tus productos quedan en «Sin área» hasta que quieras moverlos. "}Crea, renombra y ordena las áreas. Al eliminar un área sus líneas pasan a «Sin área»; nunca se elimina ningún producto. Si eliminas todas, el proyecto vuelve a ser una lista sencilla.</p>
       <div class="arealist">${S.areas.map((a, i) => `<div class="it"><input type="text" value="${esc(a.name)}" maxlength="60" data-act="area-name" data-id="${esc(a.id)}" aria-label="Nombre del área"><span style="font-size:12.5px;color:var(--ink-faint);min-width:64px">${S.lines.filter(l => l.areaId === a.id).length} líneas</span>
         <button class="iconbtn" data-act="up" data-id="${esc(a.id)}" data-keep="1" ${i === 0 ? "disabled" : ""} aria-label="Subir">↑</button><button class="iconbtn" data-act="down" data-id="${esc(a.id)}" data-keep="1" ${i === S.areas.length - 1 ? "disabled" : ""} aria-label="Bajar">↓</button>
         <button class="iconbtn" data-act="del-area" data-id="${esc(a.id)}" data-keep="1" aria-label="Eliminar" style="color:var(--danger)">🗑</button></div>`).join("")}
         <div class="it"><input type="text" id="new-area" placeholder="Nombre de la nueva área" maxlength="60"><button class="btn btn-primary" data-act="add-area" style="padding:8px 16px">Crear área</button></div></div>
         <p style="font-size:12.5px;color:var(--ink-faint);margin:10px 0 0">«Sin área» reúne lo que no está asignado, va al final y no se puede renombrar.</p>`, `<button class="btn btn-outline" data-act="close">Listo</button>`);
+    if (focusNew) setTimeout(() => { const i = $("#new-area"); if (i){ i.focus(); i.scrollIntoView({ block: "nearest" }); } }, 30);
   }
   function areaErrorText(error){
     if (error && error.code === "23505") return "Ya existe un área con ese nombre.";
@@ -897,15 +1050,6 @@ const ProyectoVista = (() => {
   }
 
   /* Desde mi selección: mismas reglas de siempre (la selección solo se limpia si todo se transfirió bien). */
-  function selectionModal(preArea){
-    const items = getSelection().filter(i => isProductAvailable(i.productId));
-    if (!items.length){ toast("Tu selección está vacía."); return; }
-    modal("Añadir desde mi selección", `<p style="margin:0 0 10px;font-size:14px">Se añadirán ${items.length} ${items.length === 1 ? "producto" : "productos"} al proyecto.</p>
-      ${hasAreas() ? `<div class="optf"><label for="sel-area">Asignar a un área (opcional):</label><select id="sel-area"><option value="none">Sin asignar</option>${S.areas.map(a => `<option value="${esc(a.id)}" ${a.id === preArea ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div>` : ""}
-      <table class="sum"><thead><tr><th>Producto</th><th>Acabado</th><th style="text-align:right">Cantidad</th></tr></thead><tbody>${items.map(s => { const p = prod(s.productId); return `<tr><td>${esc(p ? p.nombre : s.productId)}${s.configuration ? `<br><span style="color:var(--ink-faint)">${esc(MobauLineConfig.rawChoices(s.configuration) || "Configurado")}</span>` : ""}</td><td>${esc(p && s.finish ? finishLabel(p, s.finish) : "—")}</td><td class="n" style="text-align:right">${s.quantity} ${esc(s.unit)}</td></tr>`; }).join("")}</tbody></table>
-      <p style="font-size:12.5px;color:var(--ink-faint);margin:10px 0 0">Si el proyecto ya tiene el mismo producto, acabado y configuración en esa área, se suman las cantidades.</p>`,
-      `<button class="btn btn-outline" data-act="close">Cancelar</button><button class="btn btn-primary" data-act="do-selection">Añadir al proyecto</button>`);
-  }
   async function selectionDo(){
     if (S.busy) return;
     const all = getSelection(), items = all.filter(i => isProductAvailable(i.productId));
@@ -913,12 +1057,12 @@ const ProyectoVista = (() => {
     S.busy = true;
     const { failedCount, totalCount } = await MobauProjects.transferSelectionToProject(S.project.id, items, "sum", target);
     S.busy = false;
-    closeModal();
     if (failedCount > 0){
       toast(`Se añadieron ${totalCount - failedCount} de ${totalCount} productos. Tu selección no se modificó: vuelve a intentarlo.`);
     } else {
       clearSelection();
       if (typeof updateSelectionBadge === "function") updateSelectionBadge();
+      S.adding = null;
       toast(`${plural(totalCount, "producto añadido", "productos añadidos")}${target ? ` en «${areaName(target)}»` : ""}.`);
     }
     await load();
@@ -953,8 +1097,13 @@ const ProyectoVista = (() => {
       case "close": closeModal(); break;
       case "open": openLine(id); break;
       case "close-ficha": closeFicha(); break;
+      case "pm-step": S.pop = pmKey(t.dataset.where, id, t.dataset.step); render(); break;
+      case "pm-back": S.pop = pmKey(t.dataset.where, id); render(); break;
+      case "cat-toggle": S.catOpen = !S.catOpen; render(); break;
+      case "fc-only": { const v = t.dataset.v; S.filters.cats = (S.filters.cats.size === 1 && S.filters.cats.has(v)) ? new Set() : new Set([v]); render(); ensureResultVisible(); break; }
       case "pick": S.selected.has(id) ? S.selected.delete(id) : S.selected.add(id); render(); { const b = tileEl(id); if (b) b.querySelector(".tile-btn").focus({ preventScroll: true }); } break;
-      case "select-mode": S.selecting = !S.selecting; S.selected.clear(); S.open = null; S.noteEdit = null; S.pop = null; render(); break;
+      case "select-mode": if (!leaveNote()) break; S.selecting = true; S.selected.clear(); S.open = null; S.pop = null; render(); break;
+      case "sel-exit": exitSelection(); break;
       case "goto": { if (S.pop){ S.pop = null; renderDock(); } const b = document.getElementById("board-" + t.dataset.board); if (b) b.scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }); break; }
       case "to-ledger": $("#ledger").scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }); break;
       case "pop": S.pop = S.pop === t.dataset.key ? null : t.dataset.key; render(); break;
@@ -967,10 +1116,8 @@ const ProyectoVista = (() => {
       case "expand-all": S.collapsed.clear(); S.pop = null; render(); break;
       case "sel": t.checked ? S.selected.add(id) : S.selected.delete(id); render(); break;
       case "sel-area": { const k = t.dataset.key; S.lines.filter(l => (k === "all" || (l.areaId || "none") === k) && visible(l)).forEach(l => (t.checked ? S.selected.add(l.id) : S.selected.delete(l.id))); render(); break; }
-      case "bulk-clear": S.selected.clear(); render(); break;
-      case "bulk-remove": { const n = S.selected.size; if (confirm(n === 1 ? "¿Quitar este producto del proyecto?" : `¿Quitar estos ${n} productos del proyecto?`)) removeLines([...S.selected], n === 1 ? "Producto quitado del proyecto." : "Productos quitados del proyecto."); break; }
-      case "bulk-move": transfer([...S.selected], targetOf($("#bulk-area").value), "move"); break;
-      case "bulk-copy": transfer([...S.selected], targetOf($("#bulk-area").value), "copy"); break;
+      case "bulk-remove": { const n = S.selected.size; if (confirm(n === 1 ? "¿Quitar este producto del proyecto?" : `¿Quitar estos ${n} productos del proyecto?`)) removeLines([...S.selected], n === 1 ? "Producto quitado del proyecto." : "Productos quitados del proyecto.").then(ok => { if (ok) exitSelection(); }); break; }
+      case "bulk-go": { const ids = [...S.selected]; S.pop = null; render(); transfer(ids, targetOf(t.dataset.area), t.dataset.kind).then(ok => { if (ok) exitSelection(); }); break; }
       case "note": S.pop = null; if (S.noteEdit && S.noteEdit.id === id){ render(); break; } if (!leaveNote()) break; S.open = id; S.noteEdit = { id, draft: lineById(id).note || "", focus: true, status: "" }; keepPlace(render); break;
       case "note-save": saveNote(lineById(id)); break;
       case "note-cancel": if (dirtyNote() && !confirm("Tienes una nota editada sin guardar. ¿Descartar los cambios?")) break; S.noteEdit = null; render(); break;
@@ -994,10 +1141,10 @@ const ProyectoVista = (() => {
       case "reactivate": reactivate(); break;
       case "retry": load(); break;
       case "areas": S.pop = null; render(); areasModal(); break;
-      case "organize": S.pop = null; render(); organizeModal(); break;
-      case "create-first": createArea($("#first-area").value, () => { closeModal(); toast("Área creada. Tus productos siguen en «Sin área» hasta que los muevas."); }); break;
-      case "add-area": createArea($("#new-area").value, () => areasModal()); break;
-      case "from-selection": S.pop = null; render(); selectionModal(t.dataset.area || null); break;
+      case "areas-new": case "organize": S.pop = null; render(); areasModal(true); break;
+      case "add-area": { const nm = $("#new-area").value.trim(); createArea(nm, () => { toast(S.areas.length === 1 ? "Área creada. Tus productos siguen en «Sin área» hasta que los muevas." : `Área «${nm}» creada.`); areasModal(true); }); break; }
+      case "from-selection": S.pop = null; openAddPanel(); break;
+      case "add-close": S.adding = null; render(); break;
       case "do-selection": selectionDo(); break;
       case "rfq": if (!t.disabled) window.location.href = `proyectos-cotizacion.html?id=${encodeURIComponent(S.project.id)}`; break;
     }
@@ -1006,6 +1153,7 @@ const ProyectoVista = (() => {
     if (!S.project) return;
     const t = e.target, act = t.dataset && t.dataset.act;
     if (act === "qty"){ const l = lineById(t.dataset.id); if (l) saveQty(l, t.value); }
+    else if (t.id === "sel-area" && S.adding) S.adding.area = t.value;
     else if (act === "area-name"){ const a = S.areas.find(x => x.id === t.dataset.id); renameArea(t.dataset.id, t.value).then(() => { if (a) areasModal(); }); }
   });
   let qTimer = null;
@@ -1027,9 +1175,8 @@ const ProyectoVista = (() => {
     if (t.id === "ren"){
       if (e.key === "Enter"){ const id = t.dataset.id, v = t.value; S.renaming = null; renameArea(id, v); }
       else if (e.key === "Escape"){ S.renaming = null; render(); }
-    } else if (t.id === "first-area" && e.key === "Enter"){ const b = document.querySelector('[data-act="create-first"]'); if (b) b.click(); }
-    else if (t.id === "new-area" && e.key === "Enter"){ const b = document.querySelector('[data-act="add-area"]'); if (b) b.click(); }
-    else if (e.key === "Escape"){ if ($("#modal-root").innerHTML) closeModal(); else if (S.pop){ S.pop = null; render(); } else if (S.open) closeFicha(); }
+    } else if (t.id === "new-area" && e.key === "Enter"){ const b = document.querySelector('[data-act="add-area"]'); if (b) b.click(); }
+    else if (e.key === "Escape"){ if ($("#modal-root").innerHTML) closeModal(); else if (S.pop){ S.pop = null; render(); } else if (S.open) closeFicha(); else if (S.adding){ S.adding = null; render(); } else if (S.selecting) exitSelection(); }
   });
   document.addEventListener("blur", e => {
     if (S.project && e.target.id === "ren" && S.renaming){ const id = e.target.dataset.id, v = e.target.value; S.renaming = null; renameArea(id, v); }

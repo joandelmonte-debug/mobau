@@ -115,7 +115,8 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
       [writes().filter(x => x[0] === "project_products"), [qty("l-sin"), qty("l-a"), qty("l-b")], total(), rowText("l-a").includes("Fuente: Módulo LED (consulta 2)")],
       [[["project_products", "update", ["l-b"], { quantity: 2 }]], ["2", "3", "2"], "US$ 840.00", true]);
 
-    await click(await inFicha("l-a", '[data-act="remove"]'), 800);
+    await click(await inFicha("l-a", '[data-act="pop"][data-key^="pm:f:"]'), 250);
+    await click(d().querySelector('#ficha [data-act="remove"]'), 800);
     check("D3 quitar A: quedan las demás; importe actualizado; ya no hay líneas parciales (B no tiene componentes aparte)",
       [writes().slice(-1)[0], rowIds(), total(), summaryText().includes("0 parciales")], [["project_products", "delete", ["l-a"], null], ["l-sin", "l-b", "l-cot"], "US$ 480.00", true]);
 
@@ -169,7 +170,8 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
     await openCfg("l-x");
     check("D10 pendiente: el motivo en la línea y el importe lo cuenta aparte, fuera del importe calculable",
       [rowText("l-x").includes("Pendiente"), rowText("l-x").includes("Una opción elegida en «Fuente» ya no está disponible."), summaryText().includes("1 con configuración pendiente"), rowText("l-x").includes("Sin importe")], [true, true, true, true]);
-    await click(await inFicha("l-x", '[data-act="remove"]'), 800);
+    await click(await inFicha("l-x", '[data-act="pop"][data-key^="pm:f:"]'), 250);
+    await click(d().querySelector('#ficha [data-act="remove"]'), 800);
     check("D10b quitar la línea pendiente: desaparece del recuento de pendientes",
       [rowIds().includes("l-x"), summaryText().includes("0 con configuración pendiente")], [false, true]);
 

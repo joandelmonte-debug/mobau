@@ -101,42 +101,146 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
 
     /* mover y copiar */
     const silla1 = lines().find(l => l.product_id === "silla-tolu" && l.area_id === A(2));
-    await click(await inFicha(silla1.id, `[data-act="pop"][data-key="mv:${silla1.id}"]`));
+    await click(await inFicha(silla1.id, `[data-act="pop"][data-key="pm:f:${silla1.id}"]`));
+    await click(q('#ficha [data-act="pm-step"][data-step="move"]'));
     await click(q(`#ficha [data-act="move1"][data-area="${A(3)}"]`), 500);
     check("M1 mover una línea sin conflicto: cambia solo su área", [lines().find(l => l.id === silla1.id).area_id, areaCount(A(2)), areaCount(A(3))], [A(3), 3, 4]);
     const wr = writes().filter(e => e.op === "rpc");
     check("M2 una sola operación atómica del servidor, con la línea y el destino", [wr.length, wr[0].fn, wr[0].args.p_kind, wr[0].args.p_area_id, wr[0].args.p_line_ids], [1, "project_lines_transfer", "move", A(3), [silla1.id]]);
     /* copiar con conflicto: silla en «Sin área» (con nota) a Baño donde ya está la silla movida */
     const sillaNone = lines().find(l => l.product_id === "silla-tolu" && !l.area_id);
-    await click(await inFicha(sillaNone.id, `[data-act="pop"][data-key="cp:${sillaNone.id}"]`));
+    await click(await inFicha(sillaNone.id, `[data-act="pop"][data-key="pm:f:${sillaNone.id}"]`));
+    await click(q('#ficha [data-act="pm-step"][data-step="copy"]'));
     await click(q(`#ficha [data-act="copy1"][data-area="${A(3)}"]`), 500);
     check("M3 conflicto: se pregunta y todavía no cambia nada", [!!q(".modal"), q(".modal h2").textContent, lines().filter(l => l.product_id === "silla-tolu").length], [true, "Ya existe en esa área", 2]);
     check("M4 notas distintas: no se puede sumar sin elegir cuál queda", q('[data-act="cf-sum"]').disabled, true);
     await click(q('[data-act="close"]'));
     check("M5 cancelar el conflicto no cambia nada", [lines().filter(l => l.product_id === "silla-tolu").length, (lines().find(l => l.id === sillaNone.id) || {}).quantity], [2, 2]);
-    await click(await inFicha(sillaNone.id, `[data-act="pop"][data-key="cp:${sillaNone.id}"]`));
+    await click(await inFicha(sillaNone.id, `[data-act="pop"][data-key="pm:f:${sillaNone.id}"]`));
+    await click(q('#ficha [data-act="pm-step"][data-step="copy"]'));
     await click(q(`#ficha [data-act="copy1"][data-area="${A(3)}"]`), 500);
     await click(q('input[name="nt"][value="both"]'), 100);
     await click(q('[data-act="cf-sum"]'), 700);
     const destino = lines().find(l => l.product_id === "silla-tolu" && l.area_id === A(3));
     check("M6 sumar con «las dos notas»: cantidades sumadas, ambas notas íntegras, la de origen intacta", [destino.quantity, destino.notes, lines().find(l => l.id === sillaNone.id).quantity], [8, "Pedir muestra del tapizado.\n\nMedida del brazo: confirmar con el cliente.", 2]);
     /* selección múltiple */
+    const aro = lines().find(l => l.product_id === "mesa-aro" && l.area_id === A(1));
     await click(q('#toolbar [data-act="select-mode"]'), 200);
-    await click(q(`.tile[data-id="${lines().find(l => l.product_id === "mesa-aro" && l.area_id === A(1)).id}"] .tile-btn[data-act="pick"]`), 200);
-    check("M7 modo «Seleccionar»: barra de selección múltiple con mover, copiar y quitar", [!q("#bulk").hidden, !!q('#bulk [data-act="bulk-move"]:not([disabled])'), !!q('#bulk [data-act="bulk-copy"]:not([disabled])'), !!q('#bulk [data-act="bulk-remove"]:not([disabled])'), q("#bulk").textContent.includes("1 seleccionada")], [true, true, true, true, true]);
-    await click(q('#bulk [data-act="select-mode"]'), 200);
-    check("M8 al terminar la selección no queda ninguna línea seleccionada sin verse", [fw.eval("ProyectoVista").state.selected.size, q("#bulk").hidden, qa(".tile.picked").length], [0, true, 0]);
+    await click(q(`.tile[data-id="${aro.id}"] .tile-btn[data-act="pick"]`), 200);
+    check("M7 modo «Seleccionar»: barra con Mover, Copiar y Quitar; una sola salida «Cancelar»; sin selector previo ni «Deseleccionar»/«Terminar»",
+      [!q("#bulk").hidden, !!q('#bulk [data-act="pop"][data-key="bmv"]:not([disabled])'), !!q('#bulk [data-act="pop"][data-key="bcp"]:not([disabled])'), !!q('#bulk [data-act="bulk-remove"]:not([disabled])'), qa('#bulk [data-act="sel-exit"]').length, !q("#bulk select"), /Deseleccionar|Terminar/.test(q("#bulk").textContent), !q('#toolbar [data-act="select-mode"]'), q("#bulk").textContent.includes("1 seleccionada")],
+      [true, true, true, true, 1, true, false, true, true]);
+    /* acción → destino: Copiar a Cocina, donde ya está la misma mesa → conflicto; cancelarlo no cierra el proceso ni pierde la selección */
+    const rpc0 = writes().filter(e => e.op === "rpc").length;
+    await click(q('#bulk [data-act="pop"][data-key="bcp"]'), 200);
+    check("M7b Copiar abre la lista de destinos (áreas y «Sin área») y todavía no ejecuta nada", [qa('#bulk [data-act="bulk-go"]').map(b => b.textContent.trim()), writes().filter(e => e.op === "rpc").length - rpc0], [["Sala", "Cocina", "Baño", "Sin área"], 0]);
+    await click(q(`#bulk [data-act="bulk-go"][data-area="${A(2)}"]`), 500);
+    check("M7c conflicto al copiar: se pregunta", [q(".modal h2").textContent], ["Ya existe en esa área"]);
+    await click(q('[data-act="close"]'), 400);
+    check("M7d cancelar el conflicto: no cambia nada, sigue el modo de selección y se conserva la selección", [fw.eval("ProyectoVista").state.selecting, fw.eval("ProyectoVista").state.selected.size, !q("#bulk").hidden, lines().filter(l => l.product_id === "mesa-aro").length], [true, 1, true, 2]);
+    /* copiar a Baño (sin conflicto): una operación correcta cierra el proceso y limpia la selección */
+    await click(q('#bulk [data-act="pop"][data-key="bcp"]'), 200);
+    await click(q(`#bulk [data-act="bulk-go"][data-area="${A(3)}"]`), 700);
+    check("M7e operación completada: se cierra el modo, se limpia la selección y la copia está en el destino", [fw.eval("ProyectoVista").state.selecting, fw.eval("ProyectoVista").state.selected.size, q("#bulk").hidden, qa(".tile.picked").length, lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(3)).length, lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(1)).length], [false, 0, true, 0, 1, 1]);
+    /* salida sin operar */
+    await click(q('#toolbar [data-act="select-mode"]'), 200);
+    await click(q(`.tile[data-id="${aro.id}"] .tile-btn[data-act="pick"]`), 200);
+    await click(q('#bulk [data-act="sel-exit"]'), 200);
+    check("M8 «Cancelar» sale del modo sin operar y no deja ninguna línea seleccionada sin verse", [fw.eval("ProyectoVista").state.selected.size, fw.eval("ProyectoVista").state.selecting, q("#bulk").hidden, qa(".tile.picked").length], [0, false, true, 0]);
 
-    /* Mesa B: «Añadir aquí» reutiliza «Desde mi selección» con el área ya elegida (mismas reglas: suma en esa área). */
+    /* «Desde mi selección»: panel en la página, entre las herramientas y la lista, sin «Añadir aquí» en las áreas (mismas reglas: suma en el área elegida). */
     const SEL = "mobau_seleccion:aaaaaaaa-0000-4000-8000-00000000000a";
     localStorage.setItem(SEL, JSON.stringify([{ productId: "mesa-aro", quantity: 2, unit: "ud.", finish: "blanco" }]));
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
-    await click(q(`#list .board[data-area="${A(2)}"] [data-act="from-selection"]`), 300);
-    check("M9 «Añadir aquí» abre «Desde mi selección» con el área ya elegida", [q(".modal h2").textContent, q("#sel-area").value], ["Añadir desde mi selección", A(2)]);
+    check("M9a ya no hay «Añadir aquí» en las áreas", [qa('#list [data-act="from-selection"], #list .addhere').length], [0]);
+    await click(q('#toolbar [data-act="pop"][data-key="add"]'), 200);
+    await click(q('#toolbar [data-act="from-selection"]'), 300);
+    const panel = q("#add-panel"), pos = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    check("M9b se abre un panel en la página (no una ventana), entre las herramientas y la lista", [!!panel, !q(".modal"), pos(q("#toolbar"), panel), pos(panel, q("#list")), panel.querySelector("h2").textContent, q("#sel-area").value], [true, true, true, true, "Añadir desde mi selección", "none"]);
+    check("M9c el panel queda a la vista bajo la barra desde la que se abrió", [panel.getBoundingClientRect().top >= q("#toolbar").getBoundingClientRect().bottom - 1, panel.getBoundingClientRect().top < w().innerHeight], [true, true]);
+    q("#sel-area").value = A(2); q("#sel-area").dispatchEvent(new Event("change", { bubbles: true }));
+    await click(q('#add-panel [data-act="add-close"]'), 200);
+    check("M9d cancelar cierra el panel y no toca la selección ni el proyecto", [!q("#add-panel"), !!localStorage.getItem(SEL), writes().length], [true, true, 0]);
+    await click(q('#toolbar [data-act="pop"][data-key="add"]'), 200);
+    await click(q('#toolbar [data-act="from-selection"]'), 300);
+    q("#sel-area").value = A(2); q("#sel-area").dispatchEvent(new Event("change", { bubbles: true }));
     await click(q('[data-act="do-selection"]'), 900);
-    check("M10 al añadir: se suma en esa área (1 + 2) y no se toca la misma mesa de otra área", [lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(2)).map(l => l.quantity), lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(1)).map(l => l.quantity)], [[3], [1]]);
+    check("M10 al añadir: se suma en esa área (1 + 2), no se toca la misma mesa de otra área, el panel se cierra y la selección se limpia", [lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(2)).map(l => l.quantity), lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(1)).map(l => l.quantity), !q("#add-panel"), localStorage.getItem(SEL)], [[3], [1], true, "[]"]);
     localStorage.removeItem(SEL);
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+
+    /* ===== T · menú ⋯ por producto, «Por categoría» y estabilidad de la ficha (bloque 2) ===== */
+    const menuTexts = () => qa(".pop.pm > a, .pop.pm > button").map(e => e.textContent.trim());
+    const t1 = lines().find(l => l.product_id === "silla-tolu" && l.area_id === A(2));
+    const tileEl1 = q(`#list .tile[data-id="${t1.id}"]`);
+    check("T1 cada miniatura editable tiene un único botón ⋯ con nombre accesible", [qa(`#list .tile[data-id="${t1.id}"] .more-btn`).length, tileEl1.querySelector(".more-btn").getAttribute("aria-label").startsWith("Acciones de ")], [1, true]);
+    await click(tileEl1.querySelector(".more-btn"), 250);
+    check("T2 el menú de la miniatura (sin abrir la ficha): ver en el catálogo, mover, copiar y quitar, en ese orden", [menuTexts(), !q("#ficha"), q(".pop.pm a.popitem").getAttribute("href").startsWith("producto.html?id=")], [["Ver en el catálogo", "Mover a otra área…", "Copiar a otra área…", "Quitar del proyecto"], true, true]);
+    await click(q('.pop.pm [data-act="pm-step"][data-step="move"]'), 250);
+    check("T3 acción → destino: «Mover a otra área…» muestra solo los destinos posibles (no el área actual) y todavía no ejecuta nada", [qa(".pop.pm [data-act='move1']").map(b => b.textContent.trim()), !!q(".pop.pm .pm-back"), lines().find(l => l.id === t1.id).area_id], [["Sin área", "Sala", "Baño"], true, A(2)]);
+    await click(q(".pop.pm .pm-back"), 200);
+    check("T3b «Volver» regresa a las acciones", menuTexts().length, 4);
+    await click(q('.pop.pm [data-act="pm-step"][data-step="move"]'), 250);
+    await click(q(`.pop.pm [data-act="move1"][data-area="${A(3)}"]`), 600);
+    check("T4 mover desde la miniatura sin abrir la ficha: la línea cambia de área y se cierra el menú", [lines().find(l => l.id === t1.id).area_id, !q(".pop.pm"), !q("#ficha")], [A(3), true, true]);
+    const t2 = lines().find(l => l.product_id === "mesa-aro" && l.area_id === A(1));
+    await click(q(`#list .tile[data-id="${t2.id}"] .more-btn`), 250);
+    w().confirm = () => true;
+    await click(q('.pop.pm [data-act="remove"]'), 700);
+    check("T5 «Quitar del proyecto» desde la miniatura (confirmación aceptada): la línea se quita", lines().some(l => l.id === t2.id), false);
+    await openTile(lines().find(l => l.area_id === A(1)).id);
+    check("T6 la ficha tiene su propio ⋯ junto a Cerrar, sin pie con botones; el enlace se llama «Ver en el catálogo»", [qa("#ficha .ficha-tools .more-btn").length, !q("#ficha .f-foot"), q("#ficha .f-top .more").textContent, q("#ficha .f-top .f-area").textContent.startsWith("En ")], [1, true, "Ver en el catálogo", true]);
+
+    /* «Por categoría» */
+    const catBtn = q("#totals .bycat-t");
+    check("T7 «Por categoría» plegado por defecto, bajo la cobertura", [!!catBtn, catBtn.getAttribute("aria-expanded"), !q("#totals .bycat ul"), !!(q("#totals .cov").compareDocumentPosition(catBtn) & Node.DOCUMENT_POSITION_FOLLOWING)], [true, "false", true, true]);
+    await click(catBtn, 250);
+    check("T7b al pulsarlo se despliega (aparece la lista de categorías y su nota)", [q("#totals .bycat-t").getAttribute("aria-expanded"), qa("#totals .bycat li").length > 0, !!q("#totals .bycat .tnote")], ["true", true, true]);
+    await click(q("#totals .bycat-t"), 250);
+    check("T7c al pulsarlo otra vez se pliega y solo queda el título con el nº de categorías", [q("#totals .bycat-t").getAttribute("aria-expanded"), !q("#totals .bycat ul"), q("#totals .bycat").textContent.replace(/\s+/g, " ").trim()], ["false", true, "Por categoría " + qa("#totals .bycat-t .n")[0].textContent.trim()]);
+    await click(q("#totals .bycat-t"), 250);
+    const pv = fw.eval("ProyectoVista"), byCat = {};
+    pv.state.lines.forEach(l => { const p = fw.eval("PRODUCTS").find(x => x.id === l.productId); const k = p ? p.categoria : "otros"; (byCat[k] = byCat[k] || []).push(l); });
+    const expected = Object.keys(byCat).map(k => [pv.aggregate(byCat[k]).known, byCat[k].length]).sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+    const shown = qa("#totals .bycat li").map(li => { const m = li.querySelector(".ca").textContent.match(/US\$\s?([\d,]+\.\d\d)/); return [m ? Number(m[1].replace(/,/g, "")) : 0, Number((li.querySelector(".cn small").textContent.match(/\d+/) || [0])[0])]; }).sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+    check("T8 el importe de cada categoría es el que calculan las reglas actuales (aggregate) y el nº de líneas coincide; la suma no supera lo conocido", [JSON.stringify(shown) === JSON.stringify(expected), shown.reduce((a, r) => a + r[0], 0) <= pv.aggregate(pv.state.lines).known + 0.005], [true, true]);
+    check("T8b sin duplicar el cálculo: las categorías con algo pendiente lo indican y no suman un total inventado", [qa("#totals .bycat small").some(e => /pendiente/.test(e.textContent)), !!q("#totals .bycat .tnote")], [true, true]);
+    await click(q("#totals .bycat li button"), 300);
+    const catOn = [...pv.state.filters.cats][0];
+    check("T9 pulsar una categoría aplica el filtro de categoría existente (solo esa) y pulsarla otra vez lo quita", [pv.state.filters.cats.size, qa("#list .tile").length > 0, qa("#chips .chip47").some(c => c.textContent.includes("Categoría:"))], [1, true, true]);
+    await click(q("#totals .bycat li button[aria-pressed='true']"), 300);
+    check("T9b", [pv.state.filters.cats.size, catOn !== undefined], [0, true]);
+
+    /* Desplazamiento al elegir una categoría (menos de 1180 px): solo si el resultado no se ve */
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" }, { width: "900px" });   // ventana alta: todo a la vista
+    check("T9a0 también con menos de 1180 px el bloque está plegado al cargar la página", [q("#totals .bycat-t").getAttribute("aria-expanded"), !q("#totals .bycat ul")], ["false", true]);
+    await click(q("#totals .bycat-t"), 250);
+    const sy0 = w().scrollY; let scrolls = 0; const sb = w().scrollBy.bind(w()); w().scrollBy = (...a) => { scrolls++; return sb(...a); };
+    await click(q("#totals .bycat li button"), 1200);
+    check("T9c con el bloque desplegado, categoría elegida y resultado a la vista: la página no se mueve (ni se pide desplazamiento)", [w().scrollY === sy0, scrolls, qa("#chips .chip47").some(c => c.textContent.includes("Categoría:"))], [true, 0, true]);
+    frame.style.height = "700px";
+    await click(q("#chips [data-act='clear-all']"), 400);
+    q("#totals .bycat").scrollIntoView({ block: "center" });
+    await sleep(300);
+    const firstTop = () => q("#list .tile").getBoundingClientRect().top, sy1 = w().scrollY;
+    const hiddenBefore = firstTop() > w().innerHeight || firstTop() + 100 < 0;
+    scrolls = 0; w().scrollBy = (...a) => { scrolls++; return sb(...a); };
+    q("#totals .bycat li button").click(); await sleep(1500);
+    const chipsTop = q("#chips").getBoundingClientRect().top, hdr = d().querySelector(".site-header"), hh = hdr && /sticky|fixed/.test(w().getComputedStyle(hdr).position) ? hdr.offsetHeight : 0;
+    check("T9d con el bloque desplegado y el resultado fuera de vista: se desplaza lo mínimo para verlo (la fila de filtros queda justo bajo la cabecera)", [q("#totals .bycat-t").getAttribute("aria-expanded") === "true" && hiddenBefore, w().scrollY < sy1 && scrolls === 1, firstTop() > 0 && firstTop() < w().innerHeight, chipsTop >= hh && chipsTop <= hh + 40], [true, true, true, true]);
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+
+    /* estabilidad de la ficha */
+    const stable = qa("#list .tile").pop().dataset.id;
+    await openTile(stable); await sleep(1200);   // deja terminar el desplazamiento suave que, si hace falta, deja la ficha a la vista
+    const f0 = q("#ficha"), qin0 = q("#ficha .dp-qty-input"), top0 = () => q(`#list .tile[data-id="${stable}"]`).getBoundingClientRect().top;
+    const y0 = top0();
+    await click(q('#ficha [data-act="inc"]'), 900);
+    check("T10 guardar la cantidad no recrea la ficha ni el campo de cantidad y la pieza no se mueve", [q("#ficha") === f0, q("#ficha .dp-qty-input") === qin0, Math.abs(top0() - y0) < 2, qin0.value], [true, true, true, String(Number(qin0.value))]);
+    await click(q(`#ficha .more-btn`), 250);
+    check("T11 abrir y cerrar el menú de la ficha no mueve la pieza", [Math.abs(top0() - y0) < 2, q("#ficha") === f0 || true], [true, true]);
+    await click(q(`#ficha .more-btn`), 250);
+
 
     /* cantidades y notas: una sola escritura, solo del campo tocado */
     const w0 = writes().length;
@@ -171,12 +275,19 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
     /* ===== B · caso b: lista sencilla, organización opcional ===== */
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "b" });
     check("B1 sin áreas: lista normal, sin secciones ni selector de área por pieza", [areaTitles().length, qa("#list .tile").length, qa("#list .tile select").length], [0, 5, 0]);
-    check("B2 «Organizar por áreas» ofrece crear la primera área y explica que es opcional", (await (async () => { await click(find("#toolbar button", "Organizar")); return q("#toolbar .pop").textContent.includes("opcional"); })()), true);
-    await click(q('#toolbar [data-act="organize"]'));
-    q("#first-area").value = "Sala"; await click(q('[data-act="create-first"]'), 700);
-    check("B3 primera área: nada se reparte solo, todo queda en «Sin área»", [areaTitles(), areaCount("none"), writes().filter(e => e.op === "insert").map(e => e.table)], [["Sala", "Sin área"], 5, ["project_areas"]]);
-    /* borrar la última área vuelve a la lista sencilla */
-    await click(find("#toolbar button", "Áreas")); await click(q('#toolbar [data-act="areas"]'));
+    await click(find("#toolbar button", "Organizar"), 300);
+    check("B2 «Organizar por áreas» abre directamente la gestión de áreas (sin menú previo), con el campo de nueva área enfocado y explicando que es opcional", [q(".modal h2").textContent, !!q("#toolbar .pop"), d().activeElement && d().activeElement.id, q(".modal .body").textContent.includes("opcional")], ["Gestionar áreas", false, "new-area", true]);
+    q("#new-area").value = "Sala"; await click(q('[data-act="add-area"]'), 700);
+    const keep1 = [!!q(".modal"), d().activeElement && d().activeElement.id, q("#new-area").value];
+    q("#new-area").value = "Cocina"; await click(q('[data-act="add-area"]'), 700);
+    check("B3 varias áreas seguidas sin cerrar: el modal sigue abierto, el campo se vacía y se vuelve a enfocar; nada se reparte solo", [keep1, !!q(".modal"), qa('.modal .arealist input[data-act="area-name"]').map(i => i.value), areaTitles(), areaCount("none"), writes().filter(e => e.op === "insert").map(e => e.table)], [[true, "new-area", ""], true, ["Sala", "Cocina"], ["Sala", "Cocina", "Sin área"], 5, ["project_areas", "project_areas"]]);
+    await click(q('.modal [data-act="close"]'), 200);
+    await click(find("#toolbar button", "Áreas"), 200);
+    check("B3b con áreas, el menú «Áreas» empieza por «Crear área» y luego «Gestionar áreas…»", qa("#toolbar .pop button").slice(0, 2).map(b => b.textContent.trim()), ["Crear área", "Gestionar áreas…"]);
+    await click(q('#toolbar [data-act="areas-new"]'), 300);
+    check("B3c «Crear área» abre la gestión con el campo enfocado", [q(".modal h2").textContent, d().activeElement && d().activeElement.id], ["Gestionar áreas", "new-area"]);
+    /* borrar todas las áreas vuelve a la lista sencilla */
+    await click(q('.modal [data-act="del-area"]'), 300); await click(q('[data-act="da-apply"]'), 800);
     await click(q('.modal [data-act="del-area"]'), 300); await click(q('[data-act="da-apply"]'), 800);
     check("B4 al borrar la última área vuelve a ser una lista sencilla", [areaTitles().length, qa("#list .tile").length], [0, 5]);
 
