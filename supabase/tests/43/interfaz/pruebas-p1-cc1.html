@@ -147,7 +147,7 @@ const catCase = (name, qs, exp) => add("Catálogo", name, async () => {
   const o = catalogo();
   const ok = o.cards === 5 && o.pub === exp.pub && o.pubTax === !!exp.tax && (exp.sin === undefined || o.sin === exp.sin)
     && o.add === exp.add && o.proj === exp.add && o.ro === (exp.add ? 0 : 5) && o.filter === exp.filter
-    && (exp.calls ? o.calls > 0 : o.calls === 0) && o.sort === "relevancia,nombre,marca" && o.errors.length === 0;
+    && (exp.calls ? o.calls > 0 : o.calls === 0) && o.sort === "relevancia,recientes,nombre,marca" && o.errors.length === 0;
   return { ok, got: o };
 });
 catCase("Sin sesión", "rol=anon", { pub: T.cardPlan, sin: T.cardPlan, add: 0, filter: false, calls: false });
