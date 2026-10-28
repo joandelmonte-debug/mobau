@@ -29,12 +29,26 @@ const SUPABASE_ANON_KEY = "sb_publishable_NCxP_LqiNJCKv3yrpi33fg_osKCmQIL"; // c
    real, que sigue viviendo en Supabase. */
 const SUPABASE_SESSION_STORAGE_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
 
+/* Punto 47: esta versión de la web sabe trabajar con proyectos organizados por áreas y lo declara en cada
+   petición a la API de datos (/rest/v1/) con la cabecera x-mobau-areas. Una pestaña con la web anterior no la
+   envía: si el proyecto ya tiene áreas, el servidor rechaza sus cambios sobre las líneas (trigger
+   project_products_areas_guard) en vez de aplicarlos al área equivocada. Solo en /rest/v1/: ni la sesión ni el
+   almacenamiento reciben una cabecera que no necesitan. */
+function mobauDataFetch(input, init){
+  const url = typeof input === "string" ? input : ((input && input.url) || "");
+  if (!url.includes("/rest/v1/")) return fetch(input, init);
+  const headers = new Headers((init && init.headers) || (input && input.headers) || undefined);
+  headers.set("x-mobau-areas", "1");
+  return fetch(input, Object.assign({}, init, { headers }));
+}
+
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,     // guarda la sesión en localStorage del navegador
     autoRefreshToken: true,   // renueva el token antes de que caduque
     detectSessionInUrl: true  // lee el token que llega en la URL del enlace mágico
-  }
+  },
+  global: { fetch: mobauDataFetch }
 });
 
 /* Lista blanca de destinos permitidos tras el enlace mágico — nunca se

@@ -41,6 +41,8 @@ producto-archivos.js
 producto.html
 proyecto.html
 proyectos-cotizacion.html
+proyecto-importes.js
+proyecto-vista.js
 proyectos-data.js
 proyectos-detalle.html
 proyectos-nuevo.html

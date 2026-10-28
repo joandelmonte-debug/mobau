@@ -241,42 +241,9 @@
           const goingToArchived = btn.dataset.status === "active";
 
           if (goingToArchived){
-            /* Decisión basada en el conteo real de project_products,
-               nunca en el chip visible de la tarjeta. */
-            const rows = await MobauProjects.listProductsInProject(id);
-
-            if (!rows.length){
-              const confirmDelete = confirm("Este proyecto no tiene productos seleccionados. Si continúas, el proyecto se eliminará de forma permanente. ¿Quieres eliminarlo?");
-              if (!confirmDelete) return; // no se toca nada: sigue activo en Activos
-
-              btn.disabled = true;
-
-              /* deleteProject() solo permite eliminar proyectos con
-                 status "archived" (política RLS existente, no se toca
-                 aquí) — se archiva primero y, si eso funciona de verdad,
-                 se elimina justo después. Nunca se llama a setStatus
-                 como sustituto del borrado: el borrado siempre se
-                 completa con deleteProject(). */
-              const { error: archiveError } = await MobauProjects.setStatus(id, "archived");
-              if (archiveError){
-                alert(archiveError.message);
-                btn.disabled = false;
-                return;
-              }
-
-              const { error: deleteError } = await MobauProjects.deleteProject(id);
-              if (deleteError){
-                alert(`El proyecto se archivó, pero no pudimos eliminarlo: ${deleteErrorMessage(deleteError)}`);
-                await setFilter("active");
-                return;
-              }
-
-              await setFilter("active");
-              return;
-            }
-
-            /* Con uno o más productos: archivar de verdad, con su
-               confirmación — comportamiento normal, sin eliminar nada.
+            /* Punto 47: Archivar SIEMPRE archiva, también un proyecto sin productos (nada se elimina aquí): eliminar
+               solo existe en Archivados. */
+            /* Archivar de verdad, con su confirmación — sin eliminar nada.
                El aviso explica la consecuencia real antes de pulsar
                (deja de poder trabajarse, queda solo para consulta) y si
                el plan actual permite reactivarlo después o no — mismo
@@ -284,8 +251,8 @@
                usuario con un archivado que en su plan es irreversible. */
             const canReactivateLater = planAllowsMultipleActive(currentPlan);
             const archiveWarning = canReactivateLater
-              ? `Vas a archivar "${btn.dataset.name}". Quedará solo para consulta y no podrás seguir trabajando en él hasta que lo reactives (podrás hacerlo más adelante si tienes cupo disponible en tu plan). ¿Quieres continuar?`
-              : `Vas a archivar "${btn.dataset.name}". Quedará solo para consulta: no podrás seguir trabajando en él, y tu plan actual no permite reactivar proyectos archivados — tendrías que crear uno nuevo. Si necesitas varios proyectos activos a la vez, puedes suscribirte al plan Estudio Fundador. ¿Quieres continuar y archivar el proyecto?`;
+              ? `Vas a archivar "${btn.dataset.name}". Quedará solo para consulta y no se eliminará: puedes recuperarlo o eliminarlo desde Archivados (recuperarlo requiere cupo de proyectos activos en tu plan). ¿Quieres continuar?`
+              : `Vas a archivar "${btn.dataset.name}". Quedará solo para consulta y no se eliminará: podrás consultarlo o eliminarlo desde Archivados, pero tu plan actual no permite reactivar proyectos archivados — tendrías que crear uno nuevo. Si necesitas varios proyectos activos a la vez, puedes suscribirte al plan Estudio Fundador. ¿Quieres continuar y archivar el proyecto?`;
             const confirmArchive = confirm(archiveWarning);
             if (!confirmArchive) return;
 
@@ -314,7 +281,19 @@
 
       grid.querySelectorAll(".delete-project-btn").forEach(btn => {
         btn.addEventListener("click", async () => {
-          const confirmed = confirm(`¿Seguro que quieres eliminar "${btn.dataset.name}"? Esta acción no se puede deshacer.`);
+          /* Punto 47: la confirmación dice qué se elimina (líneas con sus cantidades, notas y configuraciones, y áreas). */
+          const [{ rows: delRows, error: delRowsError }, delAreas] = await Promise.all([
+            MobauProjects.loadProjectLines(btn.dataset.id).then(r => ({ rows: r.rows, error: r.error })),
+            MobauAreas.list(btn.dataset.id)
+          ]);
+          const lineCount = delRowsError ? null : delRows.length;
+          const areaCount = delAreas.state === "ready" && delAreas.areas ? delAreas.areas.length : 0;
+          const what = lineCount === null
+            ? "el proyecto, con sus líneas, notas y áreas"
+            : lineCount
+              ? `el proyecto y sus ${lineCount} ${lineCount === 1 ? "línea" : "líneas"} (cantidades, notas y configuraciones)${areaCount ? ` y sus ${areaCount} ${areaCount === 1 ? "área" : "áreas"}` : ""}`
+              : "el proyecto (no tiene productos)";
+          const confirmed = confirm(`¿Eliminar "${btn.dataset.name}"? Se eliminará ${what}. No se elimina ningún producto del catálogo ni cambian tus otros proyectos. Esta acción no se puede deshacer.`);
           if (!confirmed) return; // cancelado: no se ejecuta ninguna operación
 
           btn.disabled = true;

@@ -1,10 +1,11 @@
 const detail = () => {
   const d = D();
-  return { prices: d.querySelectorAll(".sp-price").length,
-           inputsEnabled: [...d.querySelectorAll(".dp-qty-input, .dp-qty-increment, .remove-product-btn")].filter(e => !e.disabled).length,
-           archive: vis(d.getElementById("archive-btn")), addNav: vis(d.getElementById("project-add-products")),
-           quote: vis(d.getElementById("request-quote-btn")), summary: vis(d.getElementById("summary-link")),
-           priceSummary: txt(d.getElementById("products-price-summary")), view: vis(d.getElementById("project-view")),
+  /* Punto 47: filas compactas (#list .row), importes en #totals y «Archivar» como icono tras «Solicitar cotización». */
+  return { prices: d.querySelectorAll("#list .row .r-amt").length,
+           inputsEnabled: [...d.querySelectorAll(".dp-qty-input, [data-act='inc'], [data-act='dec']")].filter(e => !e.disabled).length,
+           archive: vis(d.querySelector(".iconarch")), addNav: vis(d.querySelector("[data-act='pop'][data-key='add']")),
+           quote: vis(d.getElementById("request-quote-btn")), summary: vis(d.querySelector("a[href^='proyectos-resumen.html']")),
+           priceSummary: txt(d.getElementById("totals")), view: vis(d.getElementById("project-view")),
            calls: priceCalls(W()), errors: W().__mock.errors };
 };
 /* CC1: Gratis sin proyectos — solo el aviso de planes, sin ninguna consulta de proyectos, líneas ni solicitudes. */

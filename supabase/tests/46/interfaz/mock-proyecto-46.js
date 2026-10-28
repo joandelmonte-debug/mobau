@@ -42,7 +42,7 @@
   const line = (id, project, product_id, quantity, configuration, order) => ({
     id, project_id: P(project), product_id, finish_code: null, configuration: configuration || null,
     config_key: configuration ? `clave-${id}` : "", quantity, unit: "ud.", notes: null, room_or_area: null,
-    selected_for_rfq: true, created_at: now, order_position: order });
+    selected_for_rfq: true, created_at: now, order_position: order, area_id: null });   // area_id: columna de 47-01 (sin áreas, siempre null)
   const lines = [
     line("l-sin", 1, "demo-pub", 2, null, 1),
     line("l-a", 1, "demo-pub", 3, A, 2),

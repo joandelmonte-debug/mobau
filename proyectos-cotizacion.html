@@ -386,6 +386,10 @@
   }
   const availableProductRows = () => productRows.filter(row => isProductAvailable(row.product_id));
 
+  /* Punto 47: «Área: X» de una línea del proyecto, si el proyecto tiene áreas (areaNames: id -> nombre; vacío = sin áreas). */
+  let areaNames = new Map();
+  const rowAreaLabel = row => (areaNames.size ? `Área: ${areaNames.get(row.area_id) || "Sin área"}` : "");
+
   /* Punto 46 · bloque 4: estado actual de la configuración de cada fila.
      Filas del proyecto: project_line_states (Map por id de línea, o null si
      no se pudo comprobar). Filas de la selección: line_configuration_resolve
@@ -450,7 +454,7 @@
       const dist = DISTRIBUTORS[p.distribuidor];
       const unit = row.unit || getProductUnit(p);
       const quantity = (row.quantity === null || row.quantity === undefined) ? "—" : row.quantity;
-      const detail = lineDetailText(p, row.finish_code);
+      const detail = [lineDetailText(p, row.finish_code), rowAreaLabel(row)].filter(Boolean).join(" · ");
       /* 46: configuración de la línea (estado actual), escapada. */
       const config = rowConfig(row);
       const configHtml = config.lines.map(text => `<p class="card-meta" style="margin:-2px 0 6px;">${escapeHtml(text)}</p>`).join("")
@@ -776,7 +780,9 @@
     }
 
     /* Los productos no disponibles se marcan fuera de la solicitud antes de registrarla. */
-    const excludedIds = productRows.filter(row => !isProductAvailable(row.product_id)).map(row => row.product_id);
+    /* Punto 47: se excluye por LÍNEA (id de project_products), no por producto: el mismo producto en otra área, acabado o
+       configuración, si está disponible, se solicita igual. */
+    const excludedIds = productRows.filter(row => row.id && !isProductAvailable(row.product_id)).map(row => row.id);
     if (excludedIds.length){
       const { error: excludeError } = await MobauProjects.excludeFromRfq(project.id, excludedIds);
       if (excludeError){
@@ -879,7 +885,10 @@
 
       const projectRows = await loadRowProducts(await MobauProjects.listProductsInProject(project.id));
       if (!projectRows) return;
-      productRows = projectRows;
+      /* Punto 47: las áreas del proyecto, en su orden, para mostrar y ordenar las líneas. */
+      const areaInfo = await MobauAreas.list(project.id);
+      areaNames = new Map((areaInfo.areas || []).map(a => [a.id, a.name]));
+      productRows = MobauAreas.presentation(projectRows, areaInfo.areas).rows;
       if (!productRows.length){ document.getElementById("no-products").style.display = "block"; return; }
       projectLineStates = await MobauProjects.listLineStates(project.id);
 

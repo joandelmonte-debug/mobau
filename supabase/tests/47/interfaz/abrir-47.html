@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Ensayo 47 · abrir una página real con datos simulados</title>
+<p id="m">Preparando…</p>
+<!-- Solo pruebas locales (sin red, sin Supabase). Uso: abrir-47.html?p=proyectos-detalle.html&q=id=00000001-1111-4111-8111-111111111111&c={"caso":"c"}
+     Registra sw-paginas-47.js (sirve las páginas reales con el cliente simulado de CC1 + mock-areas-47.js), guarda la configuración en
+     sessionStorage "__p47" y abre la página. -->
+<script>
+(async () => {
+  const q = new URLSearchParams(location.search);
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) { document.getElementById("m").textContent = "Solo en un origen local de pruebas."; return; }
+  for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+  const reg = await navigator.serviceWorker.register("sw-paginas-47.js");
+  while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await new Promise(r => setTimeout(r, 50));
+  sessionStorage.setItem("__p47", q.get("c") || "{}");
+  sessionStorage.removeItem("__mockqs");
+  const ls = Object.keys(localStorage).filter(k => k.startsWith("mobau_seleccion")); ls.forEach(k => localStorage.removeItem(k));
+  if (q.get("sel")) localStorage.setItem("mobau_seleccion:aaaaaaaa-0000-4000-8000-00000000000a", q.get("sel"));
+  location.replace(`pagina/${q.get("p") || "proyectos-detalle.html"}?${q.get("q") ? q.get("q") + "&" : ""}rol=individual&pro=1&uid=a`);
+})();
+</script>

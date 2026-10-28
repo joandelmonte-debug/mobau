@@ -378,7 +378,7 @@
             <div class="ps-product-thumb">${productMediaMarkup(productWithFinishImage(p, row.finish_code), 26)}</div>
             <div>
               <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
-              <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
+              <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code), areaLabelOf(row)].filter(Boolean).join(" · "))}</div>
               ${configLinesHtml(row, false)}
             </div>
           </div>
@@ -393,6 +393,8 @@
   /* Punto 46 · bloque 4: estado actual de las líneas (Map por id, o null si
      no se pudo comprobar); no se consulta cuando se muestra la copia de una RFQ. */
   let lineStates = null;
+  /* Punto 47: etiqueta «Área: X» de una línea (vacía si el proyecto no tiene áreas). */
+  let areaLabelOf = () => "";
 
   /* Configuración de una fila: la copia enviada (sin recalcular) o el estado
      actual; en un archivado sin copia se indica que es información actual. */
@@ -504,6 +506,17 @@
       document.getElementById("no-products").style.display = "block";
       return;
     }
+    /* Punto 47: si el proyecto tiene áreas, las líneas se muestran agrupadas por área y con su nombre; si no se
+       pudieron leer, se avisa en vez de mostrarlas como un proyecto sin áreas. */
+    const areaInfo = await MobauAreas.list(project.id);
+    const present = MobauAreas.presentation(rows, areaInfo.areas);
+    rows.splice(0, rows.length, ...present.rows);
+    areaLabelOf = present.label;
+    if (areaInfo.state === "error"){
+      const note = document.getElementById("ps-archived-note");
+      note.textContent = "No pudimos cargar las áreas del proyecto: las líneas se muestran sin agrupar por área.";
+      note.style.display = "block";
+    }
 
     document.title = `Resumen preliminar — ${project.name} — Mobau`;
     const isArchived = project.status === "archived";
@@ -562,7 +575,7 @@
                 <div class="ps-product-thumb">${productMediaMarkup(productWithFinishImage(p, row.finish_code), 26)}</div>
                 <div>
                   <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
-                  <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
+                  <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code), areaLabelOf(row)].filter(Boolean).join(" · "))}</div>
                   ${configLinesHtml(row, true)}
                 </div>
               </div>

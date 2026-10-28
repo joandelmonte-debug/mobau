@@ -6,6 +6,128 @@
    (usa la variable global `supabaseClient` definida ahí).
    ============================================================ */
 
+/* ============================================================
+   Punto 47 — áreas de un proyecto (opcionales)
+   ------------------------------------------------------------
+   Un proyecto sin áreas es una lista normal; las áreas aparecen cuando la persona las crea. El estado de las
+   áreas se comprueba UNA vez por página y distingue tres casos que nunca se confunden:
+   - "ready":   la tabla project_areas existe y se pudo consultar.
+   - "missing": la tabla todavía no existe (migración 47-01 sin aplicar): el proyecto se trabaja como hasta ahora.
+   - "error":   la tabla no se pudo comprobar (red, permisos, carga). NO se cachea, NO se trata como «sin áreas» y las
+                operaciones que podrían escribir en el área equivocada se rechazan con un mensaje claro.
+   Todas las escrituras de líneas llevan la cabecera x-mobau-areas (supabase-client.js): una pestaña antigua no la
+   lleva y el servidor la rechaza cuando el proyecto ya tiene áreas. ============================================================ */
+const MobauAreas = {
+  _ready: false,
+
+  /* Devuelve { state: "ready" | "missing" | "error", error }. */
+  async probe() {
+    if (this._ready) return { state: "ready", error: null };
+    const { error } = await supabaseClient.from("project_areas").select("id").limit(1);
+    if (!error) { this._ready = true; return { state: "ready", error: null }; }
+    if (error.code === "PGRST205" || error.code === "42P01") return { state: "missing", error: null };
+    console.error("Error comprobando las áreas:", error);
+    return { state: "error", error };
+  },
+
+  /* Las áreas de un proyecto, en su orden: { state, areas, error }. areas es null si no se pudieron leer. */
+  async list(projectId) {
+    const probe = await this.probe();
+    if (probe.state === "missing") return { state: "missing", areas: [], error: null };
+    if (probe.state === "error") return { state: "error", areas: null, error: probe.error };
+    const { data, error } = await supabaseClient
+      .from("project_areas")
+      .select("id, project_id, name, sort_order, created_at")
+      .eq("project_id", projectId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (error) {
+      console.error("Error leyendo las áreas del proyecto:", error);
+      return { state: "error", areas: null, error };
+    }
+    return { state: "ready", areas: data || [], error: null };
+  },
+
+  async create(projectId, name, existing) {
+    const next = (existing || []).reduce((max, a) => Math.max(max, a.sort_order || 0), 0) + 1;
+    const { data, error } = await supabaseClient
+      .from("project_areas")
+      .insert({ project_id: projectId, name: String(name || "").trim(), sort_order: next })
+      .select("id, project_id, name, sort_order, created_at")
+      .single();
+    return { data, error };
+  },
+
+  async rename(areaId, name) {
+    const { data, error } = await supabaseClient
+      .from("project_areas")
+      .update({ name: String(name || "").trim() })
+      .eq("id", areaId)
+      .select("id, name")
+      .single();
+    return { data, error };
+  },
+
+  /* Intercambia el orden de dos áreas (subir/bajar). */
+  async swapOrder(a, b) {
+    const first = await supabaseClient.from("project_areas").update({ sort_order: b.sort_order }).eq("id", a.id);
+    if (first.error) return { error: first.error };
+    const second = await supabaseClient.from("project_areas").update({ sort_order: a.sort_order }).eq("id", b.id);
+    return { error: second.error };
+  },
+
+  /* Mueve o copia líneas a un área (null = «Sin área») en una sola operación atómica del servidor. resolutions:
+     { [lineId]: { action: "sum" | "skip", note?: "existing" | "incoming" | "both" } }. Si en el destino ya hay una línea
+     equivalente sin resolución, el servidor rechaza todo sin cambiar nada (hint transfer_conflict, detail con las líneas). */
+  async transferLines(lineIds, areaId, kind, resolutions) {
+    const { data, error } = await supabaseClient.rpc("project_lines_transfer", {
+      p_line_ids: lineIds, p_area_id: areaId || null, p_kind: kind, p_resolutions: resolutions || {}
+    });
+    return { data, error };
+  },
+
+  /* Elimina un área: sus líneas pasan a «Sin área» (atómico). resolutions por línea en conflicto:
+     { action: "sum", note? } o { action: "move", area_id }. */
+  async deleteArea(areaId, resolutions) {
+    const { data, error } = await supabaseClient.rpc("project_area_delete", {
+      p_area_id: areaId, p_resolutions: resolutions || {}
+    });
+    return { data, error };
+  },
+
+  /* Resumen y cotización: etiqueta «Área: X» y orden por área (áreas en su orden, «Sin área» al final). labels(rows, areas)
+     devuelve { rows (ordenadas), label(row) } y no hace nada si no hay áreas. areas puede ser null (no se pudieron leer). */
+  presentation(rows, areas) {
+    const list = areas || [];
+    const byId = new Map(list.map((a, i) => [a.id, { name: a.name, index: i }]));
+    const any = list.length > 0 || rows.some(r => r.area_name);
+    /* Filas de la copia de una RFQ: traen su propio nombre y orden de área; las vivas, el de las áreas actuales. */
+    const rank = row => (row.area_name ? (Number.isFinite(row.area_sort_order) ? row.area_sort_order : 1e6 - 1)
+      : byId.has(row.area_id) ? byId.get(row.area_id).index : 1e6);
+    const label = row => (!any ? "" : "Área: " + (row.area_name || (byId.get(row.area_id) || {}).name || "Sin área"));
+    const ordered = !any ? rows : rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map(x => x.r);
+    return { rows: ordered, label };
+  },
+
+  /* Los conflictos que devuelve el servidor (detail JSON) -> [{ line_id, twin_id }]. */
+  conflictsOf(error) {
+    if (!error || (error.hint !== "transfer_conflict" && error.hint !== "area_conflict")) return null;
+    try { const list = JSON.parse(error.details || error.detail || "[]"); return Array.isArray(list) ? list : []; }
+    catch (e) { return []; }
+  },
+
+  /* Texto para la persona cuando una operación sobre líneas o áreas falla. */
+  explain(error) {
+    if (!error) return "";
+    if (error.hint === "client_outdated") return "Esta página está desactualizada: recárgala para seguir trabajando en este proyecto.";
+    if (error.hint === "project_not_active") return "El proyecto ya no admite cambios (está archivado).";
+    if (error.hint === "area_invalid") return "El área ya no existe. Recarga la página.";
+    if (error.hint === "line_invalid") return "Alguna de las líneas ya no existe. Recarga la página.";
+    return error.message || "No pudimos completar la operación.";
+  }
+};
+
 const MobauProjects = {
 
   /* Lista los proyectos del usuario actual.
@@ -135,7 +257,16 @@ const MobauProjects = {
      configuración. Si esa línea ya estaba guardada, nunca la duplica:
      - mode "replace" (por defecto): reemplaza quantity/unit con el valor recibido.
      - mode "sum": newQuantity = existingQuantity + quantity, y actualiza unit. */
-  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace", finish = null, configuration = null) {
+  async saveProductToProject(projectId, productId, quantity, unit, mode = "replace", finish = null, configuration = null, areaId = null) {
+    /* Punto 47: la línea es única por producto, acabado, configuración Y área. Sin indicar área se trabaja siempre
+       sobre «Sin área», nunca sobre la de otra. Si las áreas no se pudieron comprobar no se escribe nada: podría
+       acabar en el área equivocada. Sin la migración (estado "missing") todo sigue como antes. */
+    const areaProbe = await MobauAreas.probe();
+    if (areaProbe.state === "error") {
+      return { data: null, error: { message: "No pudimos comprobar las áreas del proyecto. Revisa tu conexión e inténtalo de nuevo; no se ha cambiado nada." }, alreadyExists: false };
+    }
+    const areasOn = areaProbe.state === "ready";
+    const targetArea = areasOn && areaId ? areaId : null;
     const finishCode = (typeof finish === "string" && finish.trim()) ? finish.trim() : null;
     /* Puede haber varias líneas del mismo producto y acabado con
        configuraciones distintas: se elige la de la misma configuración
@@ -147,6 +278,7 @@ const MobauProjects = {
       .eq("project_id", projectId)
       .eq("product_id", productId);
     lookup = finishCode ? lookup.eq("finish_code", finishCode) : lookup.is("finish_code", null);
+    if (areasOn) lookup = targetArea ? lookup.eq("area_id", targetArea) : lookup.is("area_id", null);
     const { data: candidates, error: lookupError } = await lookup;
     if (lookupError) {
       return { data: null, error: lookupError, alreadyExists: false };
@@ -182,6 +314,7 @@ const MobauProjects = {
     const insertRow = { project_id: projectId, product_id: productId };
     if (finishCode) insertRow.finish_code = finishCode;
     if (configKey) insertRow.configuration = normalizeSelectionConfiguration(configuration);
+    if (targetArea) insertRow.area_id = targetArea;
     if (typeof quantity === "number" && Number.isFinite(quantity)) insertRow.quantity = quantity;
     if (typeof unit === "string" && unit) insertRow.unit = unit;
 
@@ -201,6 +334,15 @@ const MobauProjects = {
       .from("project_products")
       .delete()
       .eq("id", projectProductId);
+    return { error };
+  },
+
+  /* Quita varias líneas a la vez (selección múltiple), por id de línea. */
+  async removeProductsFromProject(projectProductIds) {
+    const { error } = await supabaseClient
+      .from("project_products")
+      .delete()
+      .in("id", projectProductIds);
     return { error };
   },
 
@@ -224,22 +366,29 @@ const MobauProjects = {
      esta consulta solo trae qué productos están guardados y con
      qué id de fila, para poder quitarlos. */
   async listProductsInProject(projectId) {
-    /* id, product_id, finish_code, configuration, quantity, unit son los únicos campos que lee
-       cualquier página (proyectos.html, proyectos-detalle.html,
-       cuenta.html, proyectos-cotizacion.html) del resultado de esta
-       función — order_position y created_at solo se usan para
-       ordenar, no hace falta traerlos de vuelta. */
-    const { data, error } = await supabaseClient
-      .from("project_products")
-      .select("id, product_id, finish_code, configuration, quantity, unit, notes")
-      .eq("project_id", projectId)
-      .order("order_position", { ascending: true })
-      .order("created_at", { ascending: true });
+    const { rows, error } = await this.loadProjectLines(projectId);
     if (error) {
       console.error("Error listando productos del proyecto:", error);
       return [];
     }
-    return data;
+    return rows;
+  },
+
+  /* Lo mismo con el error a la vista (nunca un [] que parezca «proyecto vacío») y con area_id cuando el proyecto
+     puede tener áreas: { rows, areas: { state, areas, error }, error }. Si no se pudo comprobar si existen las
+     áreas, tampoco se devuelven filas: sin eso no se sabe a qué área pertenece cada una. */
+  async loadProjectLines(projectId) {
+    const areas = await MobauAreas.list(projectId);
+    if (areas.state === "error") return { rows: [], areas, error: areas.error };
+    const columns = "id, product_id, finish_code, configuration, quantity, unit, notes" + (areas.state === "ready" ? ", area_id" : "");
+    const { data, error } = await supabaseClient
+      .from("project_products")
+      .select(columns)
+      .eq("project_id", projectId)
+      .order("order_position", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) return { rows: [], areas, error };
+    return { rows: data || [], areas, error: null };
   },
 
   /* Punto 46-04: lo solicitado en una RFQ del proyecto (la indicada o, sin
@@ -250,6 +399,15 @@ const MobauProjects = {
      se devuelven las líneas actuales del proyecto, como hasta ahora (no se
      inventa una copia). */
   async listRequestedLines(projectId, rfqId = null) {
+    const view = await this.getRequestedView(projectId, rfqId);
+    /* Si la copia no se pudo leer se devuelven las líneas actuales, como hasta ahora (el error ya quedó en consola). */
+    return view.rows || this.listProductsInProject(projectId);
+  },
+
+  /* Punto 47: lo mismo con las áreas de esa copia (rfqs.lines_snapshot v2: id, nombre y orden de las áreas usadas) y
+     el error a la vista. { rows, areas, fromCopy, error }: rows es null si no se pudo leer. Sin copia (RFQ anterior a
+     46-04, o proyecto sin RFQ) se devuelven las líneas y áreas actuales, con fromCopy false. */
+  async getRequestedView(projectId, rfqId = null) {
     let query = supabaseClient
       .from("rfqs")
       .select("lines_snapshot")
@@ -262,12 +420,15 @@ const MobauProjects = {
       .maybeSingle();
     if (error) {
       console.error("Error leyendo la copia de la solicitud:", error);
+      return { rows: null, areas: [], fromCopy: false, error };
     }
     const snapshot = data && data.lines_snapshot;
     if (!snapshot || !Array.isArray(snapshot.distributors)) {
-      return this.listProductsInProject(projectId);
+      const current = await this.loadProjectLines(projectId);
+      if (current.error) return { rows: null, areas: [], fromCopy: false, error: current.error, areaState: current.areas.state };
+      return { rows: current.rows, areas: current.areas.areas || [], fromCopy: false, error: null, areaState: current.areas.state };
     }
-    return snapshot.distributors.flatMap(group => (group.lines || []).map(line => ({
+    const rows = snapshot.distributors.flatMap(group => (group.lines || []).map(line => ({
       id: line.line_id,
       product_id: line.product_id,
       finish_code: line.finish_code || null,
@@ -275,8 +436,13 @@ const MobauProjects = {
       quantity: line.quantity,
       unit: line.unit,
       notes: line.notes || null,
+      area_id: line.area_id || null,
+      area_name: line.area_name || null,
+      area_sort_order: line.area_sort_order === undefined ? null : line.area_sort_order,
       requested: line
     })));
+    const areas = Array.isArray(snapshot.areas) ? snapshot.areas.map(a => ({ id: a.id, name: a.name, sort_order: a.sort_order })) : [];
+    return { rows, areas, fromCopy: true, error: null, areaState: areas.length ? "ready" : "missing" };
   },
 
   /* Punto 46: nota técnica de una línea del proyecto (texto libre opcional del profesional; vacío = sin nota).
@@ -434,10 +600,10 @@ const MobauProjects = {
      Al ser una transferencia múltiple, touchProject() se llama una
      sola vez al final (nunca dentro del bucle), y solo si al menos un
      producto se guardó de verdad. */
-  async transferSelectionToProject(projectId, selectionItems, mode = "replace") {
+  async transferSelectionToProject(projectId, selectionItems, mode = "replace", areaId = null) {
     let failedCount = 0;
     for (const item of selectionItems) {
-      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode, item.finish || null, item.configuration || null);
+      const { error } = await this.saveProductToProject(projectId, item.productId, item.quantity, item.unit, mode, item.finish || null, item.configuration || null, areaId);
       if (error) failedCount++;
     }
     if (selectionItems.length - failedCount > 0) {
@@ -493,13 +659,14 @@ const MobauProjects = {
     return { data, error };
   },
 
-  /* Marca como no incluidos en la solicitud los productos indicados (p. ej. archivados). */
-  async excludeFromRfq(projectId, productIds) {
+  /* Marca como no incluidas en la solicitud las LÍNEAS indicadas (p. ej. de productos archivados), por su id de línea:
+     el mismo producto en otra área, acabado o configuración no se toca (Punto 47). */
+  async excludeFromRfq(projectId, lineIds) {
     const { error } = await supabaseClient
       .from("project_products")
       .update({ selected_for_rfq: false })
       .eq("project_id", projectId)
-      .in("product_id", productIds);
+      .in("id", lineIds);
     return { error };
   },
 

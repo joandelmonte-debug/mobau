@@ -253,11 +253,12 @@ const cardBtns = () => [...D().querySelectorAll("#projects-grid .provider-card")
 }));
 const detail = () => {
   const d = D();
-  return { prices: d.querySelectorAll(".sp-price").length,
-           inputsEnabled: [...d.querySelectorAll(".dp-qty-input, .dp-qty-increment, .remove-product-btn")].filter(e => !e.disabled).length,
-           archive: vis(d.getElementById("archive-btn")), addNav: vis(d.getElementById("project-add-products")),
-           quote: vis(d.getElementById("request-quote-btn")), summary: vis(d.getElementById("summary-link")),
-           priceSummary: txt(d.getElementById("products-price-summary")), view: vis(d.getElementById("project-view")),
+  /* Punto 47: filas compactas (#list .row), importes en #totals y «Archivar» como icono tras «Solicitar cotización». */
+  return { prices: d.querySelectorAll("#list .row .r-amt").length,
+           inputsEnabled: [...d.querySelectorAll(".dp-qty-input, [data-act='inc'], [data-act='dec']")].filter(e => !e.disabled).length,
+           archive: vis(d.querySelector(".iconarch")), addNav: vis(d.querySelector("[data-act='pop'][data-key='add']")),
+           quote: vis(d.getElementById("request-quote-btn")), summary: vis(d.querySelector("a[href^='proyectos-resumen.html']")),
+           priceSummary: txt(d.getElementById("totals")), view: vis(d.getElementById("project-view")),
            calls: priceCalls(W()), errors: W().__mock.errors };
 };
 /* CC1: Gratis sin proyectos — solo el aviso de planes, sin ninguna consulta de proyectos, líneas ni solicitudes. */
@@ -576,10 +577,10 @@ add("Proyectos · Individual", "Lista igual que hoy", async () => {
   const o = { gate: gate("#projects-plan-gate").visible, usage: txt(D().getElementById("plan-usage")), cards: cardBtns() };
   return { ok: !o.gate && o.usage === "1 de 1 proyecto activo en tu plan." && eqJ(o.cards, [{ name: "Casa Norte", btns: ["Abrir", "Archivar"] }]), got: o };
 });
-add("Proyectos · Individual", "Detalle igual que hoy", async () => {
+add("Proyectos · Individual", "Detalle con filas compactas (Punto 47)", async () => {
   await open(`proyectos-detalle.html?id=${P1}&pro=1`, 1300);
   const o = detail();
-  return { ok: o.view && o.prices === 2 && o.inputsEnabled > 0 && o.archive && o.addNav && o.quote && o.summary && o.calls > 0 && o.priceSummary.includes("Total preliminar: US$ 240.00") && o.errors.length === 0, got: o };
+  return { ok: o.view && o.prices === 2 && o.inputsEnabled > 0 && o.archive && o.addNav && o.quote && o.summary && o.calls > 0 && o.priceSummary.includes("US$ 240.00") && o.errors.length === 0, got: o };
 });
 add("Proyectos · Individual", "Detalle: el servidor responde plan_required -> solo el aviso (CC1)", async () => {
   await open(`proyectos-detalle.html?id=${P1}&pro=1&t4=1&srv=deny`, 1400);
