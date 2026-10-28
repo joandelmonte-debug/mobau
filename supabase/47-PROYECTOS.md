@@ -505,3 +505,17 @@ Limitaciones: la restauración no se ha probado (no se restaura nada en Producti
 **Estado del repositorio:** sin commit ni push; sin cambios respecto a antes de esta operación (los 24 archivos de la lista siguen pendientes, `proyecto-importes.js` y `proyecto-vista.js` con `git add -N`). El respaldo `~/mobau-respaldo-produccion/2026-10-28_1234` contiene datos de Auth: sigue fuera del repositorio y no se publica. La web publicada todavía es la anterior (compatible: ningún proyecto tiene áreas).
 
 **Siguiente paso:** con tu autorización expresa, commit con la lista de 24 archivos por ruta y push (publica Cloudflare); confirmar el despliegue en verde; revisión posterior con el proyecto «VALIDACIÓN P47» que crearás tú.
+
+---
+
+# Punto 47 — revisión final: ajustes de texto aprobados y revisión funcional aprobada (2026-10-28)
+
+La revisión funcional en «VALIDACIÓN P47» (web publicada, proyecto con áreas) queda **aprobada sin más incidencias**. Ajustes de texto aprobados:
+
+1. **Texto al quitar un producto** (revisión en «VALIDACIÓN P47»): la confirmación de la acción «Quitar del proyecto» pasa de «¿Quitar esta línea del proyecto? El producto no se elimina del catálogo.» a **«¿Quitar este producto del proyecto?»** (`proyecto-vista.js`, caso `remove`). Solo cambia el texto del `confirm`; la acción es la misma: `removeLines([id])` → `MobauProjects.removeProductsFromProject` (`DELETE` de esa fila de `project_products` por su id) y actualiza la fecha del proyecto; no toca el catálogo ni otras líneas, y cancelar no cambia nada.
+2. **Resto de textos de quitar productos alineados** (`proyecto-vista.js`; solo mensajes y singular/plural, la lógica de eliminación no cambia):
+   - Tras quitar uno: «Producto quitado del proyecto.»
+   - Confirmación al quitar varios (selección múltiple): «¿Quitar estos N productos del proyecto?» (N = cantidad seleccionada).
+   - Tras quitar varios: «Productos quitados del proyecto.»
+   - Si la selección múltiple contiene un solo producto se usan los textos en singular («¿Quitar este producto del proyecto?» / «Producto quitado del proyecto.»).
+   - Comprobado en la página real con datos simulados: menú de la fila (1), selección de 1 (singular), selección de 2 («¿Quitar estos 2 productos…?», «Productos quitados…»); cada operación hizo un único `DELETE` de las filas elegidas (1, 1 y 2) y la actualización de la fecha del proyecto; sin errores en consola. Las suites no se repiten (solo cambian textos).

@@ -753,7 +753,7 @@ const ProyectoVista = (() => {
       case "sel": t.checked ? S.selected.add(id) : S.selected.delete(id); render(); break;
       case "sel-area": { const k = t.dataset.key; S.lines.filter(l => (l.areaId || "none") === k && visible(l)).forEach(l => (t.checked ? S.selected.add(l.id) : S.selected.delete(l.id))); render(); break; }
       case "bulk-clear": S.selected.clear(); render(); break;
-      case "bulk-remove": if (confirm(`¿Quitar ${S.selected.size} líneas del proyecto? Los productos no se eliminan del catálogo.`)) removeLines([...S.selected], "Líneas quitadas del proyecto."); break;
+      case "bulk-remove": { const n = S.selected.size; if (confirm(n === 1 ? "¿Quitar este producto del proyecto?" : `¿Quitar estos ${n} productos del proyecto?`)) removeLines([...S.selected], n === 1 ? "Producto quitado del proyecto." : "Productos quitados del proyecto."); break; }
       case "bulk-move": transfer([...S.selected], targetOf($("#bulk-area").value), "move"); break;
       case "bulk-copy": transfer([...S.selected], targetOf($("#bulk-area").value), "copy"); break;
       case "cfg": S.openCfg.has(id) ? S.openCfg.delete(id) : S.openCfg.add(id); render(); break;
@@ -764,7 +764,7 @@ const ProyectoVista = (() => {
       case "inc": { const l = lineById(id); saveQty(l, l.qty + 1); break; }
       case "move1": S.pop = null; transfer([id], targetOf(t.dataset.area), "move"); break;
       case "copy1": S.pop = null; transfer([id], targetOf(t.dataset.area), "copy"); break;
-      case "remove": S.pop = null; if (confirm("¿Quitar esta línea del proyecto? El producto no se elimina del catálogo.")) removeLines([id], "Línea quitada del proyecto."); else render(); break;
+      case "remove": S.pop = null; if (confirm("¿Quitar este producto del proyecto?")) removeLines([id], "Producto quitado del proyecto."); else render(); break;
       case "fa": { const v = t.dataset.v; if (t.dataset.off || !t.checked) S.filters.areas.delete(v); else S.filters.areas.add(v); render(); break; }
       case "fc": { const v = t.dataset.v; if (t.dataset.off || !t.checked) S.filters.cats.delete(v); else S.filters.cats.add(v); render(); break; }
       case "fa-clear": S.filters.areas.clear(); S.pop = null; render(); break;
