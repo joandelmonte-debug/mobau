@@ -699,8 +699,13 @@
     const rows = conflicts.map(c => {
       const tr = document.createElement("tr");
       const show = (v) => c.field === "price" ? M.priceText(v) : valueText(c.field, v);
+      /* 48-01: una copia anterior no guardó estas columnas ("legacy_not_comparable") o la copia no tiene la clave ("snapshot_incomplete"):
+         no es que el valor al enviar fuera «vacío», es que no está registrado. */
+      const atSubmit = c.reason === "legacy_not_comparable" ? "No registrado (envío anterior)"
+                     : c.reason === "snapshot_incomplete" ? "No registrado"
+                     : show(c.at_submit);
       tr.append(cell("Campo", document.createTextNode(M.fieldLabel(c.field))),
-                cell("Al enviar", document.createTextNode(show(c.at_submit))),
+                cell("Al enviar", document.createTextNode(atSubmit)),
                 cell("Actual", document.createTextNode(show(c.current))),
                 cell("Propuesto", document.createTextNode(show(c.proposed))));
       return tr;

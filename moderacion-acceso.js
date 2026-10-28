@@ -45,7 +45,9 @@ const MobauModeracion = (() => {
     materials: "Materiales", finishes: "Acabados", image_url: "Imagen", technical_sheet_url: "Ficha técnica",
     cad_bim_3d_url: "CAD / BIM / 3D", price: "Precio",
     environment: "Interior o exterior", light_source: "Fuente de luz", electrical_connection: "Conexión eléctrica",
-    color_temperature: "Temperatura de color"
+    color_temperature: "Temperatura de color",
+    /* 48-01: columnas que pueden aparecer en un conflicto de republicación. */
+    reference_code: "Referencia", catalog_role: "Función en el catálogo", cover_asset_id: "Foto de portada", updated_at: "Última modificación"
   };
   const URL_FIELDS = ["image_url", "technical_sheet_url", "cad_bim_3d_url"];
   const AVAILABILITY = { "en-stock": "En stock", "bajo-pedido": "Bajo pedido", "por-confirmar": "Por confirmar" };

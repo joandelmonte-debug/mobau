@@ -972,11 +972,12 @@ runWithCatalog(() => {
   /* "Ordenar por relevancia" solo tiene sentido con una búsqueda
      activa (usa el _score que añade searchProducts()). Sin búsqueda, el
      orden predeterminado es el «Orden del catálogo»: primero los productos
-     reales por orden de incorporación (created_at ascendente, que desde
-     40-01 es el momento en que Mobau aprueba el producto y no cambia al
-     editarlo; a igual fecha, por id) y al final los 20 productos de
-     muestra originales (ids exactos p1…p20), con su orden relativo actual
-     (sort estable). «Más recientes» ordena por created_at descendente.
+     reales por orden de incorporación (creado = catalog_entered_at de 48-02:
+     publicación efectiva, que se renueva al reincorporar un producto
+     retirado y no cambia al editarlo; sin ella, created_at; a igual fecha,
+     por id) y al final los 20 productos de muestra originales (ids exactos
+     p1…p20), con su orden relativo actual (sort estable). «Más recientes»
+     ordena por esa misma fecha, descendente.
      Se ordena la lista completa ya filtrada. */
   const SAMPLE_IDS = new Set(Array.from({ length: 20 }, (_, i) => `p${i + 1}`));
   function catalogOrder(a, b){

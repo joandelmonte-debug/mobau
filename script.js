@@ -375,10 +375,10 @@ const CATALOG_STATE = { source: "static", status: "ready", error: null };
 const CATALOG_ABSENT = new Set();
 /* v5 (punto 44): las filas guardadas llevan referencia, portada, acabados,
    interior/exterior, datos de iluminación y temperatura de color; ninguna
-   versión lee la caché de otra. */
-const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v5", distributors: "mobau_distributors_v5", categories: "mobau_categories_v5" };
-/* Las 30 columnas de catalog_products, en su orden (21 de 41-02, 4 de 44-01, 3 de 44-02, 1 de 44-03 y catalog_role de 46-01). */
-const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options, environment, light_source, electrical_connection, color_temperature, catalog_role";
+   versión lee la caché de otra. Productos v6 (48-02): añade catalog_entered_at. */
+const CATALOG_CACHE_KEYS = { products: "mobau_catalog_v6", distributors: "mobau_distributors_v5", categories: "mobau_categories_v5" };
+/* Las 31 columnas de catalog_products, en su orden (21 de 41-02, 4 de 44-01, 3 de 44-02, 1 de 44-03, catalog_role de 46-01 y catalog_entered_at de 48-02). */
+const PRODUCT_COLUMNS = "id, name, brand, distributor_id, category_id, subcategory, use_context, space, availability, description, measurements, materials, finishes, lead_time, icon, image_url, technical_sheet_url, cad_bim_3d_url, status, created_at, updated_at, reference_code, cover_path, cover_card_path, finish_options, environment, light_source, electrical_connection, color_temperature, catalog_role, catalog_entered_at";
 const STATIC_ORDER = Object.freeze({
   products: STATIC_PRODUCTS.map(p => p.id),
   distributors: Object.keys(DISTRIBUTORS),
@@ -493,24 +493,26 @@ function mapProductRow(row){
     temperaturaColor: row.color_temperature || null,
     ficha: safeUrl(row.technical_sheet_url) || null,
     cad: safeUrl(row.cad_bim_3d_url) || null, status: row.status, actualizado: row.updated_at,
-    creado: row.created_at || null
+    /* 48-02: fecha de incorporación al catálogo (primera publicación o última reincorporación). Sin ella (caché o base anteriores), created_at. */
+    creado: row.catalog_entered_at || row.created_at || null
   };
 }
 
-/* Conserva el orden actual del catálogo estático; lo nuevo va al final, por antigüedad. */
-function stableCatalogOrder(items, keyOf, knownOrder){
+/* Conserva el orden actual del catálogo estático; lo nuevo va al final, por antigüedad.
+   dateOf: fecha por la que se ordena lo nuevo (por defecto created_at); a igual fecha se conserva el orden de entrada (sort estable), sin desempate añadido. */
+function stableCatalogOrder(items, keyOf, knownOrder, dateOf = r => r.created_at){
   const rank = new Map(knownOrder.map((key, index) => [key, index]));
   const unknownRank = knownOrder.length;
   return items.slice().sort((a, b) => {
     const ra = rank.has(keyOf(a)) ? rank.get(keyOf(a)) : unknownRank;
     const rb = rank.has(keyOf(b)) ? rank.get(keyOf(b)) : unknownRank;
     if (ra !== rb) return ra - rb;
-    return String(a.created_at || keyOf(a)).localeCompare(String(b.created_at || keyOf(b)));
+    return String(dateOf(a) || keyOf(a)).localeCompare(String(dateOf(b) || keyOf(b)));
   });
 }
 
 function buildProducts(rows){
-  const ordered = stableCatalogOrder(rows, r => r.id, STATIC_ORDER.products);
+  const ordered = stableCatalogOrder(rows, r => r.id, STATIC_ORDER.products, r => r.catalog_entered_at || r.created_at);
   const brands = {};
   ordered.forEach(r => { brands[brandKey(r.brand)] = brandLabel(r.brand); });
   return { products: ordered.map(mapProductRow), brands };
