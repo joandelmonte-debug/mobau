@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mesa B integrada · casos</title>
+<style>
+  body{ margin:0; padding:40px 24px; font:16px/1.5 system-ui, sans-serif; color:#1C1F22; background:#FAFAF8; }
+  main{ max-width:760px; margin:0 auto; }
+  h1{ font-size:28px; font-weight:500; margin:0 0 6px; }
+  p{ color:#565B61; margin:0 0 20px; }
+  ul{ list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+  a{ display:block; padding:12px 16px; background:#EEEBE6; border-radius:3px; color:inherit; text-decoration:none; }
+  a:hover{ background:#E2DDD5; }
+  small{ display:block; color:#6B7077; }
+  #estado{ font-size:14px; }
+</style>
+<main>
+  <h1>Página de proyecto integrada (mesa B)</h1>
+  <p>Copia de trabajo local con datos simulados: nada se guarda en Supabase. Las fotos son las portadas públicas del catálogo, descargadas en local.</p>
+  <p id="estado">Preparando el simulador…</p>
+  <ul id="casos" hidden>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=e&rol=individual&pro=1&uid=a">Casa con 60 líneas, áreas y fotos reales<small>Cocina con 22 líneas, «Sin área», configuraciones, m², notas largas</small></a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=f&rol=individual&pro=1&uid=a">Proyecto pequeño sin áreas<small>5 productos con fotos</small></a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=c&rol=individual&pro=1&uid=a">18 líneas en 3 áreas (caso del ensayo 47)<small>Configuraciones, conflictos al mover o copiar, producto retirado</small></a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=b&rol=individual&pro=1&uid=a">5 productos sin áreas (ensayo 47)<small>Organizar por áreas es opcional</small></a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=a&rol=individual&pro=1&uid=a">Proyecto vacío</a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=c&areas=error&rol=individual&pro=1&uid=a">Error al cargar las áreas</a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000002-1111-4111-8111-111111111111&caso=c&rol=individual&pro=1&uid=a">Archivado sin solicitud</a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000003-1111-4111-8111-111111111111&caso=c&rol=individual&pro=1&uid=a">Archivado con solicitud enviada</a></li>
+    <li><a href="pagina/proyectos-detalle.html?id=00000001-1111-4111-8111-111111111111&caso=e&precios=0&rol=individual&pro=1&uid=a">Sin acceso a precios (aviso de planes)</a></li>
+  </ul>
+</main>
+<script>
+(async () => {
+  const estado = document.getElementById("estado");
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Ábrela desde un servidor local (127.0.0.1).");
+    const reg = await navigator.serviceWorker.register("sw-paginas-mesa-b.js");
+    while (!reg.active || reg.active.state !== "activated") await new Promise(r => setTimeout(r, 50));
+    estado.textContent = "Listo. Elige un caso:";
+    document.getElementById("casos").hidden = false;
+  } catch (e) { estado.textContent = "No se pudo preparar el simulador: " + (e.message || e); }
+})();
+</script>
+</html>

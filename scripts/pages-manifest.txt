@@ -43,6 +43,7 @@ proyecto.html
 proyectos-cotizacion.html
 proyecto-importes.js
 proyecto-vista.js
+proyecto-mesa.css
 proyectos-data.js
 proyectos-detalle.html
 proyectos-nuevo.html

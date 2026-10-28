@@ -30,7 +30,7 @@ async function open(page, query, conf = {}, { wait = 9000, width = "", ready } =
   sessionStorage.removeItem("__mockqs");
   frame.style.width = width || ""; frame.style.height = width ? "2600px" : "";
   await new Promise(res => { frame.onload = res; frame.src = `pagina/${page}?${query ? query + "&" : ""}${QS}`; });
-  const t0 = Date.now(), isReady = ready || (doc => doc.querySelector("#list .row, #list .empty-state, #list .alert, #list .empty"));
+  const t0 = Date.now(), isReady = ready || (doc => doc.querySelector("#list .tile, #list .empty-state, #list .alert, #list .empty"));
   while (Date.now() - t0 < wait){ await sleep(60); const doc = d(); if (doc && isReady(doc)) { await sleep(150); break; } }
   const fw = w();
   if (!fw || !fw.__mock || !fw.__p47) throw new Error(`${page} no cargó los simuladores: ensayo detenido`);
@@ -39,9 +39,12 @@ async function open(page, query, conf = {}, { wait = 9000, width = "", ready } =
 const q = (s, r) => (r || d()).querySelector(s);
 const qa = (s, r) => [...(r || d()).querySelectorAll(s)];
 const click = async (el, ms = 350) => { el.click(); await sleep(ms); };
-const rowNames = () => qa("#list .row .r-name").map(e => e.textContent.trim());
-const areaTitles = () => qa("#list .area-h h2").map(e => e.textContent.trim());
-const rowsOf = area => qa(`#list .area[data-area="${area}"] .row .r-name`).map(e => e.textContent.trim());
+/* Mesa B: piezas (.tile) en tableros (.board[data-area]); el detalle y las acciones de cada línea, en la ficha gris (#ficha). */
+const rowNames = () => qa("#list .tile .nm").map(e => e.textContent.trim());
+const areaTitles = () => qa("#list .board[data-area] .board-name").map(e => e.textContent.trim());
+const rowsOf = area => qa(`#list .board[data-area="${area}"] .tile .nm`).map(e => e.textContent.trim());
+const openTile = async id => { const t = q(`#list .tile[data-id="${id}"]`); if (t && !t.classList.contains("open")) await click(t.querySelector('.tile-btn[data-act="open"]'), 250); };
+const inFicha = async (id, sel) => { await openTile(id); return q(`#ficha ${sel}`); };
 const lines = () => w().__p47.lines.filter(l => l.project_id === P(1));
 const writes = () => w().__p47.writes;
 const areaCount = id => lines().filter(l => (l.area_id || "none") === id).length;
@@ -76,21 +79,21 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
 
     /* ===== C · caso c: proyecto con tres áreas ===== */
     let fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
-    check("C1 cabecera: nombre, estado, líneas y áreas", [q("#ph h1").textContent, q("#ph .status-chip").textContent, q("#ph .ph-meta").textContent.includes("18 líneas"), q("#ph .ph-meta").textContent.includes("3 áreas")], ["Casa Norte", "Activo", true, true]);
+    check("C1 cabecera: nombre, estado, líneas y áreas", [q("#ph h1").textContent, q("#ph .status-chip").textContent, q("#ph .lede").textContent.includes("18 líneas"), q("#ph .lede").textContent.includes("3 áreas")], ["Casa Norte", "Proyecto activo", true, true]);
     check("C2 secciones por área y «Sin área»", areaTitles(), ["Sala", "Cocina", "Baño", "Sin área"]);
     check("C3 las líneas de cada área son las suyas", [rowsOf(A(1)).length, rowsOf(A(2)).length, rowsOf(A(3)).length, rowsOf("none").length], [4, 4, 3, 7]);
-    const sala = q(`#list .area[data-area="${A(1)}"] .area-h .sub`).textContent;
+    const sala = q(`#list .board[data-area="${A(1)}"] .board-head .sum`).textContent;
     check("C4 subtotal de Sala = 1200 + 480 + (3×260 + 3×2×35) + 2×90", sala.includes("US$ 2,850.00"), true);
     check("C5 sin ccantidades de otra área sumadas: la silla de «Sin área» y la de Cocina son líneas distintas", [rowsOf(A(2)).includes("Silla Tolú"), rowsOf("none").includes("Silla Tolú")], [true, true]);
-    check("C6 cuadro económico: importe, cobertura y aviso", [!!q(".tcard .money strong"), qa(".tcard .cov i").length, q(".tcard .tnote").textContent.includes("No es una cotización final"), q(".tcard h3").textContent.includes("PROYECTO COMPLETO") || q(".tcard h3").textContent.includes("Proyecto completo")], [true, 4, true, true]);
-    check("C7 cobertura: pendiente, parcial y sin precio contados; producto no disponible aparte", qa(".tcard .covtxt span").map(e => e.textContent.trim()).join(" "), "14 con importe completo 1 parciales 1 sin precio 1 con configuración pendiente 1 no disponibles");
-    check("C8 el icono de archivar está tras «Solicitar cotización», con su texto", [qa("#ph .ph-actions > *").map(e => e.className.includes("archwrap") ? "archivar" : e.textContent.trim()).slice(-2), q("#tip-arch").textContent], [["Solicitar cotización", "archivar"], "Archivar proyectoPuedes recuperarlo o eliminarlo desde Archivados."]);
+    check("C6 importes en la columna del proyecto: importe, cobertura y aviso", [!!q("#totals .known"), qa("#totals .cov i").length, q("#totals .tnote").textContent.includes("No es una cotización final"), q("#totals .known-k").textContent.includes("Importe conocido")], [true, 4, true, true]);
+    check("C7 cobertura: pendiente, parcial y sin precio contados; producto no disponible aparte", qa("#totals .covtxt span").map(e => e.textContent.trim()).join(" "), "14 con importe completo 1 parciales 1 sin precio 1 con configuración pendiente 1 no disponibles");
+    check("C8 (D3) archivar es un enlace en la columna del proyecto, tras las acciones principales", [q("#ledger .quiet [data-act='archive-ask']").textContent.trim(), !!q("#ledger #request-quote-btn"), !!q("#ledger a[href^='proyectos-resumen.html']")], ["Archivar proyecto", true, true]);
     check("C9 sin escrituras al abrir; sin pedir lo que no existe", [writes().length, fw.__p47.selects.filter(s => s.table === "project_products").every(s => /area_id/.test(s.columns))], [0, true]);
 
     /* filtros: por área, categoría y búsqueda; el resultado filtrado es otra tarjeta y no cambia lo solicitado */
-    await click(find("#toolbar button", "Organizar"));
+    await click(find("#toolbar button", "Áreas"));
     await click(q('#toolbar [data-act="fa"][data-v="' + A(2) + '"]'));
-    check("F1 filtro por área: solo Cocina y tarjeta del resultado filtrado", [areaTitles(), qa(".tcard").length, q(".tcard.filtered h3").textContent.includes("4 de 18")], [["Cocina"], 2, true]);
+    check("F1 filtro por área: solo Cocina y el resultado filtrado en la columna", [areaTitles(), !!q("#totals .filtered"), q("#totals .filtered").textContent.includes("4 de 18")], [["Cocina"], true, true]);
     await click(q('[data-act="clear-all"]'));
     const search = q("#q"); search.value = "tolú"; search.dispatchEvent(new Event("input", { bubbles: true })); await sleep(400);
     check("F2 búsqueda por nombre/marca en todo el proyecto", rowNames().every(t => /Silla|Mesa|Pieza|Producto/.test(t)) && rowNames().length > 0, true);
@@ -98,37 +101,50 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
 
     /* mover y copiar */
     const silla1 = lines().find(l => l.product_id === "silla-tolu" && l.area_id === A(2));
-    await click(q(`.row[data-id="${silla1.id}"] [data-act="pop"]`));
-    await click(q(`.row[data-id="${silla1.id}"] [data-act="move1"][data-area="${A(3)}"]`), 500);
+    await click(await inFicha(silla1.id, `[data-act="pop"][data-key="mv:${silla1.id}"]`));
+    await click(q(`#ficha [data-act="move1"][data-area="${A(3)}"]`), 500);
     check("M1 mover una línea sin conflicto: cambia solo su área", [lines().find(l => l.id === silla1.id).area_id, areaCount(A(2)), areaCount(A(3))], [A(3), 3, 4]);
     const wr = writes().filter(e => e.op === "rpc");
     check("M2 una sola operación atómica del servidor, con la línea y el destino", [wr.length, wr[0].fn, wr[0].args.p_kind, wr[0].args.p_area_id, wr[0].args.p_line_ids], [1, "project_lines_transfer", "move", A(3), [silla1.id]]);
     /* copiar con conflicto: silla en «Sin área» (con nota) a Baño donde ya está la silla movida */
     const sillaNone = lines().find(l => l.product_id === "silla-tolu" && !l.area_id);
-    await click(q(`.row[data-id="${sillaNone.id}"] [data-act="pop"]`));
-    await click(q(`.row[data-id="${sillaNone.id}"] [data-act="copy1"][data-area="${A(3)}"]`), 500);
+    await click(await inFicha(sillaNone.id, `[data-act="pop"][data-key="cp:${sillaNone.id}"]`));
+    await click(q(`#ficha [data-act="copy1"][data-area="${A(3)}"]`), 500);
     check("M3 conflicto: se pregunta y todavía no cambia nada", [!!q(".modal"), q(".modal h2").textContent, lines().filter(l => l.product_id === "silla-tolu").length], [true, "Ya existe en esa área", 2]);
     check("M4 notas distintas: no se puede sumar sin elegir cuál queda", q('[data-act="cf-sum"]').disabled, true);
     await click(q('[data-act="close"]'));
     check("M5 cancelar el conflicto no cambia nada", [lines().filter(l => l.product_id === "silla-tolu").length, (lines().find(l => l.id === sillaNone.id) || {}).quantity], [2, 2]);
-    await click(q(`.row[data-id="${sillaNone.id}"] [data-act="pop"]`));
-    await click(q(`.row[data-id="${sillaNone.id}"] [data-act="copy1"][data-area="${A(3)}"]`), 500);
+    await click(await inFicha(sillaNone.id, `[data-act="pop"][data-key="cp:${sillaNone.id}"]`));
+    await click(q(`#ficha [data-act="copy1"][data-area="${A(3)}"]`), 500);
     await click(q('input[name="nt"][value="both"]'), 100);
     await click(q('[data-act="cf-sum"]'), 700);
     const destino = lines().find(l => l.product_id === "silla-tolu" && l.area_id === A(3));
     check("M6 sumar con «las dos notas»: cantidades sumadas, ambas notas íntegras, la de origen intacta", [destino.quantity, destino.notes, lines().find(l => l.id === sillaNone.id).quantity], [8, "Pedir muestra del tapizado.\n\nMedida del brazo: confirmar con el cliente.", 2]);
     /* selección múltiple */
-    await click(q(`.row[data-id="${lines().find(l => l.product_id === "mesa-aro" && l.area_id === A(1)).id}"] .chk`), 200);
-    check("M7 barra de selección múltiple con mover, copiar y quitar", [!q("#bulk").hidden, !!q('#bulk [data-act="bulk-move"]'), !!q('#bulk [data-act="bulk-copy"]'), !!q('#bulk [data-act="bulk-remove"]')], [true, true, true, true]);
-    await click(q('[data-act="bulk-clear"]'));
+    await click(q('#toolbar [data-act="select-mode"]'), 200);
+    await click(q(`.tile[data-id="${lines().find(l => l.product_id === "mesa-aro" && l.area_id === A(1)).id}"] .tile-btn[data-act="pick"]`), 200);
+    check("M7 modo «Seleccionar»: barra de selección múltiple con mover, copiar y quitar", [!q("#bulk").hidden, !!q('#bulk [data-act="bulk-move"]:not([disabled])'), !!q('#bulk [data-act="bulk-copy"]:not([disabled])'), !!q('#bulk [data-act="bulk-remove"]:not([disabled])'), q("#bulk").textContent.includes("1 seleccionada")], [true, true, true, true, true]);
+    await click(q('#bulk [data-act="select-mode"]'), 200);
+    check("M8 al terminar la selección no queda ninguna línea seleccionada sin verse", [fw.eval("ProyectoVista").state.selected.size, q("#bulk").hidden, qa(".tile.picked").length], [0, true, 0]);
+
+    /* Mesa B: «Añadir aquí» reutiliza «Desde mi selección» con el área ya elegida (mismas reglas: suma en esa área). */
+    const SEL = "mobau_seleccion:aaaaaaaa-0000-4000-8000-00000000000a";
+    localStorage.setItem(SEL, JSON.stringify([{ productId: "mesa-aro", quantity: 2, unit: "ud.", finish: "blanco" }]));
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+    await click(q(`#list .board[data-area="${A(2)}"] [data-act="from-selection"]`), 300);
+    check("M9 «Añadir aquí» abre «Desde mi selección» con el área ya elegida", [q(".modal h2").textContent, q("#sel-area").value], ["Añadir desde mi selección", A(2)]);
+    await click(q('[data-act="do-selection"]'), 900);
+    check("M10 al añadir: se suma en esa área (1 + 2) y no se toca la misma mesa de otra área", [lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(2)).map(l => l.quantity), lines().filter(l => l.product_id === "mesa-aro" && l.area_id === A(1)).map(l => l.quantity)], [[3], [1]]);
+    localStorage.removeItem(SEL);
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
 
     /* cantidades y notas: una sola escritura, solo del campo tocado */
     const w0 = writes().length;
     const qrow = lines().find(l => l.product_id === "sofa-bruma" && l.area_id === A(1));
-    await click(q(`.row[data-id="${qrow.id}"] [data-act="inc"]`), 600);
+    await click(await inFicha(qrow.id, `[data-act="inc"][data-id="${qrow.id}"]`), 600);
     const upd = writes().slice(w0).filter(e => e.table === "project_products");
     check("Q1 +1: una sola escritura, solo quantity, sobre su línea", [upd.length, upd[0].op, upd[0].ids, upd[0].payload], [1, "update", [qrow.id], { quantity: 2 }]);
-    await click(find("#list .row[data-id='" + qrow.id + "'] button", "Añadir nota"), 200);
+    await openTile(qrow.id); await click(find("#ficha button", "Añadir nota"), 200);
     const ta = q(`#ne-${qrow.id}`); ta.value = "Tapizado a elegir"; ta.dispatchEvent(new Event("input", { bubbles: true })); await sleep(80);
     await click(q(`[data-act="note-save"][data-id="${qrow.id}"]`), 700);
     check("Q2 nota: una escritura, solo notes", [lines().find(l => l.id === qrow.id).notes, lines().find(l => l.id === qrow.id).quantity], ["Tapizado a elegir", 2]);
@@ -137,12 +153,12 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
     const cocina = A(2);
     const sillaC = lines().find(l => l.product_id === "silla-tolu" && l.area_id === cocina), sillaN = lines().find(l => l.product_id === "silla-tolu" && !l.area_id);
-    await click(find("#toolbar button", "Organizar")); await click(q('#toolbar [data-act="areas"]'));
+    await click(find("#toolbar button", "Áreas")); await click(q('#toolbar [data-act="areas"]'));
     await click(q(`.modal [data-act="del-area"][data-id="${cocina}"]`), 400);
     check("D1 eliminar área con una equivalente en «Sin área»: pide resolver antes", [q(".modal h2").textContent, q('[data-act="da-apply"]').disabled], ["Conflictos al eliminar el área", true]);
     await click(q('.modal [data-act="close"]'));
     check("D2 cancelar: el área y sus líneas siguen, sin ninguna escritura", [areaCount(cocina), writes().length], [4, 0]);
-    await click(find("#toolbar button", "Organizar")); await click(q('#toolbar [data-act="areas"]'));
+    await click(find("#toolbar button", "Áreas")); await click(q('#toolbar [data-act="areas"]'));
     await click(q(`.modal [data-act="del-area"][data-id="${cocina}"]`), 400);
     await click(q('input[name="r0"][value="sum"]'), 100); await click(q('input[name="n0"][value="both"]'), 100);
     await click(q('[data-act="da-apply"]'), 800);
@@ -154,34 +170,34 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
 
     /* ===== B · caso b: lista sencilla, organización opcional ===== */
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "b" });
-    check("B1 sin áreas: lista normal, sin secciones ni selector de área por fila", [areaTitles().length, qa("#list .row").length, qa(".r-area").length], [0, 5, 0]);
+    check("B1 sin áreas: lista normal, sin secciones ni selector de área por pieza", [areaTitles().length, qa("#list .tile").length, qa("#list .tile select").length], [0, 5, 0]);
     check("B2 «Organizar por áreas» ofrece crear la primera área y explica que es opcional", (await (async () => { await click(find("#toolbar button", "Organizar")); return q("#toolbar .pop").textContent.includes("opcional"); })()), true);
     await click(q('#toolbar [data-act="organize"]'));
     q("#first-area").value = "Sala"; await click(q('[data-act="create-first"]'), 700);
     check("B3 primera área: nada se reparte solo, todo queda en «Sin área»", [areaTitles(), areaCount("none"), writes().filter(e => e.op === "insert").map(e => e.table)], [["Sala", "Sin área"], 5, ["project_areas"]]);
     /* borrar la última área vuelve a la lista sencilla */
-    await click(find("#toolbar button", "Organizar")); await click(q('#toolbar [data-act="areas"]'));
+    await click(find("#toolbar button", "Áreas")); await click(q('#toolbar [data-act="areas"]'));
     await click(q('.modal [data-act="del-area"]'), 300); await click(q('[data-act="da-apply"]'), 800);
-    check("B4 al borrar la última área vuelve a ser una lista sencilla", [areaTitles().length, qa("#list .row").length], [0, 5]);
+    check("B4 al borrar la última área vuelve a ser una lista sencilla", [areaTitles().length, qa("#list .tile").length], [0, 5]);
 
     /* ===== E · vacío y archivar ===== */
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "a" });
-    check("E1 proyecto vacío: estado vacío con acciones, sin filtros ni tarjetas", [!!q("#list .empty-state"), q("#list .empty-state h2").textContent, qa(".tcard").length, !!q("#toolbar .search")], [true, "Tu proyecto está vacío", 0, false]);
+    check("E1 proyecto vacío: estado vacío con acciones, sin filtros ni importes", [!!q("#list .empty-state"), q("#list .empty-state h2").textContent, qa("#totals .known").length, !!q("#toolbar .search")], [true, "Tu proyecto está vacío", 0, false]);
     await click(q('[data-act="archive-ask"]'));
     await click(q('[data-act="archive-do"]'), 800);
     const wp = writes().filter(e => e.table === "projects");
     check("E2 archivar un proyecto vacío SIEMPRE archiva: pasa a archivado, no se elimina", [wp.map(e => e.op), wp[0].payload, w().__p47.projects.some(p => p.id === P(1))], [["update"], { status: "archived" }, true]);
-    check("E3 tras archivar: solo consulta, sin acciones de edición ni eliminar", [!!q("#banner .alert"), !!q('[data-act="archive-ask"]'), !!q('[data-act="del-project"]'), q("#ph .status-chip").textContent], [true, false, false, "Archivado"]);
+    check("E3 tras archivar: solo consulta, sin acciones de edición ni eliminar", [!!q("#banner .archived-note"), !!q('[data-act="archive-ask"]'), !!q('[data-act="del-project"]'), q("#ph .status-chip").textContent], [true, false, false, "Archivado"]);
 
     /* ===== A · estados de las áreas: no existen (migración pendiente) vs error ===== */
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "b", areas: "missing" });
-    check("A1 migración sin aplicar (PGRST205): lista sencilla, sin controles de áreas y sin pedir area_id", [qa("#list .row").length, !find("#toolbar button", "Organizar"), fw.__p47.selects.filter(s => s.table === "project_products").every(s => !/area_id/.test(s.columns))], [5, true, true]);
+    check("A1 migración sin aplicar (PGRST205): lista sencilla, sin controles de áreas y sin pedir area_id", [qa("#list .tile").length, !find("#toolbar button", "Organizar"), fw.__p47.selects.filter(s => s.table === "project_products").every(s => !/area_id/.test(s.columns))], [5, true, true]);
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c", areas: "error" });
-    check("A2 error al cargar las áreas: aviso, sin lista, sin «proyecto sin áreas», sin operaciones", [!!q("#list .alert.bad"), q("#list .alert").textContent.includes("No pudimos cargar las áreas"), qa("#list .row").length, qa(".empty-state").length, !!q("#toolbar .search"), q("#request-quote-btn").disabled], [true, true, 0, 0, false, true]);
+    check("A2 error al cargar las áreas: aviso, sin lista, sin «proyecto sin áreas», sin operaciones", [!!q("#list .alert.bad"), q("#list .alert").textContent.includes("No pudimos cargar las áreas"), qa("#list .tile").length, qa(".empty-state").length, !!q("#toolbar .search"), q("#request-quote-btn").disabled], [true, true, 0, 0, false, true]);
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c", areas: "error1" });
-    check("A3 error pasajero: aviso con «Reintentar»; al reintentar se carga todo", [!!q('#list [data-act="retry"]'), qa("#list .row").length], [true, 0]);
+    check("A3 error pasajero: aviso con «Reintentar»; al reintentar se carga todo", [!!q('#list [data-act="retry"]'), qa("#list .tile").length], [true, 0]);
     await click(q('[data-act="retry"]'), 800);
-    check("A4 tras reintentar: áreas y líneas completas", [areaTitles(), qa("#list .row").length], [["Sala", "Cocina", "Baño", "Sin área"], 18]);
+    check("A4 tras reintentar: áreas y líneas completas", [areaTitles(), qa("#list .tile").length], [["Sala", "Cocina", "Baño", "Sin área"], 18]);
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c", areas: "error" });
     const r1 = await fw.eval("MobauProjects").saveProductToProject(P(1), "silla-tolu", 1, "ud.", "sum", "roble");
     check("A5 error de áreas: guardar un producto se rechaza sin escribir nada (podría caer en el área equivocada)", [!!r1.error, writes().length], [true, 0]);
@@ -208,7 +224,8 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
     /* ===== R · archivado con solicitud: copia con las áreas enviadas ===== */
     fw = await open("proyectos-detalle.html", `id=${P(3)}`, { caso: "c" });
     check("R1 solicitud enviada: áreas de la copia con su nombre y su orden, no las actuales", [areaTitles(), q("#ph .status-chip").textContent], [["Terraza", "Comedor"], "Solicitud enviada"]);
-    check("R2 solo lectura: sin casillas visibles, sin cantidades editables, sin menú de áreas", [qa('.row .chk').every(c => c.style.visibility === "hidden"), qa(".r-qty input").every(i => i.disabled), qa('[data-act="del-area"]').length], [true, true, 0]);
+    await openTile(qa("#list .tile")[0].dataset.id);
+    check("R2 solo lectura: sin modo de selección, cantidades no editables en la ficha, sin acciones de la línea ni menú de áreas", [!q('[data-act="select-mode"]'), qa("#ficha .dp-qty-input, #ficha [data-act='inc'], #ficha [data-act='dec']").every(i => i.disabled), !q('#ficha [data-act="remove"]'), qa('[data-act="del-area"]').length], [true, true, true, 0]);
     fw = await open("proyectos-detalle.html", `id=${P(2)}`, { caso: "c" });
     check("R3 archivado sin solicitud con áreas: se consulta por áreas y por «Sin área»", [areaTitles(), q("#ph .status-chip").textContent], [["Recepción", "Sala de juntas", "Sin área"], "Archivado"]);
 
@@ -232,7 +249,7 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
     /* ===== P · 100 líneas y móvil ===== */
     const t0 = Date.now();
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "d" });
-    check("P1 100 líneas en 6 áreas: todas se pintan", [qa("#list .row").length, areaTitles().length], [100, 7]);
+    check("P1 100 líneas en 6 áreas: todas se pintan", [qa("#list .tile").length, areaTitles().length], [100, 7]);
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" }, { width: "390px" });
     check("P2 móvil (390 px): sin desbordamiento horizontal", noOverflow(), [true]);
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "d" }, { width: "390px" });
@@ -240,7 +257,7 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
 
     /* ===== G · sin acceso a precios (plan): como hasta ahora, solo el aviso de planes ===== */
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c", precios: false }, { ready: doc => doc.getElementById("plan-gate").style.display !== "none" });
-    check("G1 el servidor niega los precios por plan: solo el aviso de planes, sin proyecto ni líneas", [d().getElementById("plan-gate").style.display !== "none", d().getElementById("project-view").style.display, qa("#list .row").length], [true, "none", 0]);
+    check("G1 el servidor niega los precios por plan: solo el aviso de planes, sin proyecto ni líneas", [d().getElementById("plan-gate").style.display !== "none", d().getElementById("project-view").style.display, qa("#list .tile").length], [true, "none", 0]);
   } catch (e) {
     check("ERROR del arnés", String(e && e.stack || e), "sin errores");
   }

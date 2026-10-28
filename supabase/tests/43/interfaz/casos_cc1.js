@@ -1,9 +1,11 @@
 const detail = () => {
   const d = D();
-  /* Punto 47: filas compactas (#list .row), importes en #totals y «Archivar» como icono tras «Solicitar cotización». */
-  return { prices: d.querySelectorAll("#list .row .r-amt").length,
+  /* Mesa B: piezas (#list .tile) con su importe, importes del proyecto en #totals y «Archivar» como enlace en la columna.
+     Las cantidades se editan en la ficha de cada pieza: se abre la primera para contarlas. */
+  const first = d.querySelector("#list .tile-btn[data-act='open']"); if (first) first.click();
+  return { prices: d.querySelectorAll("#list .tile .foot .a").length,
            inputsEnabled: [...d.querySelectorAll(".dp-qty-input, [data-act='inc'], [data-act='dec']")].filter(e => !e.disabled).length,
-           archive: vis(d.querySelector(".iconarch")), addNav: vis(d.querySelector("[data-act='pop'][data-key='add']")),
+           archive: vis(d.querySelector("[data-act='archive-ask']")), addNav: vis(d.querySelector("[data-act='pop'][data-key='add']")),
            quote: vis(d.getElementById("request-quote-btn")), summary: vis(d.querySelector("a[href^='proyectos-resumen.html']")),
            priceSummary: txt(d.getElementById("totals")), view: vis(d.getElementById("project-view")),
            calls: priceCalls(W()), errors: W().__mock.errors };

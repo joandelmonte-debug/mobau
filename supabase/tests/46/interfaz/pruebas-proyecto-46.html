@@ -39,7 +39,7 @@ function check(name, got, expected){
 }
 
 const READY = {
-  "proyectos-detalle.html": d => d.querySelectorAll("#list .row").length > 0,
+  "proyectos-detalle.html": d => d.querySelectorAll("#list .tile").length > 0,
   "proyectos-resumen.html": d => (d.getElementById("summary-content") || {}).style?.display === "block",
   "proyectos-cotizacion.html": d => (d.getElementById("view-send") || {}).style?.display === "grid"
 };
@@ -62,18 +62,21 @@ async function open(page, query, conf = {}, { wait = 9000, width = "" } = {}){
 }
 const d = () => frame.contentDocument;
 const w = () => frame.contentWindow;
-/* Punto 47: filas compactas. rowText(id) = todo el texto visible de la fila (con el detalle de su configuración desplegado). */
-const rowEl = rowId => d().querySelector(`#list .row[data-id="${rowId}"]`);
-const rowIds = () => [...d().querySelectorAll("#list .row")].map(r => r.dataset.id);
-const qty = rowId => (d().querySelector(`.dp-qty-input[data-id="${rowId}"]`) || {}).value;
+/* Mesa B: cada línea es una pieza (.tile) y su detalle (cantidad, nota, configuración y acciones) se abre en la ficha
+   gris (#ficha), una sola a la vez. rowText(id) = texto de la pieza más el de su ficha si está abierta. */
+const rowEl = rowId => d().querySelector(`#list .tile[data-id="${rowId}"]`);
+const rowIds = () => [...d().querySelectorAll("#list .tile")].map(r => r.dataset.id);
+const qty = rowId => { const q = rowEl(rowId) && rowEl(rowId).querySelector(".q"); return q ? q.textContent.trim().split(/\s+/)[0] : undefined; };
 const summaryText = () => (d().getElementById("totals") || {}).innerText || "";
-const openCfg = async rowId => { const b = rowEl(rowId) && rowEl(rowId).querySelector('[data-act="cfg"][aria-expanded="false"]'); if (b){ b.click(); await sleep(120); } };
-const rowText = rowId => (rowEl(rowId) ? rowEl(rowId).innerText.replace(/\s+/g, " ") : null);
+const fichaOf = rowId => { const f = d().getElementById("ficha"); return f && rowEl(rowId) && rowEl(rowId).classList.contains("open") ? f : null; };
+const openCfg = async rowId => { if (!rowEl(rowId) || rowEl(rowId).classList.contains("open")) return; rowEl(rowId).querySelector('.tile-btn[data-act="open"]').click(); await sleep(150); };
+const rowText = rowId => (rowEl(rowId) ? (rowEl(rowId).innerText + " " + (fichaOf(rowId) ? fichaOf(rowId).innerText : "")).replace(/\s+/g, " ") : null);
+const inFicha = async (rowId, sel) => { await openCfg(rowId); return d().querySelector(`#ficha ${sel}`); };
 const click = async (el, ms = 400) => { el.click(); await sleep(ms); };
 const writes = () => w().__escrituras46.map(e => [e.tabla, e.op, e.ids || null, e.cambios || e.fila]);
 const noOverflow = () => {
   const de = d().documentElement;
-  const out = [...d().querySelectorAll("button, input, .ps-product-sub, .card-meta, p, .r-name, .r-meta")].filter(el => el.getBoundingClientRect().right > de.clientWidth + 0.5).length;
+  const out = [...d().querySelectorAll("button, input, .ps-product-sub, .card-meta, p, .nm, .meta")].filter(el => el.getBoundingClientRect().right > de.clientWidth + 0.5).length;
   return [de.scrollWidth <= de.clientWidth, out];
 };
 
@@ -92,36 +95,36 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
     /* ===== Detalle · proyecto activo (Punto 47: filas compactas; el detalle de cada configuración se despliega con «Detalles») ===== */
     await open("proyectos-detalle.html", `id=${P(1)}`);
     w().confirm = () => true;
-    await openCfg("l-a"); await openCfg("l-b");
-    const ta = rowText("l-a"), tb = rowText("l-b");
+    await openCfg("l-a"); const ta = rowText("l-a");
+    await openCfg("l-b"); const tb = rowText("l-b");
     check("D1a mismo producto y acabado: tres líneas separadas por su id, más demo-cot", rowIds(), ["l-sin", "l-a", "l-b", "l-cot"]);
     check("D1b A: resumen, componente por unidad (cantidad por determinar sin factor), estado, cómo cambiarla y parte por cotizar",
       [ta.includes("Fuente: Módulo LED (consulta 1)"), ta.includes("Módulo LED"), ta.includes(COMPLETAS), ta.includes(CAMBIAR), ta.includes("Parte por cotizar"), ta.includes("Configurado")], [true, true, true, true, true, true]);
     check("D1c B (solo ajuste): su propio resumen y estado, sin «parte por cotizar»",
       [tb.includes("Fuente: Cálida (consulta 1)"), tb.includes(COMPLETAS), tb.includes("Parte por cotizar")], [true, true, false]);
-    check("D1d líneas sin configuración: sin bloque de configuración", [!rowEl("l-sin").querySelector(".r-cfg"), !rowEl("l-cot").querySelector(".r-cfg")], [true, true]);
+    check("D1d líneas sin configuración: sin bloque de configuración", [!(await inFicha("l-sin", ".cfg")), !(await inFicha("l-cot", ".cfg"))], [true, true]);
     check("D1e importe conocido: 6 × 120; la línea A queda parcial (componente sin cantidad por unidad); una consulta de estado; sin errores sin capturar",
       [total(), summaryText().includes("1 parciales"), w().__estadosCalls, w().__sinCapturar], ["US$ 720.00", true, 1, []]);
     check("D1f la aclaración sobre compatibilidad técnica sale UNA vez para todo el bloque de líneas (no por línea) y las líneas dicen «elecciones registradas», no «completas»",
       [d().querySelectorAll(".line-compat-note").length, d().querySelector(".line-compat-note").textContent, (d().getElementById("list").innerText.match(/compatibilidad técnica/g) || []).length, /completas según/.test(d().getElementById("list").innerText)],
       [1, "Mobau no valida la compatibilidad técnica entre piezas.", 0, false]);
 
-    await click(d().querySelector('[data-act="inc"][data-id="l-b"]'), 800);
+    await click(await inFicha("l-b", '[data-act="inc"][data-id="l-b"]'), 800);
     await openCfg("l-a");
     check("D2 «+» en B: solo se actualiza B; importe actualizado; se vuelve a consultar el estado; las demás cantidades no cambian",
       [writes().filter(x => x[0] === "project_products"), [qty("l-sin"), qty("l-a"), qty("l-b")], total(), rowText("l-a").includes("Fuente: Módulo LED (consulta 2)")],
       [[["project_products", "update", ["l-b"], { quantity: 2 }]], ["2", "3", "2"], "US$ 840.00", true]);
 
-    await click(d().querySelector('#list .row[data-id="l-a"] [data-act="pop"]'), 150);
-    await click(d().querySelector('#list .row[data-id="l-a"] [data-act="remove"]'), 800);
+    await click(await inFicha("l-a", '[data-act="remove"]'), 800);
     check("D3 quitar A: quedan las demás; importe actualizado; ya no hay líneas parciales (B no tiene componentes aparte)",
       [writes().slice(-1)[0], rowIds(), total(), summaryText().includes("0 parciales")], [["project_products", "delete", ["l-a"], null], ["l-sin", "l-b", "l-cot"], "US$ 480.00", true]);
 
     /* Respuesta de una carga anterior que llega después de otra más reciente */
     await open("proyectos-detalle.html", `id=${P(1)}`, { retrasos: [0, 1500, 0] });
-    d().querySelector('[data-act="inc"][data-id="l-b"]').click();
+    (await inFicha("l-b", '[data-act="inc"][data-id="l-b"]')).click();
     await sleep(150);
-    const bloqueado = d().querySelector('[data-act="inc"][data-id="l-sin"]').disabled;
+    /* Mesa B: solo hay una ficha abierta; mientras se guarda, sus controles de cantidad no se pueden pulsar. */
+    const bloqueado = [...d().querySelectorAll('#ficha [data-act="inc"], #ficha [data-act="dec"], #ficha .dp-qty-input')].every(b => b.disabled);
     await sleep(2600);
     await openCfg("l-a");
     check("D4 mientras se guarda un cambio, las demás cantidades no se pueden tocar (no se cuenta dos veces un doble clic); la consulta lenta termina con el estado más reciente",
@@ -132,16 +135,17 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
       await openCfg("l-a");
       const t = rowText("l-a");
       check(`${nombre}: lo guardado y «no pudimos comprobarla»; nunca «completas»; sin errores sin capturar`,
-        [t.includes("fuente: comp"), t.includes("Sin comprobar"), t.includes(SIN_COMPROBAR), t.includes(COMPLETAS), !rowEl("l-sin").querySelector(".r-cfg"), w().__sinCapturar],
+        [t.includes("fuente: comp"), t.includes("Sin comprobar"), t.includes(SIN_COMPROBAR), t.includes(COMPLETAS), !(await inFicha("l-sin", ".cfg")), w().__sinCapturar],
         [true, true, true, false, true, []]);
     }
 
     let t0 = Date.now();
     await open("proyectos-detalle.html", `id=${P(1)}`, { estados: "colgada" });
     const espera = Date.now() - t0;
+    await openCfg("l-a");
     check("D7a consulta sin respuesta: se pinta al cumplirse el límite (4 s), con A sin comprobar",
       [espera >= 3500 && espera < 8000, rowText("l-a").includes("Sin comprobar")], [true, true]);
-    await click(d().querySelector('[data-act="inc"][data-id="l-b"]'), 5500);
+    await click(await inFicha("l-b", '[data-act="inc"][data-id="l-b"]'), 5500);
     check("D7b después se puede cambiar la cantidad (solo B)", [writes().filter(x => x[0] === "project_products"), qty("l-b")],
       [[["project_products", "update", ["l-b"], { quantity: 2 }]], "2"]);
 
@@ -153,22 +157,25 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
 
     for (const [modo, nombre] of [["ausente", "D9a estado ausente"], ["desconocido", "D9b estado desconocido"]]){
       await open("proyectos-detalle.html", `id=${P(1)}`, { estados: modo });
-      await openCfg("l-a"); await openCfg("l-b");
+      /* Mesa B: una ficha abierta a la vez; se lee A y después B. */
+      await openCfg("l-a"); const ta9 = rowText("l-a");
+      await openCfg("l-b"); const tb9 = rowText("l-b");
       check(`${nombre}: A sin comprobar (nunca «completas»); B con su estado`,
-        [rowText("l-a").includes(SIN_COMPROBAR), rowText("l-a").includes(COMPLETAS), rowText("l-b").includes(COMPLETAS)], [true, false, true]);
+        [ta9.includes(SIN_COMPROBAR), ta9.includes(COMPLETAS), tb9.includes(COMPLETAS)], [true, false, true]);
     }
 
     await open("proyectos-detalle.html", `id=${P(1)}`, { conPendiente: true });
     w().confirm = () => true;
+    await openCfg("l-x");
     check("D10 pendiente: el motivo en la línea y el importe lo cuenta aparte, fuera del importe calculable",
       [rowText("l-x").includes("Pendiente"), rowText("l-x").includes("Una opción elegida en «Fuente» ya no está disponible."), summaryText().includes("1 con configuración pendiente"), rowText("l-x").includes("Sin importe")], [true, true, true, true]);
-    await click(d().querySelector('#list .row[data-id="l-x"] [data-act="pop"]'), 150);
-    await click(d().querySelector('#list .row[data-id="l-x"] [data-act="remove"]'), 800);
+    await click(await inFicha("l-x", '[data-act="remove"]'), 800);
     check("D10b quitar la línea pendiente: desaparece del recuento de pendientes",
       [rowIds().includes("l-x"), summaryText().includes("0 con configuración pendiente")], [false, true]);
 
     const MOTIVO_SIN_CFG = "Este producto ahora requiere elegir «Fuente».";
     await open("proyectos-detalle.html", `id=${P(1)}`, { sinConfigPendiente: true });
+    await openCfg("l-cot");
     check("D11 línea sin configuración que el servidor devuelve pendiente: muestra el motivo y el resumen lo señala",
       [rowText("l-cot").includes(MOTIVO_SIN_CFG), rowText("l-cot").includes("Pendiente"), summaryText().includes("1 con configuración pendiente")], [true, true, true]);
 
@@ -192,9 +199,12 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
     const noteIn = id => d().getElementById(`ne-${id}`);
     const noteBtn = id => d().querySelector(`[data-act="note-save"][data-id="${id}"]`);
     const noteSt = () => (d().querySelector(".note-status") || {}).textContent;
-    const openNote = async id => { await click(d().querySelector(`#list .row[data-id="${id}"] .r-note [data-act="note"]`), 200); };
+    const openNote = async id => { await click(await inFicha(id, `[data-act="note"][data-id="${id}"]`), 200); };
+    const notePv = async id => { const n = await inFicha(id, ".note-text"); return n ? n.textContent : null; };
+    const noteAct = async id => { const b = await inFicha(id, `.f-note [data-act="note"]`); return b ? b.textContent.trim() : null; };
+    const pvSin = await notePv("l-sin"), negrita = d().querySelector("#ficha .note-text b");
     check("N1 proyecto activo: la nota guardada se ve como texto (sin interpretar HTML) y las demás líneas ofrecen «Añadir nota»",
-      [d().querySelector('#list .row[data-id="l-sin"] .r-note .pv').textContent, d().querySelector("#list .r-note b"), d().querySelector('#list .row[data-id="l-b"] .r-note').textContent.trim()],
+      [pvSin, negrita, await noteAct("l-b")],
       ["Montar a 2,40 m <b>no negrita</b>\nsegunda línea", null, "Añadir nota"]);
     await openNote("l-b");
     check("N1b la nota es un bloque propio «Nota técnica (opcional)», distinto del resumen de la configuración",
@@ -204,16 +214,16 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
     check("N2 al escribir se activa «Guardar» en esa línea", noteBtn("l-b").disabled, false);
     await click(noteBtn("l-b"), 800);
     check("N3 guardar: un único UPDATE de esa fila que solo cambia notes (nunca cantidad, unidad ni configuración); el valor se conserva",
-      [writes().filter(x => x[0] === "project_products"), d().querySelector('#list .row[data-id="l-b"] .r-note .pv').textContent, qty("l-b")],
+      [writes().filter(x => x[0] === "project_products"), await notePv("l-b"), qty("l-b")],
       [[["project_products", "update", ["l-b"], { notes: "Pedir muestra del acabado" }]], "Pedir muestra del acabado", "1"]);
     await openNote("l-b");
     noteIn("l-b").value = "   ";
     noteIn("l-b").dispatchEvent(new Event("input", { bubbles: true }));
     await click(noteBtn("l-b"), 800);
     check("N4 vaciar la nota la elimina (notes = null)",
-      [writes().slice(-1)[0], d().querySelector('#list .row[data-id="l-b"] .r-note').textContent.trim()], [["project_products", "update", ["l-b"], { notes: null }], "Añadir nota"]);
-    await click(d().querySelector('[data-act="inc"][data-id="l-sin"]'), 800);
-    check("N5 cambiar la cantidad no borra la nota de la línea", [d().querySelector('#list .row[data-id="l-sin"] .r-note .pv').textContent, qty("l-sin")], ["Montar a 2,40 m <b>no negrita</b>\nsegunda línea", "3"]);
+      [writes().slice(-1)[0], await noteAct("l-b")], [["project_products", "update", ["l-b"], { notes: null }], "Añadir nota"]);
+    await click(await inFicha("l-sin", '[data-act="inc"][data-id="l-sin"]'), 800);
+    check("N5 cambiar la cantidad no borra la nota de la línea", [await notePv("l-sin"), qty("l-sin")], ["Montar a 2,40 m <b>no negrita</b>\nsegunda línea", "3"]);
 
     for (const [hint, texto] of [["line_note_archived", "Este proyecto está archivado: la nota ya no se puede modificar."], ["line_note_too_long", "La nota admite como máximo 1000 caracteres."]]){
       await open("proyectos-detalle.html", `id=${P(1)}`, { errorNota: hint });
@@ -226,8 +236,9 @@ const total = () => { const m = summaryText().match(/(US\$ [\d.,]+)\s*dólares/)
     }
 
     await open("proyectos-detalle.html", `id=${P(3)}`, { conNota: true });
+    await openCfg(rowIds()[0]);
     check("N6 archivado con copia: la nota enviada solo se lee (sin campo ni botón), como texto",
-      [d().querySelectorAll(".noted, [data-act='note']").length, d().querySelector("#list .r-note .pv").textContent, d().querySelector("#list .r-note i"), writes()],
+      [d().querySelectorAll(".noted, [data-act='note']").length, d().querySelector("#ficha .note-text").textContent, d().querySelector("#ficha .note-text i"), writes()],
       [0, "Nota enviada <i>x</i>\nlínea 2", null, []]);
     const verSol = d().querySelector(".dp-rfq__toggle");
     await click(verSol, 400);
