@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catálogo — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="cabecera.css">
+<link rel="stylesheet" href="marco.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="nav-account-hint.js"></script>
 <style>
   /* Punto 21 — todo lo de aquí es local a catalogo.html (nunca styles.css):
@@ -201,16 +206,8 @@
      .product-grid de styles.css (3 cols) y a sus dos media queries (2/1
      col) sin !important — producto.html sigue leyendo solo la clase,
      sin ningún cambio. */
-  #product-grid{ grid-template-columns: repeat(4, minmax(0,1fr)); }
-  @media (max-width:1280px){
-    #product-grid{ grid-template-columns: repeat(3, minmax(0,1fr)); }
-  }
-  @media (max-width:900px){
-    #product-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-  }
-  @media (max-width:560px){
-    #product-grid{ grid-template-columns: 1fr; }
-  }
+  /* Punto 49: sin número fijo de columnas; la tarjeta nunca baja de 264 px (5 columnas desde unos 1510 px). */
+  #product-grid{ grid-template-columns: repeat(auto-fill, minmax(264px, 1fr)); }
 
   /* Punto 31 — botón "carpeta+" (añadir directo al proyecto activo),
      local a catalogo.html: no toca .card-actions .btn de styles.css
@@ -254,28 +251,49 @@
      variante móvil de 20px), así que gana siempre sin depender del
      orden de las reglas. Solo horizontal: el padding vertical de
      ambos bloques no se toca. */
-  .site-header .wrap,
-  .page-head .wrap{
-    padding-left: 0;
-    padding-right: 0;
-  }
+  /* Punto 49: el ancho y el margen lateral los pone el marco común (marco.css, body.marco-ancho), igual que en la
+     cabecera; sustituye al ajuste anterior, que igualaba la cabecera y page-head a 0 px. */
+  .catalog-toolbar{ gap:12px 24px; flex-wrap:wrap; }
+  .catalog-toolbar__left{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 24px; min-width:0; }
+  .catalog-types{ display:flex; flex-wrap:wrap; gap:8px; }
+  .catalog-types[hidden]{ display:none; }
+  .catalog-type{ display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 14px; border:1px solid var(--line-strong); border-radius:17px; background:var(--bg); color:var(--ink-soft); font:inherit; font-size:14px; cursor:pointer; }
+  .catalog-type:hover{ border-color:var(--ink-faint); color:var(--ink); }
+  .catalog-type[aria-pressed="true"]{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink); font-weight:600; }
+  .catalog-type .n{ color:inherit; opacity:.75; font-weight:500; }
+  .catalog-title-row{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 20px; }
+  .catalog-clearq{ background:none; border:0; padding:0; font:inherit; font-size:14.5px; color:var(--accent); cursor:pointer; text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line-strong); }
+  .catalog-clearq:hover{ text-decoration-color:currentColor; }
+  .catalog-clearq[hidden]{ display:none; }
 </style>
 </head>
-<body>
+<body class="marco marco-ancho">
 
 <header class="site-header">
   <div class="wrap nav">
     <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <form class="gsearch" action="catalogo.html" method="get" role="search">
+      <div class="gsearch-bar">
+        <div class="gsearch-field">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg>
+          <label class="sr" for="gsearch-input">Buscar productos y componentes</label>
+          <input id="gsearch-input" name="q" type="search" placeholder="Buscar productos y componentes" autocomplete="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="gsearch-panel" aria-autocomplete="list">
+          <button type="button" class="gsearch-clear" aria-label="Borrar búsqueda" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"></path></svg></button>
+        </div>
+        <button type="button" class="gsearch-close">Cerrar</button>
+      </div>
+      <div class="gsearch-panel" id="gsearch-panel" hidden></div>
+      <p class="sr gsearch-live" role="status" aria-live="polite"></p>
+    </form>
     <nav class="nav-links" aria-label="Principal">
-      <a href="index.html">Inicio</a>
-      <a href="catalogo.html" class="active">Catálogo</a>
+      <a href="catalogo.html" class="active" aria-current="page">Productos</a>
       <a href="distribuidores.html">Distribuidores</a>
-      <a href="index.html#contacto">Contacto</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección</a>
+      <button type="button" class="iconbtn gsearch-open" aria-label="Buscar productos y componentes"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg></button>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden><svg class="i sel-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="8" width="13" height="12" rx="1.5"></rect><path d="M8 5h10.5A1.5 1.5 0 0 1 20 6.5V16"></path></svg><span class="sel-label">Mi selección</span><span class="sel-n"></span></a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
@@ -283,8 +301,11 @@
 
 <div class="page-head">
   <div class="wrap">
-    <div class="eyebrow" id="catalog-eyebrow">Catálogo</div>
-    <h1 id="catalog-title">Productos para arquitectura e interiorismo</h1>
+    <div class="eyebrow" id="catalog-eyebrow">Productos</div>
+    <div class="catalog-title-row">
+      <h1 id="catalog-title">Productos para arquitectura e interiorismo</h1>
+      <button type="button" class="catalog-clearq" id="catalog-clearq" hidden>Borrar búsqueda</button>
+    </div>
     <!-- Punto 43 (O1): aclaración de precios, visible siempre cerca del inicio. -->
     <p id="catalog-price-note" style="margin-top:12px; max-width:72ch; font-size:13.5px; color:var(--ink-soft);">*Los planes Individual y Estudio permiten consultar los precios publicados y solicitar cotizaciones. No todos los productos tienen precio publicado: algunos requieren cotización o están pendientes de confirmación.</p>
   </div>
@@ -295,20 +316,6 @@
   <!-- Punto 46: dos vistas del mismo catálogo (Productos, la principal, y Componentes y accesorios). Esta última no es una
        categoría: es una vista transversal a las seis, con los artículos «componente» y «ambos». -->
   <p class="catalog-view-note" id="catalog-view-note" hidden>Piezas y accesorios que se ofrecen dentro de otros productos, de cualquier categoría. Puedes consultar su ficha y sus archivos y, con tu plan, solicitarlos por separado, por ejemplo como recambio.</p>
-
-  <div class="search-bar">
-    <label for="search-input" class="search-bar__label" id="search-label">Buscar productos</label>
-    <!-- Productos es la vista principal. Un enlace secundario, a la derecha del campo y fuera de él, lleva a
-         «Componentes y accesorios» y, ya dentro, a «Volver a productos». Son enlaces reales (teclado, clic central,
-         URL directa), no botones de pestaña. -->
-    <div class="search-bar__row">
-      <input type="search" id="search-input" placeholder="Buscar por nombre, referencia, marca o categoría…">
-      <p class="catalog-viewlink" id="catalog-viewlink">
-        <a href="catalogo.html?vista=componentes" id="view-componentes" data-vista="componentes">Componentes y accesorios</a>
-        <a href="catalogo.html" id="view-productos" data-vista="productos" hidden>← Volver a productos</a>
-      </p>
-    </div>
-  </div>
 
   <section class="catalog-filters" aria-label="Filtros de catálogo">
     <!-- Barra compacta — un botón por grupo (mismo orden pedido:
@@ -513,8 +520,16 @@
   </section>
 
   <div class="catalog-toolbar">
+    <div class="catalog-toolbar__left">
     <!-- Vacío hasta que render() pinta el recuento real (punto 41, D1): durante la carga o con error no se muestra ninguna cifra. -->
     <span class="result-count" id="result-count"></span>
+    <!-- Punto 49: con una búsqueda, tipo opcional; sin búsqueda, el enlace a la vista de componentes de siempre. -->
+    <div class="catalog-types" id="catalog-types" role="group" aria-label="Tipo de artículo" hidden></div>
+    <p class="catalog-viewlink" id="catalog-viewlink">
+      <a href="catalogo.html?vista=componentes" id="view-componentes" data-vista="componentes">Componentes y accesorios</a>
+      <a href="catalogo.html" id="view-productos" data-vista="productos" hidden>← Volver a productos</a>
+    </p>
+    </div>
     <select class="sort-select" id="sort-select">
       <option value="relevancia" id="sort-default-option">Orden del catálogo</option>
       <option value="recientes">Más recientes</option>
@@ -542,7 +557,7 @@
       <div>
         <h4>Plataforma</h4>
         <ul>
-          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="catalogo.html">Productos</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
           <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
@@ -572,6 +587,7 @@
 <script src="proyectos-data.js"></script>
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
+<script src="buscador-global.js"></script>
 <script>
 runWithCatalog(() => {
   const state = {
@@ -595,13 +611,31 @@ runWithCatalog(() => {
 
   const GROUPS = ["categoria","subcategoria","distribuidor","marca","uso","espacio","disponibilidad"];
 
+  /* Punto 49: la URL es la fuente del estado de la página — consulta (q), tipo con consulta (tipo), vista sin
+     consulta (vista), filtros (varios valores separados por comas) y orden (orden). Recargar o volver desde una
+     ficha devuelve lo mismo. El precio sigue fuera de la URL: depende del acceso de cada cuenta. Las URL anteriores
+     (?vista=componentes, ?categoria=…) siguen valiendo. */
   const params = new URLSearchParams(window.location.search);
   if (params.get("vista") === "componentes") state.vista = "componentes";
+  /* Con una consulta, la lista mezcla productos y componentes (cada artículo una vez) y el tipo es un filtro
+     opcional: todo | productos | componentes. Sin consulta, la vista de siempre. */
+  state.search = params.get("q") || "";
+  state.tipo = ["todo", "productos", "componentes"].includes(params.get("tipo")) ? params.get("tipo") : (state.vista === "componentes" ? "componentes" : "todo");
+  if (["relevancia", "recientes", "nombre", "marca"].includes(params.get("orden"))) state.sort = params.get("orden");
+  document.getElementById("sort-select").value = state.sort;
+  const hasQuery = () => normalizeSearchText(state.search).length >= 2;
+  const listFor = tipo => tipo === "componentes" ? componentProducts() : tipo === "productos" ? commercialProducts() : MobauBusqueda.lista();
   /* La lista de la vista activa: la búsqueda, los filtros y sus opciones solo ven esta lista. */
-  const viewProducts = () => state.vista === "componentes" ? componentProducts() : commercialProducts();
+  const viewProducts = () => hasQuery() ? listFor(state.tipo) : (state.vista === "componentes" ? componentProducts() : commercialProducts());
+  /* El mismo motor y el mismo orden que las sugerencias de la cabecera (MobauBusqueda, script.js): _score conserva
+     ese orden para «Relevancia». */
+  function searchList(list){
+    if (!hasQuery()) return { results: list.map(p => Object.assign({ _score: 0 }, p)), fuzzyTerm: null };
+    const { resultados, aproximada } = MobauBusqueda.buscar(state.search, list);
+    return { results: resultados.map((r, i) => Object.assign({ _score: resultados.length - i }, r.p)), fuzzyTerm: aproximada };
+  }
   GROUPS.forEach(key => {
-    const val = params.get(key);
-    if(val){
+    (params.get(key) || "").split(",").map(v => v.trim()).filter(Boolean).forEach(val => {
       state[key].add(val);
       /* categoria ya no tiene checkbox propio (ver chips más abajo) —
          updateCategoryChipsUI() es quien refleja este valor en el DOM. */
@@ -609,7 +643,7 @@ runWithCatalog(() => {
         const input = document.querySelector(`.filter-group[data-group="${key}"] input[value="${val.replace(/["\\]/g, "\\$&")}"]`);
         if(input) input.checked = true;
       }
-    }
+    });
   });
 
   /* Punto 21 (2ª iteración) — acordeón de grupos: cada botón controla su
@@ -997,9 +1031,11 @@ runWithCatalog(() => {
   }
 
   function render(){
-    const componentView = state.vista === "componentes";
-    const { results: searched, fuzzyTerm } = searchProducts(viewProducts(), state.search);
-    const hasActiveSearch = normalizeSearchText(state.search).length >= 2;
+    const componentView = hasQuery() ? state.tipo !== "productos" : state.vista === "componentes";
+    const { results: searched, fuzzyTerm } = searchList(viewProducts());
+    const hasActiveSearch = hasQuery();
+    renderTypes();
+    syncUrl();
     const filtered = sortList(searched.filter(matchesFilters), hasActiveSearch);
     /* La opción predeterminada dice el orden que se aplica: relevancia con
        búsqueda; orden del catálogo sin ella. */
@@ -1033,7 +1069,7 @@ runWithCatalog(() => {
       emptyState.style.display = "none";
     }
 
-    const unit = componentView ? ["componente", "componentes"] : ["producto", "productos"];
+    const unit = hasActiveSearch && state.tipo === "todo" ? ["resultado", "resultados"] : componentView ? ["componente", "componentes"] : ["producto", "productos"];
     document.getElementById("result-count").textContent =
       filtered.length === 1 ? `1 ${unit[0]}` : `${filtered.length} ${unit[1]}`;
     injectIconSprite();
@@ -1172,11 +1208,69 @@ runWithCatalog(() => {
   /* Debounce: solo se vuelve a filtrar 200ms después de la última
      tecla, no en cada pulsación. */
   let searchDebounceTimer = null;
-  document.getElementById("search-input").addEventListener("input", (e) => {
-    state.search = e.target.value;
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(render, 200);
+  /* Punto 49: la consulta llega del campo de la cabecera (buscador-global.js), ya con su pausa. */
+  function refreshPanels(){
+    applyVistaUI(); updateCategoryChipsUI(); renderSubcategoriaPanel();
+    renderSearchableGroup("distribuidor"); renderSearchableGroup("marca"); updateFilterTriggerCounts(); render();
+  }
+  document.addEventListener("mobau:consulta", (e) => {
+    const before = hasQuery();
+    state.search = e.detail || "";
+    if (window.MobauBuscadorGlobal && MobauBuscadorGlobal.valor() !== state.search) MobauBuscadorGlobal.fijar(state.search);
+    if (!before && hasQuery()) state.tipo = state.vista === "componentes" ? "componentes" : "todo";
+    refreshPanels();
   });
+  document.getElementById("catalog-clearq").addEventListener("click", () => {
+    if (window.MobauBuscadorGlobal) MobauBuscadorGlobal.fijar("");
+    state.search = "";
+    refreshPanels();
+  });
+  /* Tipo con consulta: cambiarlo conserva la consulta y reinicia los filtros, como al cambiar de vista. */
+  function renderTypes(){
+    const box = document.getElementById("catalog-types");
+    document.getElementById("catalog-viewlink").hidden = hasQuery();
+    box.hidden = !hasQuery();
+    if (!hasQuery()) return;
+    const count = t => searchList(listFor(t)).results.length;
+    box.innerHTML = [["todo", "Todo"], ["productos", "Productos"], ["componentes", "Componentes"]].map(([t, label]) =>
+      `<button type="button" class="catalog-type" data-tipo="${t}" aria-pressed="${state.tipo === t}">${label} <span class="n">${count(t)}</span></button>`).join("");
+  }
+  document.getElementById("catalog-types").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tipo]");
+    if (!b || b.dataset.tipo === state.tipo) return;
+    state.tipo = b.dataset.tipo;
+    document.querySelectorAll(".filter-group input[type=checkbox]").forEach(i => i.checked = false);
+    GROUPS.forEach(k => state[k].clear());
+    refreshPanels();
+  });
+  /* La URL refleja el estado con replaceState: escribir, filtrar u ordenar no llenan el historial. Se conservan los
+     demás parámetros (por ejemplo, ?carrito= del flujo antiguo). */
+  function syncUrl(){
+    try {
+      const next = new URLSearchParams(window.location.search);
+      ["q", "tipo", "vista", "orden", ...GROUPS].forEach(k => next.delete(k));
+      if (hasQuery()){ next.set("q", state.search.trim()); if (state.tipo !== "todo") next.set("tipo", state.tipo); }
+      else if (state.vista === "componentes") next.set("vista", "componentes");
+      GROUPS.forEach(k => { if (state[k].size) next.set(k, [...state[k]].join(",")); });
+      if (state.sort !== "relevancia") next.set("orden", state.sort);
+      const qs = next.toString();
+      const url = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.replaceState(window.history.state, "", url);
+    } catch (e) { /* sin historial (vista previa): no pasa nada */ }
+  }
+  /* Volver desde una ficha (o recargar): la rejilla se pinta después de cargar el catálogo y los precios, así que la
+     posición se guarda al salir (por URL, en esta pestaña) y se recupera tras el primer pintado. */
+  const SCROLL_KEY = () => `mobau_productos_scroll:${window.location.search}`;
+  try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch (e) {}
+  window.addEventListener("pagehide", () => { try { sessionStorage.setItem(SCROLL_KEY(), String(Math.round(window.scrollY))); } catch (e) {} });
+  function restoreScroll(){
+    let nav = "navigate";
+    try { nav = (performance.getEntriesByType("navigation")[0] || {}).type || "navigate"; } catch (e) {}
+    if (nav !== "back_forward" && nav !== "reload") return;
+    let y = null;
+    try { y = sessionStorage.getItem(SCROLL_KEY()); } catch (e) {}
+    if (y !== null) requestAnimationFrame(() => window.scrollTo(0, Number(y) || 0));
+  }
 
   document.getElementById("sort-select").addEventListener("change", (e) => {
     state.sort = e.target.value;
@@ -1187,8 +1281,6 @@ runWithCatalog(() => {
     clearTimeout(searchDebounceTimer);
     document.querySelectorAll(".filter-group input[type=checkbox]").forEach(i => i.checked = false);
     GROUPS.forEach(k => state[k].clear());
-    document.getElementById("search-input").value = "";
-    state.search = "";
     document.getElementById("distribuidor-search").value = "";
     document.getElementById("marca-search").value = "";
     searchableGroupState.distribuidor.query = "";
@@ -1217,13 +1309,12 @@ runWithCatalog(() => {
   const ORIGINAL_TITLE = document.title;
   function applyVistaUI(){
     const comp = state.vista === "componentes";
-    document.getElementById("catalog-eyebrow").textContent = comp ? "Catálogo · Componentes y accesorios" : "Catálogo";
-    document.getElementById("catalog-title").textContent = comp ? "Componentes y accesorios" : "Productos para arquitectura e interiorismo";
-    document.getElementById("catalog-view-note").hidden = !comp;
-    document.getElementById("search-label").textContent = comp ? "Buscar componentes" : "Buscar productos";
-    document.getElementById("search-input").placeholder = comp
-      ? "Buscar por nombre, referencia o marca…" : "Buscar por nombre, referencia, marca o categoría…";
-    document.title = comp ? "Componentes y accesorios — Mobau" : ORIGINAL_TITLE;
+    const q = hasQuery();
+    document.getElementById("catalog-eyebrow").textContent = q ? "Productos · Búsqueda" : comp ? "Productos · Componentes y accesorios" : "Productos";
+    document.getElementById("catalog-title").textContent = q ? `Resultados para «${state.search.trim()}»` : comp ? "Componentes y accesorios" : "Productos para arquitectura e interiorismo";
+    document.getElementById("catalog-clearq").hidden = !q;
+    document.getElementById("catalog-view-note").hidden = q || !comp;
+    document.title = q ? `${state.search.trim()} — Productos — Mobau` : comp ? "Componentes y accesorios — Mobau" : ORIGINAL_TITLE;
     document.getElementById("view-componentes").hidden = comp;
     document.getElementById("view-productos").hidden = !comp;
   }
@@ -1316,6 +1407,7 @@ runWithCatalog(() => {
        misma llamada que ya existía. */
     updatePriceHint();
     render();
+    restoreScroll();
   })();
 }, { status: "#product-grid" });
 </script>

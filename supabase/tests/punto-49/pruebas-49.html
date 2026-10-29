@@ -1,0 +1,246 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas 49 · cabecera, búsqueda global y marco (simulado)</title>
+<style>body{font:13px system-ui;margin:16px}td,th{border:1px solid #ccc;padding:4px 6px;vertical-align:top}table{border-collapse:collapse;width:100%}.ok{color:#060}.ko{color:#b00;font-weight:700}#marco iframe{border:0;position:absolute;left:-9999px;top:0}small{color:#555}</style>
+<h1>Punto 49 · cabecera común, búsqueda global, Productos y marco (datos simulados)</h1>
+<p>Sin red ni Supabase; solo en un origen local. Abre las páginas reales de la copia a través de <code>sw-paginas-49.js</code>, sobre el cliente simulado de CC1, el de la mesa B y el catálogo simulado del Punto 49. Es emulación de navegador: no sustituye a una prueba en un teléfono real.</p>
+<p id="sum">Ejecutando…</p>
+<table id="t"><tr><th>#</th><th>Caso</th><th>Obtenido</th><th>Resultado</th></tr></table>
+<div id="marco"></div>
+<script>
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const QS_IND = "rol=individual&pro=1&uid=a", QS_GRATIS = "rol=individual&pro=0&uid=a", QS_ANON = "rol=anon", QS_DIST = "rol=supplier&perfil=own", QS_MOBAU = "rol=mobau&aal=2";
+const P1 = "id=00000001-1111-4111-8111-111111111111&caso=e&" + QS_IND;
+const SELKEY = "mobau_seleccion:aaaaaaaa-0000-4000-8000-00000000000a";
+const frame = document.createElement("iframe");
+document.getElementById("marco").appendChild(frame);
+let ok = 0, ko = 0, n = 0;
+function check(name, got, expected){
+  const pass = JSON.stringify(got) === JSON.stringify(expected);
+  pass ? ok++ : ko++;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${++n}</td><td></td><td></td><td class="${pass ? "ok" : "ko"}">${pass ? "ok" : "FALLO · esperado " + JSON.stringify(expected).replace(/</g, "&lt;")}</td>`;
+  tr.children[1].textContent = name; tr.children[2].textContent = JSON.stringify(got);
+  document.getElementById("t").appendChild(tr);
+}
+/* Las constantes globales de script.js (MobauBusqueda, CATALOG_STATE, commercialProducts…) no son propiedades de window: se leen con eval. */
+const W = () => frame.contentWindow, D = () => frame.contentDocument, G = expr => W().eval(expr), MB = () => G("MobauBusqueda"), q = s => D().querySelector(s), qa = s => [...D().querySelectorAll(s)];
+async function until(fn, ms = 8000){ const t0 = Date.now(); while (Date.now() - t0 < ms){ try { if (fn()) return true; } catch (e) {} await sleep(60); } return false; }
+const loaded = () => new Promise(res => { frame.onload = () => res(); });
+async function open(page, qs, { w = 1366, h = 860, limpia = true } = {}){
+  frame.style.width = w + "px"; frame.style.height = h + "px";
+  if (limpia){ sessionStorage.removeItem("__mockqs"); Object.keys(sessionStorage).filter(k => /^mobau_(catalog|distributors|categories|productos_scroll)/.test(k)).forEach(k => sessionStorage.removeItem(k)); }
+  const l = loaded(); frame.src = `pagina/${page}?${qs}`; await l;
+  if (!W().__mock) throw new Error(`${page} no cargó el simulador: ensayo detenido`);
+  await until(() => G("CATALOG_STATE.status") !== "loading" && !D().getElementById("nav-session-slot"));
+  await sleep(350);
+  return W();
+}
+const field = () => q("#gsearch-input");
+async function type(text, wait = 450){ const i = field(); W().focus(); i.focus(); i.value = text; i.dispatchEvent(new Event("input", { bubbles: true })); await sleep(wait); }
+function key(k){ field().dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true })); }
+const panelOpen = () => !q("#gsearch-panel").hidden;
+const options = () => qa("#gsearch-panel [role=option]").map(o => o.classList.contains("gs-all") ? "TODOS" : o.classList.contains("gs-short") ? "ATAJO:" + o.querySelector(".v").textContent : (o.querySelector(".gs-kind") ? "[C] " : "") + o.querySelector(".gs-name").textContent);
+const ids = () => qa("#product-grid .product-card").map(c => c.dataset.productId);
+const params = () => Object.fromEntries([...new URLSearchParams(W().location.search)].filter(([k]) => !["rol", "pro", "uid", "perfil", "aal"].includes(k)));
+const navText = () => q(".nav-links").innerText.replace(/\n+/g, " · ").trim();
+const visible = el => !!el && !el.hidden && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().width > 0;
+
+(async () => {
+  try {
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) throw new Error("Solo en un origen local de pruebas");
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    const reg = await navigator.serviceWorker.register("sw-paginas-49.js");
+    while (!reg.active || reg.active.state !== "activated" || reg.installing || reg.waiting) await sleep(50);
+    localStorage.setItem(SELKEY, JSON.stringify([{ productId: "spectro-cb1cc62f", quantity: 2, unit: "ud.", finish: "11" }, { productId: "spectro-2e12589a", quantity: 1, unit: "ud.", finish: "07" }, { productId: "silla-tolu", quantity: 4, unit: "ud.", finish: "roble" }]));
+
+    /* ===== Motor único (MobauBusqueda, script.js) ===== */
+    let w = await open("index.html", QS_IND);
+    const B = s => MB().buscar(s).resultados;
+    const nombres = rs => rs.map(r => (r.componente ? "[C] " : "") + r.p.nombre);
+    const sug = s => nombres(MB().sugerencias(B(s)));
+    check("M1 general «lampara»: primero los productos; el componente que encaja por nombre entra después, marcado",
+      sug("lampara"), ["Lámpara de Piso Meridian", "Lámpara Orbe", "[C] Lámpara LED GU10 6 W", "Sweden Mesa Portátil", "Mayfair Colgante", "Mayfair Mesa"]);
+    check("M2 nombre exacto de producto «dama pie»: primero", nombres(B("dama pie"))[0], "Dama Pie");
+    check("M3 nombre exacto de componente «pantalla dama»: primero, delante de productos que encajan peor", nombres(B("pantalla dama")), ["[C] Pantalla Dama", "Dama Pie", "Dama Sobremesa"]);
+    check("M4 referencia exacta de componente, con y sin separadores: el driver primero",
+      ["4.3069.6102", "430696102", "4 3069 6102"].map(x => nombres(B(x))[0]), Array(3).fill("[C] DRIVER DALI & PUSH EU 125-500mA 5,5- 22W 100-240V"));
+    check("M5 referencia exacta de producto «3230»: Dama Pie primero; la del componente (3230-P) solo encaja en parte", nombres(B("3230")), ["Dama Pie", "[C] Pantalla Dama"]);
+    check("M6 solo hay componentes relevantes («driver»): ocupan las sugerencias", sug("driver"), ["[C] Driver 24 V", "[C] DRIVER DALI & PUSH EU 125-500mA 5,5- 22W 100-240V", "[C] Driver ON-OFF 150- 500mA 6,3-21W 240V"]);
+    check("M7 búsqueda general por marca («vibia»): las 6 sugerencias son productos; los componentes siguen en «Ver todos»",
+      [sug("vibia").filter(x => x.startsWith("[C]")).length, B("vibia").filter(r => r.componente).length, B("vibia").length], [0, 2, 10]);
+    check("M8 regla de las sugerencias: como mucho 2 componentes no exactos mientras haya productos para completar («downlight» tiene 2 productos: completa con componentes)",
+      [sug("led").filter(x => x.startsWith("[C]")).length <= 2 || B("led").filter(r => !r.componente).length < 6, sug("downlight")], [true, ["BOGOTA SURFACE DOWNLIGHT - GU10", "Athens 9 Redondo", "[C] MALTA 8-12 GEN 3 CTT SWITCH | MODULO LED", "[C] Aro embellecedor Bogota", "[C] Lámpara LED GU10 6 W"]]);
+    check("M9 las sugerencias son siempre los primeros resultados en el mismo orden (subsecuencia)",
+      ["lampara", "vibia", "led", "dama", "negro", "decorativa"].every(s => { const all = nombres(B(s)), su = sug(s); let i = 0; return su.every(x => { i = all.indexOf(x, i); return i++ >= 0; }); }), true);
+    check("M10 errata «colgnte»: resultados similares, con el término", [MB().buscar("colgnte").aproximada, nombres(B("colgnte"))], ["colgante", ["Mayfair Colgante"]]);
+    check("M11 plural, mayúsculas y tildes: «LÁMPARAS» y «lampara» dan los mismos artículos", JSON.stringify(nombres(B("LÁMPARAS")).sort()) === JSON.stringify(nombres(B("lampara")).sort()), true);
+    check("M12 campos nuevos: subcategoría «empotrada», distribuidor «spectro lighting» y acabado «grafito» encuentran; materiales («policarbonato») no",
+      [B("empotrada").length > 0, B("spectro lighting").length > 0, nombres(B("grafito")).includes("Duro Petra Plafón"), nombres(B("policarbonato")).includes("[C] Pantalla Dama")], [true, true, true, false]);
+    check("M13 «ambos» aparece una sola vez y como producto; un rol desconocido nunca aparece",
+      [B("cable textil").filter(r => r.p.id === "c49-cable").length, B("cable textil").find(r => r.p.id === "c49-cable").componente, B("pieza con rol desconocido").length, B("0.0000.0001").length, MB().lista().some(p => p.id === "c49-raro")], [1, false, 0, 0, false]);
+    check("M14 menos de 2 caracteres no busca; sin coincidencias, vacío", [B("d").length, B("xyzzy").length], [0, 0]);
+    check("M15 atajos: como mucho 2; marca «vibia» lleva a Productos con 8 productos", [MB().atajos("vibia").map(a => [a.tipo, a.etiqueta, a.productos]), MB().atajos("de").length], [[["Marca", "Vibia", 8]], 0]);
+
+    /* ===== Cabecera y sugerencias (Inicio, escritorio) ===== */
+    w = await open("index.html", QS_IND);
+    let cargas = 0; const real = w.loadCatalog; w.loadCatalog = (...a) => { cargas++; return real(...a); };
+    field().dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); field().dispatchEvent(new MouseEvent("mouseenter")); await sleep(150);
+    const trasPuntero = cargas;
+    W().focus(); field().focus(); if (cargas === 0) field().dispatchEvent(new FocusEvent("focus")); await sleep(150);
+    check("C1 pasar el puntero no carga nada; al enfocar se pide el catálogo con la carga existente (sin consultas nuevas: ya estaba cargado)",
+      [trasPuntero, cargas, G("CATALOG_STATE.status")], [0, 1, "ready"]);
+    await type("dama");
+    check("C2 al escribir se abre el panel: combobox expandido, sugerencias y «Ver todos los resultados»",
+      [panelOpen(), field().getAttribute("aria-expanded"), options(), q("#gsearch-panel").textContent.includes("Ver todos los resultados (3)")],
+      [true, "true", ["Dama Pie", "Dama Sobremesa", "[C] Pantalla Dama", "TODOS"], true]);
+    check("C3 la región viva anuncia las sugerencias; sin precios en el panel", [q(".gsearch-live").textContent, /US\$|\d+\.\d\d/.test(q("#gsearch-panel").textContent)], ["3 sugerencias. 3 resultados en total.", false]);
+    key("ArrowDown"); key("ArrowDown"); await sleep(80);
+    check("C4 ↓ ↓ marca la segunda sugerencia (aria-activedescendant)", [field().getAttribute("aria-activedescendant"), q("[aria-selected=true] .gs-name").textContent], ["gs-o1", "Dama Sobremesa"]);
+    key("Escape"); await sleep(80); const tras1 = [panelOpen(), field().value]; key("Escape"); await sleep(80);
+    check("C5 Esc cierra sin borrar; un segundo Esc tampoco borra", [tras1, [panelOpen(), field().value]], [[false, "dama"], [false, "dama"]]);
+    key("ArrowDown"); await sleep(120); key("ArrowDown"); await sleep(60);
+    let l = loaded(); key("Enter"); await l; await sleep(300);
+    check("C6 Intro con una sugerencia marcada abre su ficha (↓ reabre y marca la primera; ↓ otra vez, la segunda: Dama Sobremesa)", W().location.pathname.split("/").pop() + W().location.search.replace(/&?(rol|pro|uid)=[^&]*/g, ""), "producto.html?id=spectro-d3016bf1");
+    w = await open("index.html", QS_IND, { limpia: false });
+    await type("lampara"); l = loaded(); q(".gsearch").requestSubmit(); await l; await until(() => W().document.getElementById("result-count") && W().document.getElementById("result-count").textContent); await sleep(400);
+    check("C7 Intro sin marcar va a Productos con la consulta: mismos 12 resultados que anunció el panel, productos y componentes juntos",
+      [W().location.pathname.split("/").pop(), params().q, q("#result-count").textContent, ids().includes("c49-gu10"), field().value], ["catalogo.html", "lampara", "12 resultados", true, "lampara"]);
+    w = await open("index.html", QS_IND);
+    await type("dama"); q(".gsearch-clear").click(); await sleep(100);
+    check("C8 ✕ borra, cierra y deja el foco en el campo", [field().value, panelOpen(), D().activeElement === field(), q(".gsearch-clear").hidden], ["", false, true, true]);
+    await type("dama"); key("Tab"); await sleep(60);
+    check("C9 Tab cierra las sugerencias", panelOpen(), false);
+    await type("dama"); q("main").click(); await sleep(60);
+    check("C10 un clic fuera cierra", panelOpen(), false);
+    await type("xyzzy");
+    check("C11 sin resultados: recuadro con título, explicación y «Ver todos los productos»",
+      [q(".gs-state b").textContent, q(".gs-state span").textContent, q(".gs-state a").getAttribute("href"), q(".gsearch-live").textContent], ["Sin resultados para «xyzzy»", "Prueba con otra palabra, la marca o la referencia.", "catalogo.html", "Sin resultados."]);
+    await type("vibia");
+    check("C12 atajo de marca separado de los artículos, con su recuento y destino", [options()[0], q(".gs-short").dataset.href, q(".gs-short .n").textContent, !!q(".gs-sep")], ["ATAJO:Vibia", "catalogo.html?marca=vibia", "8 productos", true]);
+    sessionStorage.setItem("__p49_catalogo", "colgada");
+    w = await open("index.html", QS_IND).catch(() => W());
+    await type("dama", 500);
+    check("C13 cargando: mientras la lista del catálogo no llega, «Cargando productos…» y el texto se conserva",
+      [panelOpen(), q("#gsearch-panel").textContent.trim(), field().value], [true, "Cargando productos…", "dama"]);
+    sessionStorage.setItem("__p49_catalogo", "error");
+    w = await open("index.html", QS_IND);
+    await type("dama", 700);
+    const conError = [q(".gs-state b") && q(".gs-state b").textContent, !!q("[data-retry]")];
+    sessionStorage.removeItem("__p49_catalogo");
+    q("[data-retry]").click(); await sleep(800);
+    check("C14 error al cargar: recuadro con «Reintentar»; al reintentar con el catálogo disponible, aparecen las sugerencias",
+      [conError, options().slice(0, 1)], [["No pudimos cargar el catálogo", true], ["Dama Pie"]]);
+
+    /* ===== Roles y navegación ===== */
+    const filas = [];
+    for (const [rol, qs, page] of [["sin sesión", QS_ANON, "index.html"], ["Gratis", QS_GRATIS, "index.html"], ["Individual", QS_IND, "index.html"], ["distribuidor", QS_DIST, "catalogo.html"], ["Mobau", QS_MOBAU, "catalogo.html"]]){
+      await open(page, qs);
+      const sel = q("#selection-count-link");
+      filas.push([rol, navText(), q(".site-header .brand").getAttribute("href"), !!q(".gsearch"), sel ? (sel.hidden ? "oculto" : sel.textContent) : "no existe"]);
+    }
+    check("R1 navegación por cuenta: Productos y Distribuidores (sin Inicio ni Contacto), Mi cuenta / Iniciar sesión, logo y «Mi selección» según el plan",
+      filas, [["sin sesión", "Productos · Distribuidores · Iniciar sesión", "index.html", true, "oculto"], ["Gratis", "Productos · Distribuidores · Mi cuenta", "index.html", true, "oculto"],
+        ["Individual", "Productos · Distribuidores · Mi cuenta", "index.html", true, "Mi selección (3)"], ["distribuidor", "Resumen · Mis productos · Productos · Mi cuenta", "panel-distribuidor.html", true, "no existe"],
+        ["Mobau", "Moderación · Productos · Mi cuenta", "moderacion.html", true, "no existe"]]);
+    await open("moderacion.html", QS_MOBAU);
+    check("R2 consola de moderación: sin buscador (excepción acordada) y con «Productos»", [!!q(".gsearch"), !!q(".gsearch-open"), navText()], [false, false, "Moderación · Productos · Mi cuenta"]);
+    await open("index.html", QS_IND);
+    check("R3 lema junto al logo a 1366 px; el pie conserva «Contacto» y nombra «Productos»",
+      [visible(q(".site-header .brand span")), q(".site-header .brand span").textContent, qa(".site-footer h4").map(h => h.textContent).includes("Contacto"), qa(".site-footer a[href='catalogo.html']").map(a => a.textContent)], [true, "Plataforma de diseño", true, ["Productos"]]);
+    await open("index.html", QS_IND, { w: 1280 });
+    check("R4 por debajo de 1360 px el lema se oculta y el buscador conserva su ancho", [visible(q(".site-header .brand span")), Math.round(q(".gsearch").getBoundingClientRect().width) >= 500], [false, true]);
+
+    /* ===== Móvil (emulación de anchura, no un teléfono real) ===== */
+    w = await open("index.html", QS_IND, { w: 390, h: 844 });
+    const selM = q("#selection-count-link");
+    check("T1 móvil con plan: buscar, «Mi selección» con su número y menú; el campo y los enlaces quedan fuera de la fila",
+      [visible(q(".gsearch-open")), visible(selM), selM.querySelector(".sel-n").textContent.replace(/\D/g, ""), visible(q(".nav-toggle")), visible(q(".gsearch")), visible(q(".nav-links"))], [true, true, "3", true, false, false]);
+    q(".gsearch-open").click(); await sleep(300);
+    check("T2 ⌕ abre la búsqueda a pantalla completa con el campo enfocado", [D().body.classList.contains("gsearch-sheet"), D().activeElement === field(), W().innerWidth - Math.round(q(".gsearch").getBoundingClientRect().width) <= 15], [true, true, true]); // ≤ 15 px: la barra de desplazamiento clásica del marco de escritorio (un móvil no la tiene)
+    await type("dama");
+    check("T3 en la hoja, las mismas sugerencias", options(), ["Dama Pie", "Dama Sobremesa", "[C] Pantalla Dama", "TODOS"]);
+    key("Escape"); await sleep(200);
+    check("T4 Esc cierra la hoja sin borrar y el foco vuelve a ⌕", [D().body.classList.contains("gsearch-sheet"), field().value, D().activeElement === q(".gsearch-open")], [false, "dama", true]);
+    q(".nav-toggle").click(); await sleep(200);
+    check("T5 menú: Productos, Distribuidores y Mi cuenta", [D().body.classList.contains("nav-open"), visible(q(".nav-links")), navText()], [true, true, "Productos · Distribuidores · Mi cuenta"]);
+    for (const [rol, qs] of [["sin sesión", QS_ANON], ["Gratis", QS_GRATIS]]){
+      await open("index.html", qs, { w: 390, h: 844 });
+      check(`T6 móvil ${rol}: sin «Mi selección»`, visible(q("#selection-count-link")), false);
+    }
+    await open("catalogo.html", QS_IND, { w: 390, h: 844 });
+    q(".gsearch-open").click(); await sleep(250); await type("dama"); q(".gsearch").requestSubmit(); await sleep(500);
+    check("T7 Productos en móvil: la hoja aplica la consulta a la rejilla al pulsar Intro y se cierra", [D().body.classList.contains("gsearch-sheet"), params().q, ids().sort()], [false, "dama", ["c49-pantalla-dama", "spectro-cb1cc62f", "spectro-d3016bf1"]]);
+
+    /* ===== Productos: consulta, tipo, filtros, orden, URL, recarga y vuelta ===== */
+    w = await open("catalogo.html", QS_IND);
+    check("P1 sin consulta: la vista de siempre (productos), el enlace a componentes y sin selector de tipo; el campo propio de la página ya no existe",
+      [q("#catalog-title").textContent, q("#result-count").textContent, visible(q("#view-componentes")), q("#catalog-types").hidden, !!q("#search-input"), ids().includes("c49-gu10")],
+      ["Productos para arquitectura e interiorismo", "42 productos", true, true, false, false]);
+    await type("dama", 600);
+    check("P2 escribir en la cabecera filtra la rejilla (sin panel de sugerencias) y la URL lleva la consulta",
+      [panelOpen(), ids(), params(), q("#catalog-title").textContent, q("#catalog-types").innerText.replace(/\s+/g, " ").trim()],
+      [false, ["spectro-cb1cc62f", "spectro-d3016bf1", "c49-pantalla-dama"], { q: "dama" }, "Resultados para «dama»", "Todo 3 Productos 2 Componentes 1"]);
+    check("P3 el componente lleva su función en texto", q('[data-product-id="c49-pantalla-dama"] .card-role') && q('[data-product-id="c49-pantalla-dama"] .card-role').textContent.trim(), "Componente o accesorio");
+    q('[data-tipo="componentes"]').click(); await sleep(300);
+    check("P4 tipo «Componentes»: conserva la consulta y la URL lo dice", [ids(), params()], [["c49-pantalla-dama"], { q: "dama", tipo: "componentes" }]);
+    q('[data-tipo="todo"]').click(); await sleep(300);
+    await type("lampara", 600);
+    D().getElementById("filter-trigger-categoria").click(); await sleep(150);
+    q('#catalog-category-chips .category-filter__chip[data-category="iluminacion"]').click(); await sleep(300);
+    const sel = q("#sort-select"); sel.value = "nombre"; sel.dispatchEvent(new Event("change", { bubbles: true })); await sleep(300);
+    const antes = { url: params(), ids: ids(), count: q("#result-count").textContent };
+    check("P5 filtros y orden en la URL junto a la consulta", antes.url, { q: "lampara", categoria: "iluminacion", orden: "nombre" });
+    let l2 = loaded(); W().location.reload(); await l2; await until(() => q("#result-count") && q("#result-count").textContent); await sleep(500);
+    check("P6 recargar devuelve la misma consulta, filtros, orden y rejilla; el campo de la cabecera muestra la consulta",
+      [params(), ids(), q("#result-count").textContent, field().value, q("#sort-select").value, [...D().querySelectorAll("#catalog-category-chips .is-active")].map(b => b.textContent.trim())],
+      [antes.url, antes.ids, antes.count, "lampara", "nombre", ["Iluminación"]]);
+    q("#clear-filters").click(); await sleep(300);
+    check("P7 «Limpiar filtros» conserva la consulta", [params(), field().value], [{ q: "lampara", orden: "nombre" }, "lampara"]);
+    q("#catalog-clearq").click(); await sleep(300);
+    check("P8 «Borrar búsqueda» vuelve a Productos: sin consulta en la URL ni en el campo", [params(), field().value, q("#catalog-title").textContent, q("#result-count").textContent], [{ orden: "nombre" }, "", "Productos para arquitectura e interiorismo", "42 productos"]);
+    w = await open("catalogo.html", QS_IND);
+    W().scrollTo(0, 1500); await sleep(900);
+    const y0 = Math.round(W().scrollY), url0 = W().location.search;
+    l2 = loaded(); q('#product-grid .product-card a[href^="producto.html"]').click(); await l2; await sleep(600);
+    const enFicha = W().location.pathname.split("/").pop();
+    l2 = loaded(); W().history.back(); await l2; await until(() => q("#result-count") && q("#result-count").textContent); await sleep(800);
+    /* En un marco no hay caché de páginas (bfcache): la página se recarga como «back_forward» y la posición la recupera
+       Productos. En una pestaña normal, Chrome suele restaurar la página entera desde su caché. */
+    check("P9 volver desde una ficha: misma URL y misma posición en la rejilla", [enFicha, W().location.search === url0, Math.abs(Math.round(W().scrollY) - y0) <= 4 ? "misma" : `${y0} → ${Math.round(W().scrollY)}`], ["producto.html", true, "misma"]);
+    await open("catalogo.html", QS_IND + "&vista=componentes");
+    check("P10 URL anterior ?vista=componentes: abre la vista de componentes", [q("#catalog-title").textContent, ids().every(id => /^(spectro-19caf9e2|spectro-2cc63dca|spectro-8f6c2029|comp-|c49-)/.test(id)), ids().includes("c49-raro")], ["Componentes y accesorios", true, false]);
+    await open("catalogo.html", QS_IND + "&categoria=revestimientos");
+    check("P11 URL anterior ?categoria=…: filtro aplicado (los 4 revestimientos de los datos simulados)", ids().sort(), ["p15", "p16", "rev-madera", "rev-porc"]);
+
+    /* ===== Otros buscadores locales ===== */
+    await open("distribuidores.html", QS_IND);
+    const dl = q("#distributor-search"); dl.value = "spectro"; dl.dispatchEvent(new Event("input", { bubbles: true })); await sleep(300);
+    check("L1 Distribuidores conserva su buscador local, distinto del global, y filtra distribuidores", [dl.placeholder, q("#distributor-count").textContent.trim(), field().value, panelOpen()], ["Buscar distribuidores", "1 distribuidor", "", false]);
+
+    /* ===== Elementos fijos y desbordes ===== */
+    const alturas = [];
+    for (const [wd, h] of [[1366, 860], [820, 1100], [390, 844]]){ await open("index.html", QS_IND, { w: wd, h }); alturas.push(q(".site-header").offsetHeight); }
+    check("F1 cabecera fija: 64 / 60 / 56 px más su línea", alturas, [65, 61, 57]);
+    await open("seleccion.html", QS_IND, { w: 1366, h: 700 });
+    check("F2 Mi selección: el resumen se pega a la altura real de la cabecera + 20 px", [getComputedStyle(q(".site-header")).position, getComputedStyle(q(".selection-layout__side")).top], ["sticky", "85px"]);
+    await open("proyectos-detalle.html", P1, { w: 1536, h: 900 });
+    await until(() => q("#project-view") && q("#project-view").style.display !== "none");
+    W().scrollTo(0, 1200); await sleep(300);
+    check("F3 página de proyecto: mide la cabecera nueva y su columna fija queda debajo, sin solaparse",
+      [W().getComputedStyle(D().documentElement).getPropertyValue("--head-h").trim() || getComputedStyle(q(".mesa")).getPropertyValue("--head-h").trim(), q(".site-header").getBoundingClientRect().bottom <= q("#ledger").getBoundingClientRect().top || q("#ledger").classList.contains("flow")],
+      ["65px", true]);
+    const desbordes = [];
+    for (const [page, qs] of [["index.html", QS_IND], ["catalogo.html", QS_IND], ["distribuidores.html", QS_IND], ["seleccion.html", QS_IND], ["proyectos.html", QS_IND], ["planes.html", QS_IND], ["cuenta.html", QS_IND], ["producto.html", QS_IND + "&id=spectro-cb1cc62f"], ["ficha-distribuidor.html", QS_ANON], ["acceso.html", QS_ANON], ["panel-distribuidor.html", QS_DIST], ["proyectos-detalle.html", P1]]){
+      await open(page, qs, { w: 390, h: 844 }); await sleep(300);
+      const e = D().documentElement; if (e.scrollWidth > e.clientWidth + 1) desbordes.push(`${page}:${e.scrollWidth}`);
+      /* Margen lateral del contenedor del contenido (el propio <main>.wrap o su primer .wrap). */
+      const c = q("main.wrap") || q("main .wrap"); if (c && page !== "proyectos-detalle.html"){ const pl = parseFloat(getComputedStyle(c).paddingLeft); if (pl < 12) desbordes.push(`${page}:margen ${pl}px`); }
+    }
+    check("F4 a 390 px ninguna página principal desborda en horizontal y el contenido tiene margen lateral", desbordes, []);
+  } catch (e) {
+    check("ABORTO", String(e && e.stack || e), "sin errores");
+  }
+  document.getElementById("sum").textContent = `${ok}/${ok + ko} correctos`;
+})();
+</script>

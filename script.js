@@ -1426,19 +1426,28 @@ function showToast(message){
   toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
 }
 
-/* ---------- búsqueda: nombre, categoría, marca y descripción ----------
-   Punto 15. El catálogo (PRODUCTS, arriba en este mismo archivo) es un
-   array estático de 20 productos incrustado en el JS de la página —
-   no existe tabla "products" en Supabase, ni RPC, ni índices, así que
-   no hay SQL que asegurar ni unaccent/pg_trgm que instalar: la
-   tolerancia a acentos/mayúsculas/erratas se resuelve aquí, en JS,
-   sobre el array ya cargado (no hay otra fuente de datos posible con
-   esta arquitectura). searchProducts() es el único punto de entrada;
-   catalogo.html no vuelve a tocar el texto de la búsqueda. */
+/* ---------- búsqueda global de productos y componentes (Punto 49) ----------
+   Un solo motor para las sugerencias de la cabecera (buscador-global.js) y para los resultados de Productos
+   (catalogo.html): las sugerencias son siempre los primeros resultados de esta misma lista, en el mismo orden.
+   Sin servidor: recorre lo que ya cargó catalog_products con la sesión del usuario (PRODUCTS), así que nunca
+   encuentra nada que esa persona no vea en el catálogo.
+
+   Coincidencia: mayúsculas, tildes y espacios indiferentes; todas las palabras deben aparecer; plural sencillo
+   («lámparas» → «lámpara», «plafones» → «plafón», «luces» → «luz»); referencia con o sin separadores
+   («430696102» = «4.3069.6102»); erratas (bigramas) solo si no hay ninguna coincidencia literal, en nombre y marca.
+   Campos: nombre, referencia, categoría, subcategoría, marca, distribuidor, descripción y acabado.
+
+   Niveles (de más a menos preciso): 1 nombre o referencia exactos · 2 el nombre empieza así · 3 todas las palabras
+   en el nombre · 4 parte de la referencia · 5 categoría o subcategoría · 6 marca o distribuidor · 7 descripción,
+   acabado o palabras repartidas · 8 errata.
+   Orden: un «componente» que no coincide de forma exacta baja dos niveles; a igual nivel, primero los productos;
+   después la puntuación fina y el orden del catálogo. «Ambos» cuenta como producto y aparece una sola vez.
+   Sugerencias (6): las coincidencias exactas entran siempre; los demás componentes, como máximo 2 mientras queden
+   productos para completar; si no hay productos suficientes, se completan con componentes. */
 
 function normalizeSearchText(str){
   return (str || "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // quita acentos
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -1448,12 +1457,8 @@ function searchTokens(str){
   return normalizeSearchText(str).split(/[^a-z0-9]+/).filter(Boolean);
 }
 
-/* Similitud aproximada por bigramas (coeficiente de Dice) — el
-   equivalente que se puede calcular en JS sin pg_trgm (que aquí no
-   aplica: no hay tabla que consultar). Solo se usa como último
-   recurso para erratas pequeñas, nunca como primer criterio, y con
-   umbral: por debajo de FUZZY_SIMILARITY_THRESHOLD no cuenta como
-   coincidencia. */
+/* Similitud aproximada por bigramas (coeficiente de Dice): solo como último recurso para erratas pequeñas, y con
+   umbral: por debajo de FUZZY_SIMILARITY_THRESHOLD no cuenta como coincidencia. */
 function bigramSet(str){
   const set = new Map();
   for (let i = 0; i < str.length - 1; i++){
@@ -1476,96 +1481,118 @@ function bigramSimilarity(a, b){
 }
 const FUZZY_SIMILARITY_THRESHOLD = 0.35;
 
-/* Un producto es "relevante" si TODAS las palabras de la consulta
-   aparecen (como substring, en cualquier orden) en el campo — nunca
-   basta con que aparezca una sola palabra de varias. El score decide
-   el orden de prioridad pedido: nombre exacto > nombre por prefijo >
-   todas las palabras en el nombre > categoría > marca > descripción >
-   (distribuido entre varios campos, sin concentrarse en ninguno). */
-function scoreProductBySubstring(product, queryWords, normalizedQuery){
-  const nombre = normalizeSearchText(product.nombre);
-  const categoria = normalizeSearchText(LABELS.categoria[product.categoria] || "");
-  const marca = normalizeSearchText(LABELS.marca[product.marca] || "");
-  const descripcion = normalizeSearchText(product.descripcion || "");
-  /* Punto 46: la referencia del fabricante también se busca (completa o en parte, p. ej. «1.1122.0218» o «1122»).
-     Solo ve los productos de la lista que se le pasa: la vista activa decide cuáles son. */
-  const referencia = normalizeSearchText(product.referencia || "");
-  const allWordsIn = (text) => queryWords.every(w => text.includes(w));
-
-  if (normalizedQuery && nombre === normalizedQuery) return 100;
-  if (normalizedQuery && referencia && referencia === normalizedQuery) return 95;
-  if (normalizedQuery && nombre.startsWith(normalizedQuery)) return 90;
-  if (allWordsIn(nombre)) return 80;
-  if (referencia && allWordsIn(referencia)) return 75;
-  if (allWordsIn(categoria)) return 70;
-  if (allWordsIn(marca)) return 60;
-  if (allWordsIn(descripcion)) return 50;
-  if (allWordsIn(`${nombre} ${referencia} ${categoria} ${marca} ${descripcion}`)) return 40;
-  return null; // ninguna palabra encaja de forma literal
-}
-
-/* Fallback aproximado — solo se prueba cuando NINGÚN producto pasó
-   scoreProductBySubstring() para toda la consulta. Cada palabra de la
-   búsqueda debe tener al menos una palabra del nombre del producto
-   por encima del umbral de similitud; si una palabra no encuentra
-   ninguna coincidencia razonable, el producto se descarta entero (no
-   se muestran productos sin relación solo porque una palabra sí
-   aproxima). */
-function fuzzyScoreProduct(product, queryWords){
-  const nombreTokens = searchTokens(product.nombre);
-  if (!nombreTokens.length) return null;
-  let totalSim = 0;
-  const matchedTokens = [];
-  for (const w of queryWords){
-    let best = 0, bestTok = null;
-    for (const tok of nombreTokens){
-      const sim = bigramSimilarity(w, tok);
-      if (sim > best){ best = sim; bestTok = tok; }
-    }
-    if (best < FUZZY_SIMILARITY_THRESHOLD) return null;
-    totalSim += best;
-    matchedTokens.push(bestTok);
+const MobauBusqueda = (() => {
+  const NIVEL = { exacta: 1, prefijo: 2, nombre: 3, referencia: 4, clasificacion: 5, origen: 6, texto: 7, aproximada: 8 };
+  const MAX_SUGERENCIAS = 6, MAX_COMPONENTES = 2, MAX_ATAJOS = 2, BAJADA_COMPONENTE = 2;
+  const compacta = s => normalizeSearchText(s).replace(/[^a-z0-9]/g, "");
+  /* Plural sencillo del español: solo como alternativa (la palabra tal cual también vale). */
+  function singular(w){
+    if (w.length < 4) return w;
+    if (/ces$/.test(w)) return w.slice(0, -3) + "z";
+    if (w.length > 4 && /[lnrdjy]es$/.test(w)) return w.slice(0, -2);
+    if (/s$/.test(w)) return w.slice(0, -1);
+    return w;
   }
-  const avgSim = totalSim / queryWords.length;
-  return { score: 10 + avgSim * 20, matchedTerm: matchedTokens.join(" ") };
-}
+  const contiene = (texto, w) => texto.includes(w) || (singular(w) !== w && texto.includes(singular(w)));
 
-/* Punto de entrada único. Devuelve:
-   - results: productos relevantes, cada uno con "_score" (mayor =
-     más relevante) añadido para que sortList() pueda usarlo cuando
-     el orden elegido sea "relevancia".
-   - fuzzyTerm: solo viene relleno si se usó el fallback aproximado
-     (para mostrar "Resultados similares a: ..."), null en cualquier
-     otro caso. Nunca modifica el texto que escribió el usuario.
-   Consultas de menos de 2 caracteres no filtran nada — se tratan
-   igual que una búsqueda vacía. */
-function searchProducts(products, rawQuery){
-  const normalizedQuery = normalizeSearchText(rawQuery);
-  if (normalizedQuery.length < 2){
-    return { results: products.map(p => Object.assign({ _score: 0 }, p)), fuzzyTerm: null };
+  /* Etiquetas visibles, las mismas que usa el catálogo. */
+  const etiqueta = {
+    categoria: id => (LABELS.categoria && LABELS.categoria[id]) || "",
+    marca: k => (LABELS.marca && LABELS.marca[k]) || "",
+    distribuidor: id => (DISTRIBUTORS[id] && DISTRIBUTORS[id].nombre) || ""
+  };
+  const esComponente = p => productCatalogRole(p) === "componente";
+  /* La lista de la búsqueda global: principal, ambos y componente (cada artículo una vez), en el orden del catálogo.
+     Un rol desconocido no entra, como en las dos vistas del catálogo. */
+  const lista = () => PRODUCTS.filter(p => isCommercialProduct(p) || isListedComponent(p));
+
+  function campos(p){
+    return {
+      nombre: normalizeSearchText(p.nombre), ref: normalizeSearchText(p.referencia), refC: compacta(p.referencia),
+      categoria: normalizeSearchText(etiqueta.categoria(p.categoria)), subcategoria: normalizeSearchText(p.subcategoria),
+      marca: normalizeSearchText(etiqueta.marca(p.marca)), distribuidor: normalizeSearchText(etiqueta.distribuidor(p.distribuidor)),
+      descripcion: normalizeSearchText(p.descripcion), acabado: normalizeSearchText((p.acabadosOpciones || []).map(f => f.nombre).join(" "))
+    };
+  }
+  function coincidencia(c, q, qC, palabras){
+    const todas = t => !!t && palabras.every(w => contiene(t, w));
+    if (q && c.nombre === q) return { nivel: NIVEL.exacta, fino: 100 };
+    if (qC.length >= 3 && c.refC && c.refC === qC) return { nivel: NIVEL.exacta, fino: 98 };
+    if (q && c.nombre.startsWith(q)) return { nivel: NIVEL.prefijo, fino: 90 };
+    if (todas(c.nombre)) return { nivel: NIVEL.nombre, fino: 80 };
+    if ((qC.length >= 3 && c.refC && c.refC.includes(qC)) || todas(c.ref)) return { nivel: NIVEL.referencia, fino: 75 };
+    if (todas(c.categoria)) return { nivel: NIVEL.clasificacion, fino: 70 };
+    if (todas(c.subcategoria)) return { nivel: NIVEL.clasificacion, fino: 68 };
+    if (todas(c.marca)) return { nivel: NIVEL.origen, fino: 60 };
+    if (todas(c.distribuidor)) return { nivel: NIVEL.origen, fino: 55 };
+    if (todas(c.descripcion)) return { nivel: NIVEL.texto, fino: 50 };
+    if (todas(c.acabado)) return { nivel: NIVEL.texto, fino: 45 };
+    if (todas([c.nombre, c.ref, c.categoria, c.subcategoria, c.marca, c.distribuidor, c.descripcion, c.acabado].join(" "))) return { nivel: NIVEL.texto, fino: 40 };
+    return null;
+  }
+  function errata(c, palabras){
+    const vocab = searchTokens(c.nombre).concat(searchTokens(c.marca));
+    if (!vocab.length) return null;
+    let suma = 0; const usados = [];
+    for (const w of palabras){
+      let mejor = 0, tok = null;
+      for (const t of vocab){ const sim = bigramSimilarity(w, t); if (sim > mejor){ mejor = sim; tok = t; } }
+      if (mejor < FUZZY_SIMILARITY_THRESHOLD) return null;
+      suma += mejor; usados.push(tok);
+    }
+    return { nivel: NIVEL.aproximada, fino: 10 + 20 * suma / palabras.length, termino: usados.join(" ") };
   }
 
-  const queryWords = searchTokens(rawQuery);
-  const scored = [];
-  products.forEach(product => {
-    const score = scoreProductBySubstring(product, queryWords, normalizedQuery);
-    if (score !== null) scored.push(Object.assign({ _score: score }, product));
-  });
-  if (scored.length) return { results: scored, fuzzyTerm: null };
-
-  /* Sin ninguna coincidencia literal: único momento en que se intenta
-     la similitud aproximada, y solo por encima del umbral. */
-  const fuzzy = [];
-  let fuzzyTerm = null;
-  products.forEach(product => {
-    const match = fuzzyScoreProduct(product, queryWords);
-    if (match){
-      fuzzy.push(Object.assign({ _score: match.score }, product));
-      if (!fuzzyTerm) fuzzyTerm = match.matchedTerm;
+  /* lista: artículos en el orden del catálogo (por defecto, la lista global). Consultas de menos de 2 caracteres no
+     buscan. Devuelve { resultados: [{ p, nivel, efectivo, fino, componente }], aproximada: texto | null }. */
+  function buscar(consulta, articulos){
+    const lista_ = articulos || lista();
+    const q = normalizeSearchText(consulta), qC = compacta(consulta), palabras = searchTokens(consulta);
+    if (q.length < 2 || !palabras.length) return { resultados: [], aproximada: null };
+    const encontrados = [];
+    lista_.forEach((p, i) => { const m = coincidencia(campos(p), q, qC, palabras); if (m) encontrados.push(Object.assign({ p, i }, m)); });
+    let aproximada = null;
+    if (!encontrados.length){
+      lista_.forEach((p, i) => { const m = errata(campos(p), palabras); if (m){ encontrados.push(Object.assign({ p, i }, m)); if (!aproximada) aproximada = m.termino; } });
     }
-  });
-  return { results: fuzzy, fuzzyTerm: fuzzy.length ? fuzzyTerm : null };
-}
+    encontrados.forEach(r => {
+      r.componente = esComponente(r.p);
+      r.efectivo = r.componente && r.nivel !== NIVEL.exacta ? r.nivel + BAJADA_COMPONENTE : r.nivel;
+    });
+    encontrados.sort((a, b) => a.efectivo - b.efectivo || (a.componente - b.componente) || (b.fino - a.fino) || (a.i - b.i));
+    return { resultados: encontrados, aproximada };
+  }
+
+  /* Qué resultados caben en las sugerencias, sin cambiar su orden. */
+  function sugerencias(resultados){
+    const elegidos = new Set(); let componentes = 0;
+    resultados.forEach((r, i) => {
+      if (elegidos.size >= MAX_SUGERENCIAS) return;
+      if (!r.componente || r.nivel === NIVEL.exacta) elegidos.add(i);
+      else if (componentes < MAX_COMPONENTES){ elegidos.add(i); componentes++; }
+    });
+    resultados.forEach((r, i) => { if (elegidos.size < MAX_SUGERENCIAS) elegidos.add(i); });
+    return [...elegidos].sort((a, b) => a - b).map(i => resultados[i]);
+  }
+
+  /* Atajos: hasta 2 marcas, categorías o subcategorías cuyo nombre empieza por la consulta (desde 3 caracteres).
+     El recuento es el de la vista a la que llevan: Productos o, si solo hay componentes, la de componentes. */
+  function atajos(consulta){
+    const q = normalizeSearchText(consulta), palabras = searchTokens(consulta);
+    if (q.length < 3) return [];
+    const encaja = texto => { const e = normalizeSearchText(texto); return e.startsWith(q) || palabras.every(w => e.split(/[^a-z0-9]+/).some(t => t.startsWith(singular(w)) || t.startsWith(w))); };
+    const grupos = [["marca", "Marca", p => p.marca, etiqueta.marca], ["categoria", "Categoría", p => p.categoria, etiqueta.categoria], ["subcategoria", "Subcategoría", p => p.subcategoria, x => x]];
+    const out = [];
+    grupos.forEach(([param, tipo, clave, nombre]) => {
+      const vistos = new Map();
+      lista().forEach(p => { const k = clave(p); if (!k) return; const v = vistos.get(k) || { productos: 0, componentes: 0 }; if (isCommercialProduct(p)) v.productos++; else v.componentes++; vistos.set(k, v); });
+      vistos.forEach((v, k) => { const n = nombre(k); if (n && encaja(n)) out.push({ param, tipo, clave: k, etiqueta: n, productos: v.productos, componentes: v.componentes }); });
+    });
+    return out.slice(0, MAX_ATAJOS);
+  }
+
+  return { buscar, sugerencias, atajos, lista, NIVEL };
+})();
 
 /* ---------- unidades de medida (Bloque cantidades) ---------- */
 
@@ -1712,11 +1739,14 @@ const PROJECTS_PLAN_GATE = {
 
 /* Actualiza el enlace "Mi selección (N)" del header, en las
    páginas que lo tengan — no hace nada si el elemento no existe. */
+/* Punto 49: en la cabecera, el número va en un círculo (en móvil, junto a un icono); el texto sigue siendo
+   «Mi selección (n)» para lectores de pantalla (los paréntesis van ocultos a la vista). */
+const SELECTION_ICON = '<svg class="i sel-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="8" width="13" height="12" rx="1.5"></rect><path d="M8 5h10.5A1.5 1.5 0 0 1 20 6.5V16"></path></svg>';
 function updateSelectionBadge(){
   const el = document.getElementById("selection-count-link");
   if (!el) return;
   const n = getSelectionCount();
-  el.textContent = n > 0 ? `Mi selección (${n})` : "Mi selección";
+  el.innerHTML = `${SELECTION_ICON}<span class="sel-label">Mi selección</span><span class="sel-n">${n > 0 ? `<span class="sr"> (</span>${n}<span class="sr">)</span>` : ""}</span>`;
 }
 
 function bindAddButtons(container, onChange){

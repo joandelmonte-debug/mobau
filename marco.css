@@ -1,0 +1,121 @@
+/* ============================================================
+   MOBAU — Marco común de las páginas principales (Punto 49)
+   ------------------------------------------------------------
+   Lleva a las páginas principales el lenguaje de la página de proyecto aprobada, sin rehacerlas: se carga después de
+   styles.css y cambia sobre todo variables (tipografía, tinta, piedra, líneas, verde) y unas pocas piezas comunes
+   (botones, campos, estados vacíos, chips). styles.css no se toca.
+   Dos niveles, por clase en <body>:
+   - body.marco        → armonización visual. Sirve también a las páginas estrechas (acceso, cuenta, formularios),
+                          que conservan su ancho interior.
+   - body.marco-ancho  → además, el contenedor exterior de la página de proyecto: hasta 1680 px con margen
+                          clamp(16px, 3.2vw, 48px). Es el marco, no una obligación de llenarlo: cada página limita
+                          por dentro lo que no debe estirarse (textos, formularios, resúmenes).
+   La altura de la cabecera fija (64/60/56 px + 1 px de línea) está en --cab-h, para los elementos que se pegan
+   debajo de ella.
+   ============================================================ */
+body.marco{
+  --f-head:"Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-body:"Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono:"Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --bg:#FAFAF8; --surface:#F3F1ED; --ink:#1C1F22; --ink-soft:#565B61; --ink-faint:#6B7077;
+  --line:#E4E1DC; --line-strong:#CFCAC3; --accent:#1E4D48; --accent-ink:#163B37; --accent-soft:#E6EDEB;
+  --stone:#EEEBE6; --gut:clamp(16px, 3.2vw, 48px); --cab-h:65px;
+  background:var(--bg); font-feature-settings:"tnum" 1;
+}
+@media (max-width:1099px){ body.marco{ --cab-h:61px; } }
+@media (max-width:699px){ body.marco{ --cab-h:57px; } }
+
+/* Títulos: el peso y el tracking de la mesa (más ligeros que Plus Jakarta 600/700). */
+body.marco h1, body.marco h2{ font-weight:500; letter-spacing:-.022em; }
+body.marco h3, body.marco h4{ font-weight:600; letter-spacing:-.01em; }
+body.marco .page-head{ padding:40px 0 28px; border-bottom:1px solid var(--line); }
+body.marco .page-head h1{ font-size:clamp(28px, 3vw, 36px); line-height:1.1; }
+
+/* Botones: la familia de la mesa (píldora de 42 px; pequeña de 34 px). Mismos nombres y funciones. */
+body.marco .btn{ min-height:42px; padding:0 20px; border-radius:21px; font-weight:500; font-size:15px; justify-content:center; }
+body.marco .btn:active{ transform:none; }
+body.marco .btn-sm{ min-height:34px; padding:0 14px; border-radius:17px; font-size:14px; }
+body.marco .btn-outline{ border-color:var(--line-strong); }
+body.marco .btn-outline:hover{ border-color:var(--ink); }
+body.marco .btn-ghost{ padding:0 4px; }
+
+/* Campos: blancos con borde fino y radio 6, como los formularios de la mesa. */
+body.marco .field input, body.marco .field select, body.marco .field textarea,
+body.marco .search-bar input, body.marco .sort-select, body.marco .filter-search-input{
+  border:1px solid var(--line-strong); border-radius:6px; background:#fff; font-family:var(--f-body); color:var(--ink);
+}
+body.marco .field input, body.marco .field select{ min-height:42px; }
+body.marco .field input:focus, body.marco .field select:focus, body.marco .field textarea:focus,
+body.marco .search-bar input:focus{ border-color:var(--ink-faint); outline:2px solid var(--accent); outline-offset:1px; }
+body.marco .field label{ font-weight:500; color:var(--ink-soft); }
+
+/* Estados vacíos: recuadro de piedra centrado, sin línea discontinua (como en la mesa). */
+body.marco .cart-empty{ border:0; border-radius:3px; background:var(--surface); color:var(--ink-soft); }
+
+/* Chips y etiquetas */
+body.marco .chip{ border-radius:11px; background:transparent; border-color:var(--line-strong); color:var(--ink-soft); }
+
+/* Pie */
+body.marco .site-footer{ background:var(--surface); border-top-color:var(--line); }
+
+/* ---------- Margen lateral ----------
+   --wrap-pad es el margen lateral de .wrap: 32 px en las páginas estrechas (como hasta ahora) y el del proyecto en
+   las de marco ancho y en cualquier página por debajo de 900 px. Gana a los «padding: X 0 Y» de cada página, que
+   dejaban el contenido pegado al borde en el móvil; los contenedores con ancho propio lo suman para conservar su
+   ancho interior (calc(640px + 2 * var(--wrap-pad))). */
+body.marco{ --wrap-pad:32px; }
+@media (max-width:900px){ body.marco{ --wrap-pad:var(--gut); } }
+body.marco .wrap{ padding-left:var(--wrap-pad); padding-right:var(--wrap-pad); }
+/* Los .wrap anidados no vuelven a sumar margen. */
+body.marco .wrap .wrap{ padding-left:0; padding-right:0; }
+
+/* ---------- Marco ancho ---------- */
+body.marco-ancho{ --maxw:1680px; --wrap-pad:var(--gut); }
+body.marco-ancho .page-head p{ max-width:68ch; }
+
+/* Elementos que se pegan bajo la cabecera fija: su altura real más 20 px (antes, 96 px fijos). */
+body.marco .selection-layout__side, body.marco .rfq-summary, body.marco .cc-aside{ top:calc(var(--cab-h) + 20px); }
+body.marco .pd-section{ scroll-margin-top:calc(var(--cab-h) + 20px); }
+
+/* ---------- Ajustes por página (solo ancho y composición) ---------- */
+/* Inicio: los pasos y las categorías aprovechan el marco; los textos siguen con su medida. */
+body.marco-ancho .section-head p{ max-width:52ch; }
+/* Distribuidores: tarjetas adaptables (≥ 340 px) en lugar de 2 columnas fijas que, a 1680, quedarían de 780 px. */
+body.marco-ancho .provider-grid{ grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); }
+/* Página de lectura (Plan Distribuidor Fundador): el texto conserva su columna de 760 px, alineada con el marco. */
+body.marco-ancho .wrap.dp-main{ max-width:var(--maxw); }
+body.marco-ancho .wrap.dp-main > *{ max-width:760px; }
+/* Mi selección: la lista y el resumen lateral usan el marco; el resumen queda alineado con el borde derecho de la
+   cabecera, como la columna de la página de proyecto. */
+body.marco-ancho .selection-layout{ gap:44px; }
+/* Inicio: el recuadro informativo no se estira a todo el marco. */
+body.marco-ancho .info-banner{ max-width:980px; }
+/* Distribuidores: el buscador local (solo distribuidores) no se estira a todo el marco. */
+body.marco-ancho .directory-toolbar .search-bar{ flex:0 1 560px; }
+/* Planes: tres tarjetas con una medida cómoda, no estiradas a 1680. */
+body.marco-ancho .pl-grid{ max-width:1180px; }
+/* Perfil de empresa (formulario estrecho): conserva su ancho interior de 640 px. */
+body.marco:not(.marco-ancho) .wrap.dp-main{ max-width:calc(640px + 2 * var(--wrap-pad)); }
+
+/* Inicio · bloque «Descubre» (hero). Solo composición: el fondo translúcido, los colores, los textos y su tamaño
+   no cambian. Antes el bloque se apoyaba en la esquina inferior izquierda y su fondo desbordaba 20 px el margen
+   del marco, así que, con el ancho nuevo, parecía pegado al borde. Ahora:
+   - el fondo es el propio panel (sin desbordar) y el aire va dentro, como un relleno;
+   - el panel se separa del margen con una sangría que crece con la pantalla (≈37 px a 1280, 52 a 1536, 72 a 1920);
+   - se centra en vertical dentro del hero, en el tercio izquierdo, sobre la zona más oscura del degradado. */
+body.marco-ancho .hero{ align-items:center; }
+body.marco-ancho .hero-content{
+  max-width:680px; margin:48px 0 56px clamp(0px, calc(6vw - 40px), 72px);
+  padding:clamp(30px, 2.8vw, 44px) clamp(28px, 3vw, 48px);
+}
+body.marco-ancho .hero-content::before{ inset:0; }
+body.marco-ancho .hero .pill-row{ margin-top:28px; }
+body.marco-ancho .hero-actions .btn{ white-space:nowrap; }
+/* Móvil y tableta estrecha: el panel ocupa el ancho entre márgenes, abajo, y deja libre la parte alta de la imagen
+   (al menos 132 px); relleno algo menor para que los botones quepan en una línea y las etiquetas, de dos en dos. */
+@media (max-width:900px){
+  body.marco-ancho .hero{ align-items:flex-end; }
+  body.marco-ancho .hero-content{ max-width:none; margin:132px 0 52px; padding:22px 16px 22px; }
+  body.marco-ancho .hero-actions{ gap:16px; }
+  body.marco-ancho .hero .pill-row{ margin-top:20px; gap:8px; }
+}

@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ficha de producto — Mobau</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cabecera.css">
+<link rel="stylesheet" href="marco.css">
 <style>
   /* Punto 46 · configurador de la ficha (solo este panel; usa los colores de styles.css). */
   .cfg-panel{ margin: 0 0 22px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -33,28 +38,40 @@
 </style>
 <script src="nav-account-hint.js"></script>
 </head>
-<body>
+<body class="marco">
 
 <header class="site-header">
   <div class="wrap nav">
     <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
+    <form class="gsearch" action="catalogo.html" method="get" role="search">
+      <div class="gsearch-bar">
+        <div class="gsearch-field">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg>
+          <label class="sr" for="gsearch-input">Buscar productos y componentes</label>
+          <input id="gsearch-input" name="q" type="search" placeholder="Buscar productos y componentes" autocomplete="off" spellcheck="false" enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="gsearch-panel" aria-autocomplete="list">
+          <button type="button" class="gsearch-clear" aria-label="Borrar búsqueda" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"></path></svg></button>
+        </div>
+        <button type="button" class="gsearch-close">Cerrar</button>
+      </div>
+      <div class="gsearch-panel" id="gsearch-panel" hidden></div>
+      <p class="sr gsearch-live" role="status" aria-live="polite"></p>
+    </form>
     <nav class="nav-links" aria-label="Principal">
-      <a href="index.html">Inicio</a>
-      <a href="catalogo.html" class="active">Catálogo</a>
+      <a href="catalogo.html" class="active" aria-current="page">Productos</a>
       <a href="distribuidores.html">Distribuidores</a>
-      <a href="index.html#contacto">Contacto</a>
       <span class="nav-sep"></span>
       <span id="nav-session-slot"></span>
     </nav>
     <div class="nav-cta">
-      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden>Mi selección</a>
+      <button type="button" class="iconbtn gsearch-open" aria-label="Buscar productos y componentes"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg></button>
+      <a href="seleccion.html" class="btn btn-outline" id="selection-count-link" hidden><svg class="i sel-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="8" width="13" height="12" rx="1.5"></rect><path d="M8 5h10.5A1.5 1.5 0 0 1 20 6.5V16"></path></svg><span class="sel-label">Mi selección</span><span class="sel-n"></span></a>
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>
     </div>
   </div>
 </header>
 
 <div class="wrap breadcrumb" id="breadcrumb">
-  <a href="index.html">Inicio</a> / <a href="catalogo.html">Catálogo</a> / <span id="bc-name">Producto</span>
+  <a href="index.html">Inicio</a> / <a href="catalogo.html">Productos</a> / <span id="bc-name">Producto</span>
 </div>
 
 <main class="wrap product-layout" id="product-root">
@@ -162,7 +179,7 @@
       <div>
         <h4>Plataforma</h4>
         <ul>
-          <li><a href="catalogo.html">Catálogo</a></li>
+          <li><a href="catalogo.html">Productos</a></li>
           <li><a href="distribuidores.html">Distribuidores</a></li>
           <li hidden><a href="proyectos.html">Mis proyectos</a></li>
         </ul>
@@ -192,6 +209,7 @@
 <script src="proyectos-data.js"></script>
 <script src="seleccion-data.js"></script>
 <script src="script.js"></script>
+<script src="buscador-global.js"></script>
 <script src="producto-archivos.js"></script>
 <script>
 /* Punto 38-A: una cuenta de distribuidor ve la ficha en solo lectura —

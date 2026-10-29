@@ -32,7 +32,7 @@ function check(name, got, expected){
 const GRID = { "catalogo.html": "#product-grid", "producto.html": "#related-grid" };
 async function open(conf = {}, { page = "catalogo.html", qs = QS_GRATIS, wait = 7000, cards = true, id = "demo-pub", width = "" } = {}){
   sessionStorage.setItem("__grupos46", JSON.stringify(conf));
-  ["mobau_catalog_v5", "mobau_distributors_v5", "mobau_categories_v5"].forEach(k => sessionStorage.removeItem(k)); // la caché de catálogo no mezcla ensayos
+  ["mobau_catalog_v6", "mobau_distributors_v5", "mobau_categories_v5"].forEach(k => sessionStorage.removeItem(k)); // la caché de catálogo no mezcla ensayos
   frame.style.width = width; frame.style.height = width ? "2600px" : "";
   sessionStorage.removeItem("__mockqs");
   const query = page === "producto.html" ? `id=${id}&${qs}` : qs;
@@ -497,7 +497,8 @@ const sinCapturar = () => W().__sinCapturar;
     /* ===== Paso 0 · productos «solo componente» ===== */
     const ROLES = { "demo-pub": "principal", "demo-cot": "componente", "demo-pend": "ambos", "demo-sin": "raro" }; // demo-nodisp: fila sin la columna
     const idsIn = sel => [...doc().querySelectorAll(`${sel} .product-card`)].map(c => c.dataset.productId).sort();
-    const search = async text => { const i = doc().getElementById("search-input"); i.value = text; i.dispatchEvent(new Event("input", { bubbles: true })); await sleep(600); };
+    /* Punto 49: el buscador de Productos es el global de la cabecera (#gsearch-input): al escribir filtra la rejilla. */
+    const search = async text => { const i = doc().getElementById("gsearch-input"); i.value = text; i.dispatchEvent(new Event("input", { bubbles: true })); await sleep(600); };
     clearSel();
     w = await open({ roles: ROLES, validacion: "ok" }, { qs: QS_IND }); await ready(w);
     check("R1 catálogo: solo «principal», «ambos» y la fila anterior a 46-01 (sin columna = por defecto); «componente» y un valor desconocido no salen; PRODUCTS los conserva todos",
@@ -512,7 +513,9 @@ const sinCapturar = () => W().__sinCapturar;
     await search("Sin fila");
     const sinRes2 = idsIn("#product-grid");
     await search("Publicado");
-    check("R3 la búsqueda comercial no devuelve un componente ni un rol desconocido, y sí un principal", [sinRes, sinRes2, idsIn("#product-grid")], [[[], "block"], [], ["demo-pub"]]);
+    /* Punto 49 (decisión aprobada): con una búsqueda, Productos encuentra también los componentes, sin activar antes
+       su vista; un rol desconocido sigue sin aparecer nunca. Antes, «Bajo» no devolvía nada en el catálogo principal. */
+    check("R3 con una búsqueda se encuentran también los componentes (Punto 49); un rol desconocido nunca, y un principal sí", [sinRes, sinRes2, idsIn("#product-grid")], [[["demo-cot"], "none"], [], ["demo-pub"]]);
     await search("");
     const mk = mark("#product-grid");
     card("demo-nodisp").querySelector(".btn-add-selection").click(); await sleep(700);
@@ -642,22 +645,31 @@ const sinCapturar = () => W().__sinCapturar;
     check("V10 componentes: se encuentran por nombre, por referencia completa y parcial y por marca; un principal no aparece",
       [await vBuscar("Bajo cotización"), await vBuscar("1.1122.0218"), await vBuscar("1122"), await vBuscar("4.3069.6102"), await vBuscar("Demo"), await vBuscar("Publicado"), await vBuscar("1.1120.8108")],
       [["demo-cot"], ["demo-cot"], ["demo-cot"], ["demo-nodisp"], ["demo-cot", "demo-nodisp", "demo-pend"], [], []]);
-    await search("1122");
-    check("V11a en la vista de componentes hay un enlace sencillo «Volver a productos» (texto, accesible con teclado)",
+    await search("");
+    check("V11a sin búsqueda, en la vista de componentes hay un enlace sencillo «Volver a productos» (texto, accesible con teclado)",
       (() => { const a = doc().getElementById("view-productos"); a.focus(); return [a.tagName, a.textContent.trim(), a.getAttribute("href"), doc().activeElement === a, a.closest("button") === null]; })(),
       ["A", "← Volver a productos", "catalogo.html", true, true]);
-    await vGoView("productos");
-    check("V11 volver al catálogo principal: conserva el texto buscado, y la referencia de un «solo componente» NO lo trae al catálogo principal",
-      [doc().getElementById("search-input").value, idsIn("#product-grid"), doc().getElementById("catalog-title").textContent, w.location.search.includes("vista=")],
-      ["1122", [], "Productos para arquitectura e interiorismo", false]);
+    await search("1122");
+    /* Punto 49: con una búsqueda, el enlace de vista se sustituye por el tipo (Todo · Productos · Componentes); quien
+       buscaba desde la vista de componentes empieza en «Componentes». */
+    const vTipos = () => [...doc().querySelectorAll("#catalog-types [data-tipo]")].map(b => `${b.dataset.tipo}:${b.getAttribute("aria-pressed")}`);
+    check("V11b con una búsqueda, el tipo sustituye al enlace de vista y empieza en «Componentes» si se buscaba desde esa vista",
+      [vTipos(), doc().getElementById("catalog-viewlink").hidden, idsIn("#product-grid")], [["todo:false", "productos:false", "componentes:true"], true, ["demo-cot"]]);
+    doc().querySelector('#catalog-types [data-tipo="productos"]').click(); await sleep(450);
+    check("V11 tipo «Productos»: conserva el texto buscado, y la referencia de un «solo componente» NO lo trae a los productos",
+      [doc().getElementById("gsearch-input").value, idsIn("#product-grid"), doc().getElementById("catalog-title").textContent, new URLSearchParams(w.location.search).get("tipo")],
+      ["1122", [], "Resultados para «1122»", "productos"]);
     check("V12 catálogo principal: búsqueda por referencia de un principal y de un «ambos» (que está en las dos vistas); por nombre de un «solo componente» no",
       [await vBuscar("1.1120.8108"), await vBuscar("9.9999.0001"), await vBuscar("Bajo cotización"), await vBuscar("4.3069")], [["demo-pub"], ["demo-pend"], [], []]);
+    doc().querySelector('#catalog-types [data-tipo="todo"]').click(); await sleep(450);
+    check("V12b tipo «Todo» (Punto 49): la referencia de un «solo componente» lo encuentra sin cambiar de vista, marcado como componente",
+      [await vBuscar("1.1122.0218"), card("demo-cot") && card("demo-cot").querySelector(".card-role").textContent.trim()], [["demo-cot"], "Componente o accesorio"]);
     await search("");
 
     w = await open(CONF2, { qs: QS_VISITANTE + "&vista=componentes" }); await sleep(300);
     check("V13 enlace directo ?vista=componentes (visitante): abre la vista de componentes, con el buscador adaptado y las seis categorías intactas",
-      [idsIn("#product-grid"), doc().getElementById("search-input").placeholder, vLinks(), [...doc().querySelectorAll("#catalog-category-chips button")].some(b => /Componentes/i.test(b.textContent)), doc().getElementById("catalog-view-note").hidden],
-      [["demo-cot", "demo-nodisp", "demo-pend"], "Buscar por nombre, referencia o marca…", [false, true], false, false]);
+      [idsIn("#product-grid"), doc().getElementById("gsearch-input").placeholder, vLinks(), [...doc().querySelectorAll("#catalog-category-chips button")].some(b => /Componentes/i.test(b.textContent)), doc().getElementById("catalog-view-note").hidden],
+      [["demo-cot", "demo-nodisp", "demo-pend"], "Buscar productos y componentes", [false, true], false, false]);
 
     /* ===== Solicitar componentes por separado: grupos opcionales, textos de estado y permisos ===== */
     const CONF3 = { roles: ROLES2, refs: REFS, validacion: "ok", profundo: true, carcasaOpcional: true };   // «carcasa» de demo-cot opcional: simula el grupo Driver del módulo cambiado a Opcional

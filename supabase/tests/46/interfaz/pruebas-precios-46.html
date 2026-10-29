@@ -31,7 +31,7 @@ const W = () => frame.contentWindow;
 const doc = () => frame.contentDocument;
 async function open(conf, qs = QS_IND, { ro = false } = {}){
   sessionStorage.setItem("__grupos46", JSON.stringify(conf));
-  ["mobau_catalog_v5", "mobau_distributors_v5", "mobau_categories_v5"].forEach(k => sessionStorage.removeItem(k));
+  ["mobau_catalog_v6", "mobau_distributors_v5", "mobau_categories_v5"].forEach(k => sessionStorage.removeItem(k));
   sessionStorage.removeItem("__mockqs");
   await new Promise(res => { frame.onload = res; frame.src = `pagina/producto.html?id=demo-pub&${qs}`; });
   const w = W();

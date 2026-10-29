@@ -4,6 +4,8 @@
 # supabase/, la documentación interna y cualquier archivo no listado quedan fuera.
 acceso.html
 activar-plan.html
+buscador-global.js
+cabecera.css
 catalogo.html
 crear-cuenta.html
 cuenta.html
@@ -24,6 +26,7 @@ images/hero/hero-sala-principal.jpg
 index.html
 inscripcion-profesional.html
 login.html
+marco.css
 moderacion-acceso.js
 moderacion-producto.html
 moderacion-propuesta.html
