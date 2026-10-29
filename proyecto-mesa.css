@@ -474,3 +474,38 @@ body.pagina-mesa{ background:#FAFAF8; }
   .mesa .dock .dock-areas{ width:38px; }
   .mesa.page{ padding-bottom:80px; }
 }
+
+/* ---------- Vista de lista (opcional): las mismas piezas, en filas compactas ----------
+   Solo desde 720 px: por debajo, las piezas ya son filas y el selector se oculta; la preferencia elegida no se toca. */
+.mesa .seg{ display:inline-flex; flex:none; height:44px; padding:3px; border:1px solid var(--rule-2); border-radius:22px; }
+.mesa .seg button{ width:46px; padding:0; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:19px; background:none; color:var(--ink-2); }
+.mesa .seg button:hover{ color:var(--ink); }
+.mesa .seg button[aria-pressed="true"]{ background:var(--ink); color:#fff; }
+.mesa .nt-l{ display:none; }
+@media (max-width:719px){ .mesa .seg{ display:none; } }
+@media (min-width:720px){
+  .mesa .tools{ flex-wrap:wrap; row-gap:10px; }   /* con el selector, la barra pasa a dos líneas antes de aplastar el buscador */
+  .mesa .search{ min-width:220px; }
+  .mesa .grid.is-list{ grid-template-columns:minmax(0,1fr); gap:0; }
+  .mesa .is-list .tile{ border-top:1px solid var(--rule); }
+  .mesa .is-list .tile-btn{ display:grid; grid-template-columns:64px minmax(0,1fr) auto auto; grid-template-areas:"ph nm q a" "ph meta q a" "ph flag q a"; grid-template-rows:auto auto 1fr; column-gap:16px; align-items:start; padding:10px 56px 10px 0; }
+  .mesa .is-list .tile-btn .ph{ grid-area:ph; width:64px; }
+  .mesa .is-list .ph-none{ padding:0; }
+  .mesa .is-list .ph-none .phc, .mesa .is-list .ph-none .phs{ display:none; }
+  .mesa .is-list .tile-btn .nm{ grid-area:nm; margin:0; align-self:end; }
+  .mesa .is-list .tile-btn .meta{ grid-area:meta; }
+  .mesa .is-list .tile-btn .fw, .mesa .is-list .tile-btn .foot{ display:contents; }
+  .mesa .is-list .tile-btn .flag{ grid-area:flag; margin-top:2px; }
+  .mesa .is-list .foot .q{ grid-area:q; grid-row:1 / -1; align-self:center; flex-direction:column; align-items:flex-end; gap:2px; min-width:76px; text-align:right; }
+  .mesa .is-list .foot .q svg{ display:none; }
+  .mesa .is-list .foot .q .nt-l{ display:block; font-size:13px; color:var(--ink-3); }
+  .mesa .is-list .foot .a{ grid-area:a; grid-row:1 / -1; align-self:center; min-width:108px; }
+  .mesa .is-list .tile.open .tile-btn{ box-shadow:inset 3px 0 0 var(--ink); padding-left:12px; margin-left:-12px; width:calc(100% + 12px); }
+  .mesa .is-list .tile-more{ top:50%; right:8px; transform:translateY(-50%); }
+  .mesa .is-list .tile-more .more-btn{ opacity:1; background:none; width:40px; height:40px; }
+  .mesa .is-list .tile-more .more-btn:hover{ background:var(--stone); }
+  .mesa .is-list .tile .tick{ top:50%; left:0; transform:translateY(-50%); }
+  .mesa.selecting .is-list .tile-btn{ padding-left:40px; }
+  .mesa .grid.is-list > .ficha{ margin:0 0 6px; }
+  .mesa .grid.is-list > .ficha::before{ display:none; }
+}

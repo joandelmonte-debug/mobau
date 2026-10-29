@@ -22,10 +22,15 @@ const ProyectoVista = (() => {
     plus: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     check: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     close: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    grid: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>',
+    rows: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="4" rx="1"/><rect x="4" y="10" width="16" height="4" rx="1"/><rect x="4" y="15.5" width="16" height="4" rx="1"/></svg>',
     areas: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>'
   };
 
   /* ---------- estado ---------- */
+  /* La vista elegida se recuerda solo en este navegador. En pantallas estrechas la lista no se aplica (CSS) y la preferencia no se toca. */
+  const VIEW_KEY = "mobau_project_view";
+  function loadView(){ try { return localStorage.getItem(VIEW_KEY) === "lista" ? "lista" : "miniaturas"; } catch (e) { return "miniaturas"; } }
   const S = {
     project: null, plan: null, session: null, userId: null,
     areasState: "ready", areas: [], lines: [], states: null, loadError: null,
@@ -34,7 +39,8 @@ const ProyectoVista = (() => {
     noteEdit: null, pop: null, renaming: null, infoOpen: false, infoEdit: false, infoError: "", canReactivate: false, reactivateWhy: "",
     open: null, selecting: false, current: null,  /* mesa: ficha abierta, modo de selección y área que se está leyendo */
     adding: null,                                 /* panel «Desde mi selección» abierto: { area } */
-    catOpen: false                                /* bloque «Por categoría» de la columna del proyecto desplegado */
+    catOpen: false,                               /* bloque «Por categoría» de la columna del proyecto desplegado */
+    view: loadView()                              /* presentación de los productos: "miniaturas" o "lista" (preferencia de interfaz, no un dato del proyecto) */
   };
   let loadSeq = 0;
   const hooks = { onPlanGate: null, onLoaded: null };
@@ -200,7 +206,7 @@ const ProyectoVista = (() => {
         ${photoHtml(l)}
         <span class="nm" title="${esc(name)}">${esc(name)}</span>
         <span class="meta">${esc(meta)}</span>
-        <span class="fw"><span class="foot"><span class="q">${esc(qtyText(l))}${l.note ? `${ICON.note}<span class="sr">, con nota</span>` : ""}</span>${amount}</span>${tileFlag(l, flag)}</span>
+        <span class="fw"><span class="foot"><span class="q">${esc(qtyText(l))}${l.note ? `${ICON.note}<span class="sr">, con nota</span><span class="nt-l" aria-hidden="true">Con nota</span>` : ""}</span>${amount}</span>${tileFlag(l, flag)}</span>
       </button></li>`;
   }
 
@@ -584,6 +590,8 @@ const ProyectoVista = (() => {
       ${canOrganize && !hasAreas() ? `<button class="pill" data-act="organize">Organizar<span class="long"> por áreas</span></button>` : ""}
       ${hasAreas() && (canOrganize || ro()) ? `<span class="menu-wrap"><button class="pill${f.areas.size ? " on" : ""}" data-act="pop" data-key="org" aria-haspopup="menu" aria-expanded="${S.pop === "org"}">Áreas${n(f.areas.size)} ${ICON.chev}</button>${S.pop === "org" ? popFilter("org") : ""}</span>` : ""}
       ${!ro() && !S.selecting ? `<button class="pill" data-act="select-mode">Seleccionar</button>` : ""}
+      <span class="seg" role="group" aria-label="Vista de los productos"><button type="button" data-act="view" data-v="miniaturas" aria-pressed="${S.view !== "lista"}" aria-label="Miniaturas" title="Miniaturas">${ICON.grid}</button><button type="button" data-act="view" data-v="lista" aria-pressed="${S.view === "lista"}" aria-label="Lista" title="Lista">${ICON.rows}</button></span>
+
       ${!ro() ? `<span class="menu-wrap push"><button class="pill" data-act="pop" data-key="add" aria-haspopup="menu" aria-expanded="${S.pop === "add"}" ${failed ? "disabled" : ""}>${ICON.plus}<span>Añadir<span class="long"> productos</span></span></button>
         ${S.pop === "add" ? `<div class="pop right"><button data-act="from-selection">Desde mi selección <span class="count">${selCount}</span></button><hr><p class="h">Catálogo por categoría</p>${cats.map(c => `<a class="popitem" href="catalogo.html?categoria=${encodeURIComponent(c)}&project_id=${encodeURIComponent(pr.id)}">${esc(LABELS.categoria[c])}</a>`).join("")}<hr><a class="popitem" href="catalogo.html?project_id=${encodeURIComponent(pr.id)}">Buscar en todo el catálogo</a></div>` : ""}</span>` : ""}`;
     if (keepQ){ const q = $("#q"); q.focus({ preventScroll: true }); q.setSelectionRange(q.value.length, q.value.length); }
@@ -653,7 +661,7 @@ const ProyectoVista = (() => {
     const selAll = S.selecting && !ro() && vis.length ? `<label class="selall"><input type="checkbox" data-act="sel-area" data-key="${esc(flat ? "all" : key)}" ${allSel ? "checked" : ""}> Todo${flat ? "" : " el área"}</label>` : "";
     const sum = filtering() ? `${cap(word(vis.length))} de ${all.length} coinciden.` : boardSummary(all);
     const body = col ? `<p class="unfold"><button class="textbtn" data-act="toggle" data-key="${esc(key)}">Desplegar ${plural(all.length, "producto", "productos")}</button></p>`
-      : `<ul class="grid" data-grid="${esc(key)}">${vis.map(tileHtml).join("")}</ul>`;
+      : `<ul class="grid${S.view === "lista" ? " is-list" : ""}" data-grid="${esc(key)}">${vis.map(tileHtml).join("")}</ul>`;
     return `<section class="board${col ? " collapsed" : ""}" ${flat ? "" : `data-area="${esc(key)}" id="board-${esc(key)}"`} data-board="${esc(key)}">
       <header class="board-head"><span class="tail">${selAll}${menu}</span><h2>${title}<span class="sum">${sum}</span>${why}</h2></header>${body}</section>`;
   }
@@ -1099,6 +1107,12 @@ const ProyectoVista = (() => {
       case "close-ficha": closeFicha(); break;
       case "pm-step": S.pop = pmKey(t.dataset.where, id, t.dataset.step); render(); break;
       case "pm-back": S.pop = pmKey(t.dataset.where, id); render(); break;
+      case "view": {
+        const v = t.dataset.v === "lista" ? "lista" : "miniaturas";
+        if (S.view !== v){ S.view = v; S.pop = null; try { localStorage.setItem(VIEW_KEY, v); } catch (err) {} render(); }
+        const b = document.querySelector(`[data-act="view"][data-v="${v}"]`); if (b) b.focus({ preventScroll: true });
+        break;
+      }
       case "cat-toggle": S.catOpen = !S.catOpen; render(); break;
       case "fc-only": { const v = t.dataset.v; S.filters.cats = (S.filters.cats.size === 1 && S.filters.cats.has(v)) ? new Set() : new Set([v]); render(); ensureResultVisible(); break; }
       case "pick": S.selected.has(id) ? S.selected.delete(id) : S.selected.add(id); render(); { const b = tileEl(id); if (b) b.querySelector(".tile-btn").focus({ preventScroll: true }); } break;

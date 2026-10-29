@@ -401,6 +401,128 @@ const noOverflow = () => { const de = d().documentElement; return [de.scrollWidt
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "d" }, { width: "390px" });
     check("P3 móvil con 100 líneas: sin desbordamiento horizontal", noOverflow(), [true]);
 
+    /* ===== V · vista de lista (opcional): las mismas líneas en filas compactas; la preferencia es de interfaz ===== */
+    {
+    const VK = "mobau_project_view";
+    const setPref = v => { try { v ? localStorage.setItem(VK, v) : localStorage.removeItem(VK); } catch (e) {} };
+    const getPref = () => { try { return localStorage.getItem(VK); } catch (e) { return "?"; } };
+    const segBtn = v => q(`#toolbar [data-act="view"][data-v="${v}"]`);
+    const isList = () => qa("#list .grid").length > 0 && qa("#list .grid").every(g => g.classList.contains("is-list"));
+    const tileIds = () => qa("#list .tile").map(t => t.dataset.id);
+    const cs = (el, pseudo) => w().getComputedStyle(el, pseudo);
+    const setView = async v => { await click(segBtn(v), 120); await waitFor(() => segBtn(v).getAttribute("aria-pressed") === "true"); await sleep(250); };
+    const rr = e => e.getBoundingClientRect();
+    const pcols = el => cs(el).gridTemplateColumns.split(" ").length;
+    setPref(null);
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+    const ids0 = tileIds(), names0 = rowNames(), areas0 = areaTitles(), wv = writes().length;
+    const sb = qa("#toolbar .seg button");
+    check("V1 por defecto: Miniaturas (sin preferencia); el selector son dos iconos con nombre accesible y ayuda, la activa reconocible; las miniaturas siguen en cuadrícula",
+      [sb.map(b => b.getAttribute("aria-label")), sb.map(b => b.title), sb.map(b => !!b.querySelector("svg.i")), sb.map(b => b.textContent.trim()), sb.map(b => rr(b).width >= 44 && rr(b).height >= 36), segBtn("miniaturas").getAttribute("aria-pressed"), segBtn("lista").getAttribute("aria-pressed"), cs(segBtn("miniaturas")).backgroundColor !== cs(segBtn("lista")).backgroundColor, isList(), pcols(q("#list .grid")) > 1, cs(q("#list .tile-btn")).display],
+      [["Miniaturas", "Lista"], ["Miniaturas", "Lista"], [true, true], ["", ""], [true, true], "true", "false", true, false, true, "block"]);
+    await setView("lista");
+    check("V2 «Lista»: las mismas líneas, en el mismo orden y áreas; se recuerda en el navegador y no hay ninguna escritura",
+      [isList(), tileIds(), rowNames(), areaTitles(), getPref(), writes().length, segBtn("lista").getAttribute("aria-pressed")], [true, ids0, names0, areas0, "lista", wv, "true"]);
+    const tb1 = q("#list .tile-btn"), nm1 = tb1.querySelector(".nm"), qq1 = tb1.querySelector(".q"), am1 = tb1.querySelector(".a");
+    const grid1 = q("#list .grid"), tiles1 = qa(".tile", grid1), tops = tiles1.map(t => rr(t).top);
+    check("V3 geometría de la fila: una columna, foto de 64 px, nombre → cantidad → importe de izquierda a derecha, filas compactas y sin desbordar",
+      [cs(tb1).display, pcols(grid1), Math.round(rr(tb1.querySelector(".ph")).width), rr(nm1).right <= rr(qq1).left + 1 && rr(qq1).right <= rr(am1).left + 1, tops.every((t, i) => !i || t > tops[i - 1]), tiles1.every(t => rr(t).height < 125), cs(nm1).webkitLineClamp, noOverflow()[0]],
+      ["grid", 1, 64, true, true, true, "2", true]);
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+    check("V4 la preferencia se conserva al volver a abrir la página", [isList(), segBtn("lista").getAttribute("aria-pressed"), tileIds()], [true, "true", ids0]);
+    /* filtros: el mismo resultado en ambas vistas */
+    const qi = q("#q"); qi.value = "silla"; qi.dispatchEvent(new Event("input", { bubbles: true })); await waitFor(() => tileIds().length < ids0.length); await sleep(250);
+    const idsF = tileIds(), areasF = areaTitles(), chipsF = qa("#chips .chip47").map(c => c.textContent.replace("×", "").trim());
+    await setView("miniaturas");
+    check("V5 los filtros y sus resultados son los mismos al cambiar de vista (y de vuelta)", [tileIds(), areaTitles(), qa("#chips .chip47").map(c => c.textContent.replace("×", "").trim()), idsF.length > 0 && idsF.length < ids0.length], [idsF, areasF, chipsF, true]);
+    await click(q('[data-act="clear-all"]'), 300);
+    check("V5b al limpiar los filtros vuelven todas las líneas (Miniaturas)", [tileIds(), isList()], [ids0, false]);
+    await setView("lista");
+    /* ficha gris en la lista */
+    const fid = ids0[2];
+    await openTile(fid);
+    const fv0 = q("#ficha"), tl = q(`#list .tile[data-id="${fid}"]`), gw = rr(q("#list .grid")).width;
+    check("V6 la ficha se abre bajo su fila, a todo el ancho de la lista, sin muesca, y es una sola",
+      [qa("#ficha").length, fv0.previousElementSibling === tl, Math.abs(rr(fv0).width - gw) < 2, cs(fv0, "::before").display, tl.classList.contains("open")], [1, true, true, "none", true]);
+    await setView("miniaturas");
+    check("V7 al cambiar a Miniaturas la ficha sigue abierta (mismo nodo) y su pieza marcada", [q("#ficha") === fv0, qa("#ficha").length, q(`#list .tile[data-id="${fid}"]`).classList.contains("open"), isList()], [true, 1, true, false]);
+    await setView("lista");
+    check("V7b y de vuelta a Lista, igual", [q("#ficha") === fv0, q(`#list .tile[data-id="${fid}"]`).classList.contains("open")], [true, true]);
+    /* nota en edición: el texto sin guardar se conserva y no se guarda ni se descarta */
+    let asked = 0; w().confirm = () => { asked++; return true; };
+    const nl0 = lines().find(l => l.id === fid), wn = writes().length;
+    await click(find("#ficha button", "Añadir nota") || find("#ficha button", "Editar nota"), 250);
+    const ta0 = q(`#ne-${fid}`); ta0.value = "Borrador sin guardar ZXY"; ta0.dispatchEvent(new Event("input", { bubbles: true })); await sleep(120);
+    await setView("miniaturas");
+    check("V8 nota en edición (el cursor sigue en el campo): al cambiar de vista el texto sigue ahí, sin guardar, sin descartar y sin preguntar",
+      [q(`#ne-${fid}`) === ta0, q(`#ne-${fid}`).value, writes().length, lines().find(l => l.id === fid).notes, asked], [true, "Borrador sin guardar ZXY", wn, nl0.notes, 0]);
+    await setView("lista");
+    check("V8b y de vuelta a Lista, igual", [q(`#ne-${fid}`).value, writes().length, asked], ["Borrador sin guardar ZXY", wn, 0]);
+    q(`#ne-${fid}`).blur();   // un clic real en el selector saca el foco del campo
+    await setView("miniaturas");
+    check("V8c con el foco fuera del campo: el texto sigue, con «Cambios sin guardar», el botón Guardar activo y nada escrito",
+      [q(`#ne-${fid}`).value, !!find("#ficha .dirty", "sin guardar"), q(`[data-act="note-save"][data-id="${fid}"]`).disabled, writes().length, asked], ["Borrador sin guardar ZXY", true, false, wn, 0]);
+    await setView("lista");
+    check("V8d y de vuelta a Lista, igual", [q(`#ne-${fid}`).value, !!find("#ficha .dirty", "sin guardar"), writes().length, lines().find(l => l.id === fid).notes, asked], ["Borrador sin guardar ZXY", true, wn, nl0.notes, 0]);
+    await click(q(`[data-act="note-cancel"][data-id="${fid}"]`), 250);
+    await click(q('#ficha [data-act="close-ficha"]'), 250);
+    check("V8e cancelar la nota y cerrar la ficha: nada guardado", [!!q("#ficha"), writes().length], [false, wn]);
+    /* ⋯ y selección no abren ni cierran la ficha */
+    const tv1 = lines().find(l => l.product_id === "silla-tolu" && l.area_id === A(2)).id;
+    const moreBtn = q(`#list .tile[data-id="${tv1}"] .more-btn`);
+    check("V9 en la lista el ⋯ se ve siempre (a la derecha de la fila, sobre la propia fila)", [cs(moreBtn).opacity, rr(moreBtn).right <= rr(q(`#list .tile[data-id="${tv1}"]`)).right + 1, rr(moreBtn).left > rr(q(`#list .tile[data-id="${tv1}"] .a`)).right], ["1", true, true]);
+    await click(moreBtn, 250);
+    const pm = q(".pop.pm");
+    check("V10 el ⋯ de la fila abre su menú (ver, mover, copiar, quitar) sin abrir la ficha y dentro de la pantalla", [menuTexts(), !q("#ficha"), rr(pm).left >= 0 && rr(pm).right <= w().innerWidth], [["Ver en el catálogo", "Mover a otra área…", "Copiar a otra área…", "Quitar del proyecto"], true, true]);
+    await click(q('.pop.pm [data-act="pm-step"][data-step="move"]'), 250);
+    await click(q(`.pop.pm [data-act="move1"][data-area="${A(3)}"]`), 700);
+    check("V11 mover desde la lista usa la misma operación: la línea cambia de área, se cierra el menú y no se abre la ficha", [lines().find(l => l.id === tv1).area_id, !q(".pop.pm"), !q("#ficha"), isList()], [A(3), true, true, true]);
+    /* selección múltiple */
+    await click(q('#toolbar [data-act="select-mode"]'), 250);
+    const pick = async id => click(q(`#list .tile[data-id="${id}"] .tile-btn`), 200);
+    await pick(ids0[0]); await pick(ids0[1]);
+    check("V12 selección en la lista: las filas se marcan, no se abre ninguna ficha y el ⋯ no estorba", [qa("#list .tile.picked").map(t => t.dataset.id), !q("#ficha"), q("#bulk").textContent.includes("2 seleccionadas"), qa("#list .tile-more").every(e => cs(e).display === "none")], [[ids0[0], ids0[1]], true, true, true]);
+    await setView("miniaturas");
+    check("V13 al cambiar de vista la selección múltiple se conserva", [qa("#list .tile.picked").map(t => t.dataset.id), q("#bulk").textContent.includes("2 seleccionadas"), !q("#bulk").hidden], [[ids0[0], ids0[1]], true, true]);
+    await setView("lista");
+    await pick(ids0[2]);
+    check("V13b y de vuelta a Lista se puede seguir marcando", [qa("#list .tile.picked").length, q("#bulk").textContent.includes("3 seleccionadas")], [3, true]);
+    await click(q('#bulk [data-act="sel-exit"]'), 250);
+    check("V13c «Cancelar» sale sin operar y la vista no cambia", [qa("#list .tile.picked").length, !!q('#toolbar [data-act="select-mode"]'), isList(), getPref()], [0, true, true, "lista"]);
+    /* posición de lectura (100 líneas): el producto que se estaba viendo sigue en su sitio */
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "d" });
+    const topH = () => { const h = q(".site-header"), st = q("#strip"); return (h && /sticky|fixed/.test(cs(h).position) ? h.offsetHeight : 0) + (st && st.offsetHeight && cs(st).position === "sticky" ? st.offsetHeight : 0); };
+    const firstVisible = () => qa("#list .tile").find(t => { const r = rr(t); return r.bottom > topH() + 8 && r.top < w().innerHeight; });
+    const target = qa("#list .tile")[45];
+    w().scrollTo({ top: rr(target).top + w().scrollY - 300, behavior: "instant" }); await sleep(500);
+    const fv = firstVisible(), fvId = fv.dataset.id, fvTop = rr(fv).top, y = w().scrollY;
+    await setView("miniaturas");
+    await waitFor(() => { const e = q(`#list .tile[data-id="${fvId}"]`); return e && Math.abs(rr(e).top - fvTop) <= 4; }, 3000);
+    check("V14 Lista → Miniaturas: el producto que se leía sigue en su sitio, sin saltar al principio", [Math.abs(rr(q(`#list .tile[data-id="${fvId}"]`)).top - fvTop) <= 4, w().scrollY > 200, isList()], [true, true, false]);
+    const fv2 = firstVisible(), fv2Id = fv2.dataset.id, fv2Top = rr(fv2).top;
+    await setView("lista");
+    await waitFor(() => { const e = q(`#list .tile[data-id="${fv2Id}"]`); return e && Math.abs(rr(e).top - fv2Top) <= 4; }, 3000);
+    check("V14b Miniaturas → Lista: igual", [Math.abs(rr(q(`#list .tile[data-id="${fv2Id}"]`)).top - fv2Top) <= 4, w().scrollY > 200, isList()], [true, true, true]);
+    /* móvil: se conserva la presentación actual, sin selector, y la preferencia de escritorio no se pisa */
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" }, { width: "390px" });
+    const tbm = q("#list .tile-btn");
+    check("V15 móvil (390 px) con preferencia «Lista»: sin selector, la fila móvil de siempre (foto de 76 px), sin desbordar, y la preferencia sigue en «lista»",
+      [cs(q("#toolbar .seg")).display, cs(tbm).gridTemplateColumns.split(" ")[0], Math.round(rr(tbm.querySelector(".ph")).width), noOverflow()[0], getPref()], ["none", "76px", 76, true, "lista"]);
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+    check("V15b al volver a un ancho suficiente se recupera la lista", [isList(), cs(q("#toolbar .seg")).display !== "none", getPref()], [true, true, "lista"]);
+    /* cambiar el ancho de la ventana con la ficha abierta: ni se cierra ni se pisa la preferencia */
+    await openTile(ids0[3]);
+    frame.style.width = "390px"; await sleep(700);
+    check("V16 estrechar la ventana con la ficha abierta: sigue abierta, el selector se oculta y la preferencia no cambia", [qa("#ficha").length, cs(q("#toolbar .seg")).display, getPref()], [1, "none", "lista"]);
+    frame.style.width = ""; await sleep(700);
+    check("V16b al ensanchar vuelve la lista con la misma ficha", [qa("#ficha").length, cs(q("#toolbar .seg")).display !== "none", cs(q("#list .tile-btn")).gridTemplateColumns.split(" ")[0]], [1, true, "64px"]);
+    /* sin preferencia y con el almacenamiento bloqueado: Miniaturas */
+    setPref("otra-cosa");
+    fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c" });
+    check("V17 un valor desconocido se ignora: Miniaturas", [isList()], [false]);
+    setPref(null);
+    }
+
     /* ===== G · sin acceso a precios (plan): como hasta ahora, solo el aviso de planes ===== */
     fw = await open("proyectos-detalle.html", `id=${P(1)}`, { caso: "c", precios: false }, { ready: doc => doc.getElementById("plan-gate").style.display !== "none" });
     check("G1 el servidor niega los precios por plan: solo el aviso de planes, sin proyecto ni líneas", [d().getElementById("plan-gate").style.display !== "none", d().getElementById("project-view").style.display, qa("#list .tile").length], [true, "none", 0]);
