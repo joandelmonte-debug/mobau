@@ -55,6 +55,13 @@
   .ps-product-name{ font-family:var(--f-head); font-weight:600; font-size:14px; }
   .ps-product-sub{ font-size:12.5px; color:var(--ink-faint); margin-top:2px; }
   .ps-unavailable-row td{ color:var(--ink-faint); font-style:italic; }
+  /* Proyectos con áreas: encabezado discreto de cada grupo (sin subtotales ni columnas nuevas). */
+  .ps-table .ps-area-row td{ padding:22px 0 6px; font-size:12.5px; font-weight:600; color:var(--ink-faint); border-bottom:1px solid var(--line-strong); }
+  .ps-table .ps-area-row td:nth-child(1){ width:auto; }
+  .ps-table tbody tr.ps-area-row:first-child td{ padding-top:8px; }
+  /* Nota guardada de la línea: bajo sus datos, con saltos de línea y sin recortar. */
+  .ps-product-note{ font-size:12.5px; color:var(--ink-faint); margin-top:4px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .ps-note-label{ font-weight:600; }
 
   .ps-totals{
     border-top:2px solid var(--ink); padding-top:16px; margin-bottom:24px;
@@ -139,6 +146,8 @@
     .print-document .ps-table th{ font-size: 9pt; }
     .print-document .ps-product-name{ font-size: 10pt; font-weight: 600; }
     .print-document .ps-product-sub{ font-size: 9pt; }
+    .print-document .ps-product-note{ font-size: 9pt; color:#000; }
+    .print-document .ps-area-row td{ font-size: 9pt; font-weight: 700; color:#000; }
     .print-document .ps-totals .ps-total-line{ font-size: 13pt; font-weight: 600; }
     .print-document .ps-disclaimer{ font-size: 9pt; }
     /* Miniatura del producto: dimensiones fijas más pequeñas que en
@@ -155,6 +164,8 @@
        la mitad entre dos páginas. */
     .ps-table thead{ display:table-header-group; }
     .ps-table tr{ break-inside:avoid; page-break-inside:avoid; }
+    /* El encabezado de un área nunca queda solo al final de una página: va unido a su primera fila. */
+    .ps-table .ps-area-row{ break-after:avoid; page-break-after:avoid; }
     .ps-table-wrap{ overflow-x:visible; }
 
     /* Ancho de página A4 (menos márgenes): anchos fijos + wrap
@@ -346,6 +357,28 @@
     }
   }
 
+  /* Nota guardada de la línea (texto escapado; los saltos de línea los respeta el CSS). Sin nota, nada. */
+  function noteHtml(row){
+    return typeof row.notes === "string" && row.notes.trim() !== ""
+      ? `<div class="ps-product-note"><span class="ps-note-label">Nota:</span> ${escapeHtml(row.notes)}</div>` : "";
+  }
+
+  /* Proyecto con áreas: las filas (ya ordenadas por MobauAreas.presentation, una por producto, acabado y configuración, sin fusionar)
+     se agrupan bajo el nombre de su área; solo aparecen las áreas que tienen líneas. Sin áreas, la lista queda como estaba. */
+  let groupsOn = false;
+  let areaNames = new Map();
+  const groupNameOf = row => row.area_name || areaNames.get(row.area_id) || "Sin área";
+  function rowsHtml(rows, render, cols){
+    if (!groupsOn) return rows.map(render).join("");
+    let last = null;
+    return rows.map(row => {
+      const name = groupNameOf(row), key = (row.area_id || "") + "|" + name;
+      const head = key !== last ? `<tr class="ps-area-row"><td colspan="${cols}">${escapeHtml(name)}</td></tr>` : "";
+      last = key;
+      return head + render(row);
+    }).join("");
+  }
+
   /* Fila de la tabla. Sin sesión no se llega aquí (requireSession ya
      redirigió), así que getPriceInfo() siempre refleja el estado real
      para un usuario autenticado — nunca un importe para quien no
@@ -355,7 +388,7 @@
     if (!p){
       return `
         <tr class="ps-unavailable-row">
-          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td>
+          <td colspan="5">Producto no disponible (ID: ${escapeHtml(row.product_id)})${noteHtml(row)}</td>
         </tr>`;
     }
     const dist = DISTRIBUTORS[p.distribuidor];
@@ -378,8 +411,9 @@
             <div class="ps-product-thumb">${productMediaMarkup(productWithFinishImage(p, row.finish_code), 26)}</div>
             <div>
               <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
-              <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code), areaLabelOf(row)].filter(Boolean).join(" · "))}</div>
+              <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
               ${configLinesHtml(row, false)}
+              ${noteHtml(row)}
             </div>
           </div>
         </td>
@@ -393,8 +427,6 @@
   /* Punto 46 · bloque 4: estado actual de las líneas (Map por id, o null si
      no se pudo comprobar); no se consulta cuando se muestra la copia de una RFQ. */
   let lineStates = null;
-  /* Punto 47: etiqueta «Área: X» de una línea (vacía si el proyecto no tiene áreas). */
-  let areaLabelOf = () => "";
 
   /* Configuración de una fila: la copia enviada (sin recalcular) o el estado
      actual; en un archivado sin copia se indica que es información actual. */
@@ -511,7 +543,8 @@
     const areaInfo = await MobauAreas.list(project.id);
     const present = MobauAreas.presentation(rows, areaInfo.areas);
     rows.splice(0, rows.length, ...present.rows);
-    areaLabelOf = present.label;
+    groupsOn = rows.length > 0 && present.label(rows[0]) !== "";      // mismo criterio de «¿tiene áreas?» que usa la presentación
+    areaNames = new Map((areaInfo.areas || []).map(a => [a.id, a.name]));
     if (areaInfo.state === "error"){
       const note = document.getElementById("ps-archived-note");
       note.textContent = "No pudimos cargar las áreas del proyecto: las líneas se muestran sin agrupar por área.";
@@ -559,10 +592,10 @@
          @media print), nada en pantalla depende de esta clase. */
       document.querySelector(".ps-table").classList.add("ps-table--noprice");
 
-      document.getElementById("ps-table-body").innerHTML = rows.map(row => {
+      document.getElementById("ps-table-body").innerHTML = rowsHtml(rows, row => {
         const p = PRODUCTS.find(pp => pp.id === row.product_id);
         if (!p){
-          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)})</td></tr>`;
+          return `<tr class="ps-unavailable-row"><td colspan="4">Producto no disponible (ID: ${escapeHtml(row.product_id)})${noteHtml(row)}</td></tr>`;
         }
         const dist = DISTRIBUTORS[p.distribuidor];
         const unit = row.unit || getProductUnit(p);
@@ -575,8 +608,9 @@
                 <div class="ps-product-thumb">${productMediaMarkup(productWithFinishImage(p, row.finish_code), 26)}</div>
                 <div>
                   <div class="ps-product-name">${escapeHtml(p.nombre)}${p.status === "archived" ? " (no disponible actualmente)" : ""}</div>
-                  <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code), areaLabelOf(row)].filter(Boolean).join(" · "))}</div>
+                  <div class="ps-product-sub">${escapeHtml([LABELS.categoria[p.categoria], lineDetailText(p, row.finish_code)].filter(Boolean).join(" · "))}</div>
                   ${configLinesHtml(row, true)}
+                  ${noteHtml(row)}
                 </div>
               </div>
             </td>
@@ -584,7 +618,7 @@
             <td>${escapeHtml(dist.nombre)}</td>
             <td class="ps-num">${displayQty} ${unit}</td>
           </tr>`;
-      }).join("");
+      }, 4);
 
       document.getElementById("ps-totals").innerHTML = "";
       document.getElementById("summary-content").style.display = "block";
@@ -593,7 +627,7 @@
 
     await loadPriceState(rows.map(row => row.product_id));
     if (!MobauAccess.hasProfessionalTools()) return showPlanGate();
-    document.getElementById("ps-table-body").innerHTML = rows.map(renderRow).join("");
+    document.getElementById("ps-table-body").innerHTML = rowsHtml(rows, renderRow, 5);
     renderTotals(rows);
     MobauLineConfig.compatNote(document.getElementById("ps-totals"), rows.some(row => row.configuration || (row.requested && row.requested.configuration)));
 
