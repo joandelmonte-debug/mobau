@@ -74,7 +74,7 @@
   .pl-deleted-list .c-name{ color: var(--ink); font-weight:600; }
   .lc-block{ margin-top:10px; padding:10px 12px; border-left:3px solid var(--danger); background: var(--surface); font-size:13px; }
   .lc-block p{ margin:0; max-width:none; }
-  /* Filas compactas (45): selección | código | marca | nombre | estado | acciones.
+  /* Filas compactas (45): selección | código | marca | tipo | nombre | estado | acciones.
      Notas, confirmaciones e historial se abren debajo de la fila. */
   .pl-selbar{ display:flex; flex-wrap:wrap; align-items:center; gap:0 18px; margin:6px 0 4px; font-size:14px; }
   .pl-selcount{ font-weight:600; color: var(--ink); }
@@ -93,14 +93,15 @@
   .pl-group-panel .pl-group-label{ margin-top:10px; font-weight:600; color: var(--ink); }
   .pl-group-panel .lc-actions{ margin-top:12px; }
   /* Columnas compartidas por todas las filas (subgrid); sin subgrid, anchos fijos. */
-  .pl-rows{ display:grid; grid-template-columns:32px minmax(56px,100px) minmax(64px,120px) minmax(0,1fr) max-content max-content; column-gap:14px; }
+  .pl-rows{ display:grid; grid-template-columns:32px minmax(56px,100px) minmax(64px,120px) minmax(72px,104px) minmax(0,1fr) max-content max-content; column-gap:14px; }
   .pl-row, .pl-rowhead{ grid-column:1 / -1; display:grid; grid-template-columns:subgrid; align-items:center; row-gap:2px; padding:2px 8px; border-bottom:1px solid var(--line); }
   @supports not (grid-template-columns: subgrid){
     .pl-rows{ display:block; }
-    .pl-row, .pl-rowhead{ grid-template-columns:32px 110px 130px minmax(0,1fr) 150px 330px; column-gap:14px; }
+    .pl-row, .pl-rowhead{ grid-template-columns:32px 110px 130px 100px minmax(0,1fr) 150px 330px; column-gap:14px; }
   }
   .pl-rowhead{ border-top:1px solid var(--line); padding-top:8px; padding-bottom:8px; font-size:12px; letter-spacing:.04em; text-transform:uppercase; color: var(--ink-soft); }
   .pl-rowhead span:last-child{ text-align:right; }
+  .pl-catalog-head .pl-hc--static{ justify-content:flex-end; }
   .pl-row{ min-height:48px; background: var(--white); font-size:14px; }
   .pl-row.is-selected{ background: var(--surface); }
   .pl-sel{ display:grid; place-items:center; width:32px; height:44px; cursor:pointer; }
@@ -111,7 +112,13 @@
   .pl-name{ min-width:0; overflow-wrap:anywhere; }
   .pl-name .c-name{ font-weight:600; color: var(--ink); }
   .pl-kind{ margin-top:1px; font-size:12px; color: var(--ink-soft); }
-  .pl-role{ display:inline-block; margin-top:3px; padding:0 7px; font-size:11.5px; line-height:18px; color: var(--ink-soft); border:1px solid var(--line); border-radius:999px; }
+  .pl-role{ color: var(--ink-soft); overflow-wrap:anywhere; }
+  .pl-role.is-unknown{ font-style:italic; }
+  /* Cambios abiertos de un producto publicado: el texto explica, el color refuerza. */
+  .pl-tag{ display:inline-block; margin-top:3px; padding:1px 8px; font-size:12px; line-height:18px; border:1px solid transparent; border-radius:999px; }
+  .pl-tag--draft{ background: var(--brass-soft); color:#6E4E22; border-color:#E2D2B2; }
+  .pl-tag--submitted{ background: var(--accent-soft); color: var(--accent-ink); border-color:#C3D6D1; }
+  .pl-tag--changes{ background: var(--white); color: var(--danger); border-color: var(--danger); }
   .pl-state{ display:flex; flex-wrap:wrap; gap:4px; }
   .pl-acts{ display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:0 2px; }
   .pl-acts .pd-link, .pl-acts .pl-toggle, .pl-acts .pp-withdraw-btn{ display:inline-flex; align-items:center; min-height:44px; margin:0; padding:0 8px; white-space:nowrap; }
@@ -160,6 +167,49 @@
     .pl-icon{ width:36px; }
     .pl-row-details{ grid-column:2 / -1; }
     .pl-tip:hover::after, .pl-tip:focus-visible::after{ right:auto; left:0; }
+  }
+  /* Cabecera con filtros (solo En catálogo): título + botón de filtro por columna. */
+  .pl-rowhead .pl-hc{ display:flex; align-items:center; gap:2px; min-width:0; }
+  .pl-rowhead .pl-hc-title{ overflow-wrap:anywhere; }
+  .pl-rowhead .pl-hc-sort{ font-size:11px; color: var(--accent-ink); }
+  .pl-fbtn{ display:inline-grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid transparent; border-radius: var(--radius); background:none; color: var(--ink-soft); cursor:pointer; flex:0 0 auto; }
+  .pl-fbtn:hover{ background: var(--surface); color: var(--ink); }
+  .pl-fbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:1px; }
+  .pl-fbtn svg{ width:14px; height:14px; }
+  .pl-fbtn.is-active{ background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+  .pl-fbtn[aria-expanded="true"]{ background: var(--surface-2); color: var(--ink); }
+  .pl-rowhead .pl-hsel{ display:grid; place-items:center; width:32px; height:32px; }
+  .pl-rowhead .pl-hsel input{ width:18px; height:18px; margin:0; cursor:pointer; }
+  .pl-fbar{ display:flex; flex-wrap:wrap; align-items:center; gap:2px 16px; margin:0 0 8px; font-size:14px; }
+  .pl-fbar .pl-fcount{ font-weight:600; color: var(--ink); }
+  .pl-fbar .pl-fnote{ color: var(--ink-soft); }
+  .pl-fbar .pl-toggle{ min-height:44px; }
+  .pl-fm{ position:fixed; z-index:30; width:300px; max-width:calc(100vw - 24px); max-height:min(80vh, 560px); display:flex; flex-direction:column; background: var(--white); border:1px solid var(--line-strong); border-radius: var(--radius-lg); box-shadow:0 8px 28px rgba(30,25,15,.18); font-size:14px; }
+  .pl-fm-body{ overflow-y:auto; padding:10px 12px 4px; min-height:0; }
+  .pl-fm-sec{ margin:0 0 10px; }
+  .pl-fm-h{ margin:0 0 4px; font-size:12px; letter-spacing:.04em; text-transform:uppercase; color: var(--ink-soft); font-weight:600; }
+  .pl-fm button.pl-fm-sort{ display:flex; align-items:center; gap:8px; width:100%; min-height:40px; padding:0 8px; border:0; border-radius: var(--radius); background:none; font:inherit; color: var(--ink); text-align:left; cursor:pointer; }
+  .pl-fm button.pl-fm-sort:hover{ background: var(--surface); }
+  .pl-fm button.pl-fm-sort[aria-pressed="true"]{ background: var(--accent-soft); color: var(--accent-ink); font-weight:600; }
+  .pl-fm input[type="search"]{ width:100%; min-height:40px; padding:0 10px; font:inherit; border:1px solid var(--line-strong); border-radius: var(--radius); box-sizing:border-box; }
+  .pl-fm-list{ list-style:none; margin:6px 0 0; padding:0; max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius: var(--radius); }
+  .pl-fm-list li{ margin:0; }
+  .pl-fm-list label{ display:flex; align-items:center; gap:8px; min-height:40px; padding:0 10px; cursor:pointer; overflow-wrap:anywhere; }
+  .pl-fm-list label:hover{ background: var(--surface); }
+  .pl-fm-list input{ width:16px; height:16px; margin:0; flex:0 0 auto; accent-color: var(--accent); }
+  .pl-fm-list .pl-fm-count{ margin-left:auto; color: var(--ink-soft); font-size:12px; padding-left:8px; flex:0 0 auto; }
+  .pl-fm-list .pl-fm-all{ border-bottom:1px solid var(--line); font-weight:600; }
+  .pl-fm-none{ margin:6px 0 0; color: var(--ink-soft); font-size:13px; }
+  .pl-fm-foot{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; padding:10px 12px; border-top:1px solid var(--line); }
+  .pl-fm-foot .btn{ min-height:40px; padding:0 16px; font-size:14px; }
+  .pl-fm-foot .pl-toggle{ margin-left:auto; min-height:40px; }
+  .pl-fm-foot .pl-toggle:disabled{ color: var(--ink-soft); cursor:default; text-decoration:none; }
+  .pl-fm-hint{ flex:1 1 100%; margin:0; font-size:12.5px; color: var(--danger); }
+  @media (max-width: 700px){
+    .pl-catalog-head{ display:flex; flex-wrap:wrap; gap:2px 4px; margin:0 0 6px; padding:0; border:0; font-size:13px; text-transform:none; letter-spacing:0; }
+    .pl-catalog-head .pl-hsel, .pl-catalog-head .pl-hc--static{ display:none; }
+    .pl-catalog-head .pl-hc{ border:1px solid var(--line); border-radius:999px; padding:0 2px 0 10px; }
+    .pl-fm{ left:12px !important; right:12px; top:auto !important; bottom:12px; width:auto; max-height:80vh; }
   }
 </style>
 </head>
@@ -245,7 +295,7 @@
           <label for="pl-category">Categoría</label>
           <select id="pl-category"><option value="">Todas</option></select>
         </div>
-        <div class="field" style="margin:0;">
+        <div class="field" id="pl-status-field" style="margin:0;">
           <label for="pl-status">Estado</label>
           <select id="pl-status"><option value="">Todos</option></select>
         </div>
@@ -272,10 +322,16 @@
 
     <section id="pl-view-catalog" class="pl-section" role="tabpanel" aria-labelledby="pl-tab-catalog">
       <h2 class="pl-section-title">En catálogo</h2>
-      <p id="pl-catalog-count" class="card-meta" style="margin:6px 0 12px;"></p>
+      <p id="pl-catalog-count" class="card-meta" style="margin:6px 0 12px;" aria-live="polite"></p>
+      <!-- Filtros de columna: resultado, búsqueda local activa y «Limpiar todos los filtros». -->
+      <div class="pl-fbar" id="pl-catalog-fbar" hidden>
+        <span class="pl-fnote" id="pl-fnote"></span>
+        <button type="button" class="pl-toggle" id="pl-clear-columns">Limpiar todos los filtros</button>
+      </div>
       <div id="pl-catalog-empty" class="cart-empty pl-empty" hidden>
         <p id="pl-catalog-empty-title" style="margin:0; color:var(--ink); font-weight:600;"></p>
         <p id="pl-catalog-empty-text" style="margin:0;"></p>
+        <button type="button" class="btn btn-outline" id="pl-catalog-clear" hidden>Limpiar todos los filtros</button>
       </div>
       <div class="pl-rows" id="pl-catalog-list"></div>
     </section>
@@ -470,6 +526,8 @@
      su propuesta de cambios) o create:ID (producto nuevo sin producto aún). */
   const selected = new Set();
   let visibleKeys = [];
+  let tabKeys = new Set(); // claves de la pestaña activa (para contar seleccionados fuera de la vista)
+  const hiddenSelectedCount = () => { const v = new Set(visibleKeys); return [...selected].filter(k => tabKeys.has(k) && !v.has(k)).length; };
   /* Notificaciones: las decisiones se cargan aparte; hasta entonces no se
      muestra el estado vacío. newDecisions: decisiones con «Nueva» (criterio
      existente, por dispositivo) para el indicador de la pestaña. */
@@ -1064,6 +1122,12 @@
      selección | código comercial | marca | nombre | estado | acciones. Sin
      reference_code se muestra «—» (nunca el identificador interno). */
   const ROLE_TAGS = { principal: "Principal", componente: "Componente", ambos: "Ambos" };
+  const ROLE_UNKNOWN = "Sin clasificar";
+  function roleOf(entry){
+    const key = entry.product ? entry.product.catalog_role
+      : (entry.proposal && entry.proposal.proposed_components ? entry.proposal.proposed_components.catalog_role : null);
+    return ROLE_TAGS[key] ? { key, label: ROLE_TAGS[key], known: true } : { key: "", label: ROLE_UNKNOWN, known: false };
+  }
   function rowShell(entry, kind, states){
     const row = document.createElement("div");
     row.className = "pl-row";
@@ -1079,15 +1143,14 @@
     sel.append(box);
     const meta = document.createElement("div");
     meta.className = "pl-c-meta";
-    meta.append(textDiv("pl-code", entry.code || "—"), textDiv("pl-brand", entry.brand || "Sin marca"));
+    /* Función del artículo (46): columna «Tipo», solo informativa; el dato existente, sin deducir nada. */
+    const role = roleOf(entry);
+    const roleEl = textDiv(role.known ? "pl-role" : "pl-role is-unknown", role.label);
+    meta.append(textDiv("pl-code", entry.code || "—"), textDiv("pl-brand", entry.brand || "Sin marca"), roleEl);
     const name = document.createElement("div");
     name.className = "pl-name";
     name.append(textDiv("c-name", entry.name));
-    if (kind) name.append(textDiv("pl-kind", kind));
-    /* Función del artículo (46): solo informativa; dónde aparece, no si se puede solicitar. */
-    const roleKey = entry.product ? entry.product.catalog_role
-      : (entry.proposal && entry.proposal.proposed_components ? entry.proposal.proposed_components.catalog_role : null);
-    if (ROLE_TAGS[roleKey]) name.append(textDiv("pl-role", ROLE_TAGS[roleKey]));
+    if (kind) name.append(typeof kind === "string" ? textDiv("pl-kind", kind) : kind);
     const state = document.createElement("div");
     state.className = "pl-state";
     state.append(...states);
@@ -1114,13 +1177,33 @@
     return link(proposal ? PROPOSAL[proposal.status].action : "Proponer cambios", href);
   }
 
+  /* Cambios abiertos de un producto publicado (propuesta update): el texto explica
+     el estado real y el color solo lo refuerza. El producto sigue publicado. */
+  const CHANGE_STATES = {
+    none:              { label: "Sin cambios pendientes",                    cls: "" },
+    draft:             { label: "Cambios en borrador",                       cls: "pl-tag--draft" },
+    submitted:         { label: "Cambios enviados · pendientes de revisión", cls: "pl-tag--submitted" },
+    changes_requested: { label: "Cambios solicitados por Mobau",              cls: "pl-tag--changes" }
+  };
+  function changeKey(entry){
+    const open = entry.product ? openUpdates.get(entry.product.id) : null;
+    return open && CHANGE_STATES[open.status] ? open.status : "none";
+  }
+  function changeTag(open){
+    const info = CHANGE_STATES[open.status];
+    const el = document.createElement("div");
+    el.className = `pl-tag ${info.cls}`;
+    el.textContent = info.label;
+    return el;
+  }
+
   /* En catálogo: el producto publicado, con su versión actual aunque tenga
      cambios abiertos (esos cambios se ven también en Borradores y propuestas). */
   function buildCatalogRow(entry){
     const product = entry.product;
     const open = openUpdates.get(product.id) || null;
     const lc = lcRow(product);
-    const kind = open ? `Cambios propuestos · ${PROPOSAL[open.status].label}` : (LC.enabled() && lifecycle && !lc ? LC.TEXT.notChecked : "");
+    const kind = open ? changeTag(open) : (LC.enabled() && lifecycle && !lc ? LC.TEXT.notChecked : "");
     const { row, acts, details } = rowShell(entry, kind, [statusChip(product, lc)]);
     acts.append(proposalAction(open, productHref(product), details), iconButton("eye", "Ver producto", viewHref(product)));
     if (lcUsable(lc)){
@@ -1579,7 +1662,9 @@
   }
   function renderSelection(){
     const n = selected.size;
-    $("pl-selcount").textContent = n === 0 ? "Ningún producto seleccionado" : `${n} ${n === 1 ? "seleccionado" : "seleccionados"} en total`;
+    const away = hiddenSelectedCount();
+    $("pl-selcount").textContent = n === 0 ? "Ningún producto seleccionado" : `${n} ${n === 1 ? "seleccionado" : "seleccionados"} en total${away ? ` · ${away} fuera de la vista` : ""}`;
+    syncHeaderCheck();
     $("pl-clear-selection").disabled = n === 0;
     $("pl-select-visible").disabled = visibleKeys.length === 0 || visibleKeys.every(k => selected.has(k));
   }
@@ -1719,8 +1804,10 @@
     bar.hidden = !actions || selected.size === 0 || group.phase === "running";
     if (bar.hidden) return;
     const elsewhere = selected.size - new Set(inTab.map(e => e.key)).size;
+    const shownKeys = new Set(visibleKeys);
+    const hiddenIn = inTab.filter(e => !shownKeys.has(e.key)).length;
     $("pl-group-count").textContent = inTab.length
-      ? `${inTab.length} ${inTab.length === 1 ? "seleccionado" : "seleccionados"} en esta pestaña${elsewhere > 0 ? ` · ${elsewhere} en otras (no se tocan)` : ""}`
+      ? `${inTab.length} ${inTab.length === 1 ? "seleccionado" : "seleccionados"} en esta pestaña${hiddenIn > 0 ? ` (${hiddenIn} fuera de la vista: también se incluyen)` : ""}${elsewhere > 0 ? ` · ${elsewhere} en otras (no se tocan)` : ""}`
       : "Ninguno de los seleccionados está en esta pestaña";
     $("pl-group-actions").replaceChildren(...(inTab.length ? actions : []).map(action => {
       const b = document.createElement("button");
@@ -1863,7 +1950,7 @@
   }
 
   const ROW_BUILDERS = { catalog: buildCatalogRow, draft: buildDraftRow, update: buildUpdateRow, create: buildCreateRow, trash: buildTrashRow };
-  const HEAD = ["", "Código", "Marca", "Nombre", "Estado", "Acciones"];
+  const HEAD = ["", "Código", "Marca", "Tipo", "Nombre", "Estado", "Acciones"];
   const EMPTY = {
     catalog: ["Todavía no tienes productos en el catálogo.", "Tus productos nuevos, borradores y retirados están en «Borradores y propuestas»."],
     drafts:  ["No tienes borradores ni propuestas abiertas.", "Usa «Crear producto o componente» o «Proponer cambios» en un producto."],
@@ -1875,7 +1962,342 @@
       drafts:  total === 1 ? "borrador o propuesta" : "borradores y propuestas",
       trash:   total === 1 ? "producto en la papelera" : "productos en la papelera"
     };
-    return shown === total ? `${total} ${nouns[tab]}` : `${shown} de ${total} ${nouns[tab]}`;
+    if (shown === total) return `${total} ${nouns[tab]}`;
+    return tab === "catalog" ? `Mostrando ${shown} de ${total} ${nouns[tab]}` : `${shown} de ${total} ${nouns[tab]}`;
+  }
+
+  /* ---------- Filtros y orden de columna (En catálogo) ----------
+     Estado de interfaz, separado de los datos del producto: colFilters (grupo ->
+     conjunto de valores permitidos; sin entrada = sin filtro) y colSort (una
+     columna a la vez). Dentro de un grupo los valores son alternativas (O); entre
+     grupos y columnas se combinan (Y). Nada se aplica hasta pulsar «Aplicar». */
+  const COLUMNS = {
+    code:  { title: "Código", groups: [{ id: "code" }],  sort: ["De menor a mayor", "De mayor a menor"] },
+    brand: { title: "Marca",  groups: [{ id: "brand" }], sort: ["De A a Z", "De Z a A"] },
+    role:  { title: "Tipo",   groups: [{ id: "role" }],  sort: ["De A a Z", "De Z a A"] },
+    name:  { title: "Nombre", groups: [{ id: "name" }],  sort: ["De A a Z", "De Z a A"] },
+    state: { title: "Estado", groups: [{ id: "pub", title: "Estado de publicación" }, { id: "chg", title: "Cambios pendientes" }], sort: ["De A a Z", "De Z a A"] }
+  };
+  const COLUMN_ORDER = ["code", "brand", "role", "name", "state"];
+  const CHANGE_ORDER = ["none", "draft", "submitted", "changes_requested"];
+  const colFilters = {};
+  let colSort = null;   // { col, dir: 1 | -1 }
+  let menu = null;      // { col, pending: { grupo: Set }, sort: 0 | 1 | -1, query, el, opener }
+  const collator = new Intl.Collator("es", { numeric: true, sensitivity: "base" });
+  const norm = (text) => String(text).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const groupOf = (gid) => Object.values(COLUMNS).flatMap(c => c.groups).find(g => g.id === gid);
+
+  function groupValue(e, gid){
+    if (gid === "code") return { key: e.code, label: e.code || "Sin código" };
+    if (gid === "brand") return { key: e.brand, label: e.brand || "Sin marca" };
+    if (gid === "name") return { key: e.name, label: e.name };
+    if (gid === "role"){ const r = roleOf(e); return { key: r.key, label: r.label }; }
+    if (gid === "pub"){ const label = statusChip(e.product, lcRow(e.product)).textContent; return { key: label, label }; }
+    const k = changeKey(e);
+    return { key: k, label: CHANGE_STATES[k].label };
+  }
+  const hasColumnFilters = () => Object.keys(colFilters).length > 0;
+  const passesColumns = (e, skipGid) => Object.entries(colFilters).every(([gid, set]) => gid === skipGid || set.has(groupValue(e, gid).key));
+  /* Criterios de la barra (buscador local, categoría, solo seleccionados), comunes a la tabla y a los menús. */
+  function passesToolbar(e){
+    const query = $("pl-search").value.trim().toLowerCase();
+    return (!$("pl-category").value || e.category === $("pl-category").value) &&
+      (!query || e.search.includes(query)) &&
+      (!$("pl-only-selected").checked || selected.has(e.key));
+  }
+
+  /* Valores únicos de un grupo, de las filas que cumplen todo lo demás menos el filtro del propio grupo. */
+  function groupOptions(gid, entries){
+    const counts = new Map();
+    entries.filter(e => passesToolbar(e) && passesColumns(e, gid)).forEach(e => {
+      const v = groupValue(e, gid);
+      const cur = counts.get(v.key);
+      if (cur) cur.count += 1; else counts.set(v.key, { key: v.key, label: v.label, count: 1 });
+    });
+    const list = [...counts.values()];
+    if (gid === "chg") return list.sort((a, b) => CHANGE_ORDER.indexOf(a.key) - CHANGE_ORDER.indexOf(b.key));
+    return list.sort((a, b) => (a.key === "") - (b.key === "") || collator.compare(a.label, b.label));
+  }
+
+  /* Valor de orden: el dato real (nunca la etiqueta «Sin código», «Sin marca»…); los vacíos van siempre al final. */
+  function sortValue(e, col){
+    if (col === "state") return `${groupValue(e, "pub").label} ${CHANGE_ORDER.indexOf(changeKey(e))}`;
+    return groupValue(e, COLUMNS[col].groups[0].id).key;
+  }
+  function applyColumns(list){
+    const out = list.filter(e => passesColumns(e));
+    if (colSort) out.sort((a, b) => {
+      const x = sortValue(a, colSort.col), y = sortValue(b, colSort.col);
+      return (x === "") - (y === "") || (x === "" ? 0 : colSort.dir * collator.compare(x, y));
+    });
+    return out;
+  }
+  const columnActive = (col) => COLUMNS[col].groups.some(g => colFilters[g.id]);
+
+  const FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h12l-4.6 5.4V13l-2.8-1.4V8.4z"/></svg>';
+  function buildCatalogHead(){
+    const head = document.createElement("div");
+    head.className = "pl-rowhead pl-catalog-head";
+    const sel = document.createElement("label");
+    sel.className = "pl-hsel";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.id = "pl-hcheck";
+    box.setAttribute("aria-label", "Seleccionar o deseleccionar los productos visibles");
+    box.addEventListener("change", () => {
+      visibleKeys.forEach(k => { if (box.checked) selected.add(k); else selected.delete(k); });
+      render();
+    });
+    sel.append(box);
+    head.append(sel);
+    COLUMN_ORDER.forEach(col => {
+      const cell = document.createElement("div");
+      cell.className = "pl-hc";
+      const title = document.createElement("span");
+      title.className = "pl-hc-title";
+      title.textContent = COLUMNS[col].title;
+      cell.append(title);
+      if (colSort && colSort.col === col){
+        const arrow = document.createElement("span");
+        arrow.className = "pl-hc-sort";
+        arrow.textContent = colSort.dir === 1 ? "↑" : "↓";
+        arrow.title = `Ordenado ${COLUMNS[col].sort[colSort.dir === 1 ? 0 : 1].toLowerCase()}`;
+        cell.append(arrow);
+      }
+      const active = columnActive(col);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `pl-fbtn${active ? " is-active" : ""}`;
+      btn.dataset.col = col;
+      btn.setAttribute("aria-haspopup", "dialog");
+      btn.setAttribute("aria-expanded", String(!!menu && menu.col === col));
+      const text = `Filtrar y ordenar ${COLUMNS[col].title}${active ? " (filtro activo)" : ""}`;
+      btn.setAttribute("aria-label", text);
+      btn.title = text;
+      btn.innerHTML = FUNNEL;
+      btn.addEventListener("click", () => { if (menu && menu.col === col) closeMenu(true); else openMenu(col, btn); });
+      cell.append(btn);
+      head.append(cell);
+    });
+    const acts = textDiv("pl-hc pl-hc--static", "Acciones");
+    head.append(acts);
+    return head;
+  }
+  function syncHeaderCheck(){
+    const box = document.getElementById("pl-hcheck");
+    if (!box) return;
+    const on = visibleKeys.filter(k => selected.has(k)).length;
+    box.checked = visibleKeys.length > 0 && on === visibleKeys.length;
+    box.indeterminate = on > 0 && on < visibleKeys.length;
+    box.disabled = visibleKeys.length === 0;
+  }
+
+  /* --- Menú de columna --- */
+  /* Borde inferior de la cabecera fija del sitio: los menús nunca se abren por encima de ella. */
+  const headerBottom = () => { const h = document.querySelector(".site-header"); return h ? Math.max(0, h.getBoundingClientRect().bottom) : 0; };
+  function placeMenu(){
+    if (!menu) return;
+    const r = menu.opener.getBoundingClientRect();
+    const el = menu.el;
+    const limit = headerBottom() + 8;       // arriba: bajo la cabecera
+    const floor = window.innerHeight - 8;   // abajo: borde de la ventana
+    /* El botón se ha desplazado fuera de la vista (tras la cabecera o bajo la ventana): el menú se cierra. */
+    if (r.bottom <= limit - 8 || r.top >= window.innerHeight){ closeMenu(false); return; }
+    if (window.innerWidth <= 700){
+      /* Panel inferior: alto máximo = espacio bajo la cabecera; el cuerpo se desplaza y Aplicar/Cancelar quedan a la vista. */
+      el.style.left = ""; el.style.top = "";
+      el.style.maxHeight = `${Math.max(200, Math.min(window.innerHeight * 0.8, floor - 4 - limit))}px`;
+      return;
+    }
+    /* Debajo del botón; si debajo no cabe y arriba hay más sitio, encima (siempre bajo la cabecera). Si el contenido
+       no cabe, el cuerpo del menú se desplaza por dentro. */
+    const gap = 6;
+    const below = floor - (r.bottom + gap);
+    const above = (r.top - gap) - limit;
+    const useAbove = below < 320 && above > below;
+    el.style.maxHeight = `${Math.max(200, Math.min(560, useAbove ? above : below, floor - limit))}px`;
+    const w = el.offsetWidth;
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
+    let top = useAbove ? r.top - gap - el.offsetHeight : r.bottom + gap;
+    top = Math.max(limit, Math.min(top, floor - el.offsetHeight));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }
+  function closeMenu(restoreFocus){
+    if (!menu) return;
+    const { col, el } = menu;
+    el.remove();
+    menu = null;
+    document.removeEventListener("pointerdown", onMenuOutside, true);
+    window.removeEventListener("resize", placeMenu);
+    window.removeEventListener("scroll", placeMenu, true);
+    const btn = document.querySelector(`.pl-fbtn[data-col="${col}"]`);
+    if (btn){ btn.setAttribute("aria-expanded", "false"); if (restoreFocus) btn.focus(); }
+  }
+  function onMenuOutside(ev){
+    if (!menu || menu.el.contains(ev.target) || menu.opener.contains(ev.target)) return;
+    closeMenu(false);
+  }
+
+  function openMenu(col, opener){
+    closeMenu(false);
+    const entries = entriesByTab().catalog;
+    const def = COLUMNS[col];
+    const options = {};
+    const pending = {};
+    def.groups.forEach(g => {
+      options[g.id] = groupOptions(g.id, entries);
+      pending[g.id] = new Set(colFilters[g.id] ? [...colFilters[g.id]] : options[g.id].map(o => o.key));
+    });
+    const el = document.createElement("div");
+    el.className = "pl-fm";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", `Filtrar y ordenar ${def.title}`);
+    menu = { col, pending, sort: colSort && colSort.col === col ? colSort.dir : 0, query: "", el, opener };
+    opener.setAttribute("aria-expanded", "true");
+
+    const body = document.createElement("div");
+    body.className = "pl-fm-body";
+    const foot = document.createElement("div");
+    foot.className = "pl-fm-foot";
+
+    /* Orden: se elige aquí y se aplica con «Aplicar». */
+    const sortSec = document.createElement("div");
+    sortSec.className = "pl-fm-sec";
+    sortSec.append(textDiv("pl-fm-h", "Ordenar"));
+    const sortBtns = [1, -1].map((dir, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pl-fm-sort";
+      b.textContent = def.sort[i];
+      b.addEventListener("click", () => { menu.sort = menu.sort === dir ? 0 : dir; syncSort(); });
+      sortSec.append(b);
+      return b;
+    });
+    function syncSort(){ sortBtns.forEach((b, i) => b.setAttribute("aria-pressed", String(menu.sort === (i === 0 ? 1 : -1)))); }
+    syncSort();
+
+    const searchSec = document.createElement("div");
+    searchSec.className = "pl-fm-sec";
+    const search = document.createElement("input");
+    search.type = "search";
+    search.placeholder = `Buscar en ${def.title.toLowerCase()}`;
+    search.setAttribute("aria-label", `Buscar entre los valores de ${def.title}`);
+    searchSec.append(search);
+
+    const lists = document.createElement("div");
+    const hint = document.createElement("p");
+    hint.className = "pl-fm-hint";
+    hint.hidden = true;
+    const apply = document.createElement("button");
+    apply.type = "button"; apply.className = "btn btn-primary"; apply.textContent = "Aplicar";
+    const cancel = document.createElement("button");
+    cancel.type = "button"; cancel.className = "btn btn-outline"; cancel.textContent = "Cancelar";
+    const clear = document.createElement("button");
+    clear.type = "button"; clear.className = "pl-toggle"; clear.textContent = "Limpiar filtro de esta columna";
+    clear.disabled = !columnActive(col);
+
+    function validity(){
+      const empty = def.groups.some(g => options[g.id].length && !options[g.id].some(o => pending[g.id].has(o.key)));
+      apply.disabled = empty;
+      hint.hidden = !empty;
+      hint.textContent = empty ? "Marca al menos un valor o usa «Limpiar filtro de esta columna»." : "";
+    }
+    function renderLists(){
+      const q = norm(menu.query.trim());
+      lists.replaceChildren(...def.groups.map(g => {
+        const sec = document.createElement("div");
+        sec.className = "pl-fm-sec";
+        if (def.groups.length > 1) sec.append(textDiv("pl-fm-h", g.title));
+        const shown = options[g.id].filter(o => !q || norm(o.label).includes(q));
+        if (!shown.length){
+          sec.append(textDiv("pl-fm-none", options[g.id].length ? "Ningún valor coincide con la búsqueda." : "No hay valores."));
+          return sec;
+        }
+        const ul = document.createElement("ul");
+        ul.className = "pl-fm-list";
+        const mk = (label, checked, onChange, extra, count) => {
+          const li = document.createElement("li");
+          const lab = document.createElement("label");
+          if (extra) lab.className = extra;
+          const cb = document.createElement("input");
+          cb.type = "checkbox"; cb.checked = checked;
+          cb.addEventListener("change", () => onChange(cb.checked));
+          const span = document.createElement("span");
+          span.textContent = label;
+          lab.append(cb, span);
+          if (count !== undefined) lab.append(textDiv("pl-fm-count", String(count)));
+          li.append(lab);
+          ul.append(li);
+          return cb;
+        };
+        const allOn = shown.every(o => pending[g.id].has(o.key));
+        const someOn = shown.some(o => pending[g.id].has(o.key));
+        const allBox = mk("Seleccionar todos", allOn, (on) => {
+          shown.forEach(o => { if (on) pending[g.id].add(o.key); else pending[g.id].delete(o.key); });
+          renderLists();
+        }, "pl-fm-all");
+        allBox.indeterminate = someOn && !allOn;
+        shown.forEach(o => mk(o.label, pending[g.id].has(o.key), (on) => {
+          if (on) pending[g.id].add(o.key); else pending[g.id].delete(o.key);
+          renderLists();
+        }, "", o.count));
+        sec.append(ul);
+        return sec;
+      }));
+      validity();
+    }
+    search.addEventListener("input", () => { menu.query = search.value; renderLists(); });
+    renderLists();
+
+    apply.addEventListener("click", () => {
+      def.groups.forEach(g => {
+        const keys = options[g.id].map(o => o.key);
+        const chosen = keys.filter(k => pending[g.id].has(k));
+        if (chosen.length === keys.length) delete colFilters[g.id]; else colFilters[g.id] = new Set(chosen);
+      });
+      if (menu.sort) colSort = { col, dir: menu.sort };
+      else if (colSort && colSort.col === col) colSort = null;
+      closeMenu(false);
+      render();
+      const btn = document.querySelector(`.pl-fbtn[data-col="${col}"]`);
+      if (btn) btn.focus();
+    });
+    cancel.addEventListener("click", () => closeMenu(true));
+    clear.addEventListener("click", () => {
+      def.groups.forEach(g => delete colFilters[g.id]);
+      closeMenu(false);
+      render();
+      const btn = document.querySelector(`.pl-fbtn[data-col="${col}"]`);
+      if (btn) btn.focus();
+    });
+
+    body.append(sortSec, searchSec, lists);
+    foot.append(apply, cancel, clear, hint);
+    el.append(body, foot);
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape"){ ev.preventDefault(); closeMenu(true); return; }
+      if (ev.key !== "Tab") return;
+      const f = [...el.querySelectorAll("button, input")].filter(x => !x.disabled && x.offsetParent !== null);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (ev.shiftKey && document.activeElement === first){ ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && document.activeElement === last){ ev.preventDefault(); first.focus(); }
+    });
+    document.body.append(el);
+    placeMenu();
+    document.addEventListener("pointerdown", onMenuOutside, true);
+    window.addEventListener("resize", placeMenu);
+    window.addEventListener("scroll", placeMenu, true);
+    /* Escritorio: el foco va al campo de búsqueda. Móvil: al propio panel (sin abrir el teclado) y sin que el foco desplace la página. */
+    if (window.innerWidth > 700) search.focus({ preventScroll: true });
+    else { el.tabIndex = -1; el.focus({ preventScroll: true }); }
+  }
+
+  function clearColumnFilters(){
+    Object.keys(colFilters).forEach(k => delete colFilters[k]);
+    closeMenu(false);
+    render();
   }
 
   function render(){
@@ -1903,30 +2325,42 @@
     if (!lists){ visibleKeys = []; renderSelection(); renderGroupBar(entries); return; }
 
     fillStatusOptions();
-    const query = $("pl-search").value.trim().toLowerCase();
-    const category = $("pl-category").value;
-    const status = $("pl-status").value;
+    const isCatalog = view === "catalog";
+    if (!isCatalog) closeMenu(false);
+    /* En catálogo el estado se filtra desde la cabecera: el desplegable de la barra no se usa. */
+    $("pl-status-field").hidden = isCatalog;
+    const query = $("pl-search").value.trim();
+    const status = isCatalog ? "" : $("pl-status").value;
     const onlySelected = $("pl-only-selected").checked;
     const all = entries[view];
-    const visible = all.filter(e =>
-      (!category || e.category === category) &&
-      (!query || e.search.includes(query)) &&
-      matchesStatus(e, status) &&
-      (!onlySelected || selected.has(e.key))
-    );
+    tabKeys = new Set(all.map(e => e.key));
+    let visible = all.filter(e => passesToolbar(e) && matchesStatus(e, status));
+    if (isCatalog) visible = applyColumns(visible);
     visibleKeys = visible.map(e => e.key);
 
-    const head = document.createElement("div");
-    head.className = "pl-rowhead";
-    head.setAttribute("aria-hidden", "true");
-    head.append(...HEAD.map(text => { const s = document.createElement("span"); s.textContent = text; return s; }));
+    let head;
+    if (isCatalog) head = buildCatalogHead();
+    else {
+      head = document.createElement("div");
+      head.className = "pl-rowhead";
+      head.setAttribute("aria-hidden", "true");
+      head.append(...HEAD.map(text => { const s = document.createElement("span"); s.textContent = text; return s; }));
+    }
     $(`pl-${view}-list`).replaceChildren(...(visible.length ? [head, ...visible.map(e => ROW_BUILDERS[e.type](e))] : []));
+    const filtered = hasColumnFilters();
+    $("pl-catalog-fbar").hidden = !isCatalog || (!filtered && !query && !colSort);
+    const notes = [];
+    if (query) notes.push(`Búsqueda activa: «${query}»`);
+    if (colSort) notes.push(`Orden: ${COLUMNS[colSort.col].title} ${COLUMNS[colSort.col].sort[colSort.dir === 1 ? 0 : 1].toLowerCase()}`);
+    $("pl-fnote").textContent = notes.join(" · ");
+    $("pl-clear-columns").hidden = !filtered || visible.length === 0;
+    $("pl-catalog-clear").hidden = !(isCatalog && filtered && visible.length === 0);
     $(`pl-${view}-count`).textContent = countText(view, visible.length, all.length);
     $(`pl-${view}-count`).hidden = all.length === 0;
     $(`pl-${view}-empty`).hidden = visible.length > 0;
     const [title, text] = all.length === 0 ? EMPTY[view]
       : (onlySelected && !visible.length ? ["No hay productos seleccionados en esta pestaña.", "Desmarca «Solo seleccionados» para ver todos."]
-      : ["Ningún producto coincide con los filtros.", "Prueba con otra búsqueda, categoría o estado."]);
+      : ["Ningún producto coincide con los filtros.", isCatalog && filtered ? "Prueba con otra búsqueda o categoría, o limpia los filtros de columna." : "Prueba con otra búsqueda, categoría o estado."]);
     $(`pl-${view}-empty-title`).textContent = title;
     $(`pl-${view}-empty-text`).textContent = text;
     if (view === "trash") $("pl-trash-back").hidden = all.length > 0;
@@ -1994,6 +2428,8 @@
   ["input", "change"].forEach(evt => {
     ["pl-search", "pl-category", "pl-status", "pl-only-selected"].forEach(id => $(id).addEventListener(evt, render));
   });
+  $("pl-clear-columns").addEventListener("click", clearColumnFilters);
+  $("pl-catalog-clear").addEventListener("click", clearColumnFilters);
   $("pl-select-visible").addEventListener("click", () => { visibleKeys.forEach(k => selected.add(k)); render(); });
   $("pl-clear-selection").addEventListener("click", () => { selected.clear(); render(); });
   $("pl-retry-btn").addEventListener("click", load);

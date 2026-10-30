@@ -1,0 +1,557 @@
+{
+ "_nota": "Línea base de las pestañas Borradores y propuestas y Papelera capturada con distribuidor-productos.html del commit 0a41c45 (antes de la columna Tipo y los filtros), con mock-mis-productos.js?extra=1. La etiqueta de tipo estaba bajo el nombre (campo role).",
+ "drafts": {
+  "rows": [
+   {
+    "key": "product:p01",
+    "code": "007.10",
+    "brand": "Vibia",
+    "name": "Aplique Pared",
+    "kind": "Cambios de Aplique Pared · sigue publicado con su versión actual",
+    "role": "Principal",
+    "state": "Borrador",
+    "acts": [
+     [
+      "A",
+      "Continuar borrador",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=p01",
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p01",
+      null
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:p02",
+    "code": "1.2020.1190",
+    "brand": "Hoff Light",
+    "name": "Árbol Suspendido",
+    "kind": "Cambios de Árbol Suspendido · sigue publicado con su versión actual",
+    "role": "Principal",
+    "state": "Borrador",
+    "acts": [
+     [
+      "A",
+      "Continuar borrador",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=p02",
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p02",
+      null
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:p05",
+    "code": "A-2",
+    "brand": "Vibia",
+    "name": "Riel 2 m",
+    "kind": "Cambios de Riel 2 m · sigue publicado con su versión actual",
+    "role": "Ambos",
+    "state": "Borrador",
+    "acts": [
+     [
+      "A",
+      "Continuar borrador",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=p05",
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p05",
+      null
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:p09",
+    "code": "007.10-8",
+    "brand": "Vibia",
+    "name": "Aplique Pared 8",
+    "kind": "Cambios de Aplique Pared 8 · sigue publicado con su versión actual",
+    "role": "Principal",
+    "state": "Borrador",
+    "acts": [
+     [
+      "A",
+      "Continuar borrador",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=p09",
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p09",
+      null
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:p03",
+    "code": "00123",
+    "brand": "Délta",
+    "name": "Downlight Redondo",
+    "kind": "Cambios de Downlight Redondo · sigue publicado con su versión actual",
+    "role": "Componente",
+    "state": "En revisión",
+    "acts": [
+     [
+      "BUTTON",
+      "Ver propuesta enviada",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p03",
+      null
+     ]
+    ],
+    "details": "Nombre: NuevoMobau la está revisando; mientras tanto no se puede editar.Cancelar propuesta"
+   },
+   {
+    "key": "product:p06",
+    "code": "2.9003.1318",
+    "brand": "Sin marca",
+    "name": "Lámpara de Mesa",
+    "kind": "Cambios de Lámpara de Mesa · sigue publicado con su versión actual",
+    "role": "Ambos",
+    "state": "En revisión",
+    "acts": [
+     [
+      "BUTTON",
+      "Ver propuesta enviada",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p06",
+      null
+     ]
+    ],
+    "details": "Nombre: NuevoMobau la está revisando; mientras tanto no se puede editar.Cancelar propuesta"
+   },
+   {
+    "key": "product:p10",
+    "code": "—",
+    "brand": "Hoff Light",
+    "name": "Árbol Suspendido 9",
+    "kind": "Cambios de Árbol Suspendido 9 · sigue publicado con su versión actual",
+    "role": "Principal",
+    "state": "En revisión",
+    "acts": [
+     [
+      "BUTTON",
+      "Ver propuesta enviada",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p10",
+      null
+     ]
+    ],
+    "details": "Nombre: NuevoMobau la está revisando; mientras tanto no se puede editar.Cancelar propuesta"
+   },
+   {
+    "key": "product:p04",
+    "code": "A-10",
+    "brand": "Faro",
+    "name": "Driver DALI",
+    "kind": "Cambios de Driver DALI · sigue publicado con su versión actual",
+    "role": "Componente",
+    "state": "Cambios solicitados",
+    "acts": [
+     [
+      "A",
+      "Corregir y reenviar",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=p04",
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p04",
+      null
+     ]
+    ],
+    "details": "Nota de Mobau: Falta ficha"
+   },
+   {
+    "key": "product:p13",
+    "code": "A-2-12",
+    "brand": "Vibia",
+    "name": "Riel 2 m 12",
+    "kind": "Cambios de Riel 2 m 12 · sigue publicado con su versión actual",
+    "role": "Ambos",
+    "state": "Cambios solicitados",
+    "acts": [
+     [
+      "A",
+      "Corregir y reenviar",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=p13",
+      null
+     ],
+     [
+      "A",
+      "Ver producto",
+      null,
+      false,
+      "producto.html?id=p13",
+      null
+     ]
+    ],
+    "details": "Nota de Mobau: Falta ficha"
+   },
+   {
+    "key": "create:q21",
+    "code": "ALTA-21",
+    "brand": "Vibia",
+    "name": "Alta como ambos",
+    "kind": "Producto nuevo",
+    "role": "Ambos",
+    "state": "Borrador",
+    "acts": [
+     [
+      "A",
+      "Continuar borrador",
+      null,
+      false,
+      "distribuidor-propuestas.html?propuesta=q21",
+      null
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "create:q22",
+    "code": "ALTA-22",
+    "brand": "Vibia",
+    "name": "Alta sin tipo",
+    "kind": "Producto nuevo",
+    "role": null,
+    "state": "En revisión",
+    "acts": [
+     [
+      "BUTTON",
+      "Ver propuesta enviada",
+      null,
+      false,
+      null,
+      null
+     ]
+    ],
+    "details": "Nombre: Alta sin tipoMarca: Vibiareference_code: ALTA-22Categoría: IluminaciónMobau la está revisando; mientras tanto no se puede editar.Cancelar propuesta"
+   },
+   {
+    "key": "product:x-draft",
+    "code": "X-001",
+    "brand": "Vibia",
+    "name": "Borrador sin publicar",
+    "kind": null,
+    "role": "Principal",
+    "state": "Borrador",
+    "acts": [
+     [
+      "A",
+      "Proponer cambios",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=x-draft",
+      null
+     ],
+     [
+      "BUTTON",
+      "Ver historial",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "BUTTON",
+      "Retirar",
+      null,
+      false,
+      null,
+      "trash"
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:x-review",
+    "code": "X-002",
+    "brand": "Faro",
+    "name": "Pieza en revisión",
+    "kind": null,
+    "role": "Componente",
+    "state": "En revisión",
+    "acts": [
+     [
+      "A",
+      "Proponer cambios",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=x-review",
+      null
+     ],
+     [
+      "BUTTON",
+      "Ver historial",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "BUTTON",
+      "Retirar",
+      null,
+      false,
+      null,
+      "trash"
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:x-ret-a",
+    "code": "X-003",
+    "brand": "Hoff Light",
+    "name": "Retirado propio",
+    "kind": "Retirado del catálogo el 1 de septiembre de 2026",
+    "role": "Ambos",
+    "state": "Retirado",
+    "acts": [
+     [
+      "A",
+      "Proponer cambios",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=x-ret-a",
+      null
+     ],
+     [
+      "BUTTON",
+      "Solicitar republicación",
+      null,
+      false,
+      null,
+      "request_republish"
+     ],
+     [
+      "BUTTON",
+      "Ver historial",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "BUTTON",
+      "Retirar",
+      null,
+      false,
+      null,
+      "trash"
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:x-ret-b",
+    "code": "X-004",
+    "brand": "Délta",
+    "name": "Retirado con cambios abiertos",
+    "kind": "Cambios de Retirado con cambios abiertos · Borrador",
+    "role": null,
+    "state": "Retirado por Mobau",
+    "acts": [
+     [
+      "A",
+      "Continuar borrador",
+      null,
+      false,
+      "distribuidor-propuestas.html?producto=x-ret-b",
+      null
+     ],
+     [
+      "BUTTON",
+      "Solicitar republicación (no disponible): Tiene una propuesta de cambios en borrador: envíala y espera la decisión de Mobau, o cancélala, antes de solicitar la republicación.",
+      "true",
+      false,
+      null,
+      "request_republish"
+     ],
+     [
+      "BUTTON",
+      "Ver historial",
+      null,
+      false,
+      null,
+      null
+     ],
+     [
+      "BUTTON",
+      "Retirar (no disponible): Tiene una propuesta abierta.",
+      "true",
+      false,
+      null,
+      "trash"
+     ]
+    ],
+    "details": ""
+   }
+  ],
+  "status": [
+   "Todos",
+   "Productos nuevos",
+   "Cambios propuestos",
+   "Borradores",
+   "En revisión",
+   "Cambios solicitados",
+   "Retirados"
+  ],
+  "head": [
+   "",
+   "Código",
+   "Marca",
+   "Nombre",
+   "Estado",
+   "Acciones"
+  ]
+ },
+ "trash": {
+  "rows": [
+   {
+    "key": "product:x-trash-a",
+    "code": "X-005",
+    "brand": "Vibia",
+    "name": "Papelera propia",
+    "kind": "Retirado el 3 de septiembre de 2026. Al restaurarlo volverá a Borradores y propuestas como borrador.",
+    "role": "Principal",
+    "state": "En la papelera",
+    "acts": [
+     [
+      "BUTTON",
+      "Restaurar",
+      null,
+      false,
+      null,
+      "restore"
+     ],
+     [
+      "BUTTON",
+      "Eliminar definitivamente",
+      null,
+      false,
+      null,
+      "purge"
+     ],
+     [
+      "BUTTON",
+      "Ver historial",
+      null,
+      false,
+      null,
+      null
+     ]
+    ],
+    "details": ""
+   },
+   {
+    "key": "product:x-trash-b",
+    "code": "X-006",
+    "brand": "Faro",
+    "name": "Papelera de Mobau",
+    "kind": "Mobau lo movió a la papelera el 4 de septiembre de 2026. Solo Mobau puede restaurarlo; tú puedes eliminarlo definitivamente.",
+    "role": null,
+    "state": "Movido por Mobau",
+    "acts": [
+     [
+      "BUTTON",
+      "Eliminar definitivamente",
+      null,
+      false,
+      null,
+      "purge"
+     ],
+     [
+      "BUTTON",
+      "Ver historial",
+      null,
+      false,
+      null,
+      null
+     ]
+    ],
+    "details": "Motivo de Mobau: Datos incompletos"
+   }
+  ],
+  "status": [
+   "Todos",
+   "Retirados por tu empresa",
+   "Movidos por Mobau"
+  ],
+  "head": [
+   "",
+   "Código",
+   "Marca",
+   "Nombre",
+   "Estado",
+   "Acciones"
+  ]
+ }
+}
