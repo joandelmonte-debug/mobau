@@ -1,47 +1,76 @@
 /* ============================================================
    MOBAU — Estado de sesión en el header (nav)
    ------------------------------------------------------------
-   Llena #nav-session-slot según haya o no sesión activa. Sin sesión,
-   un enlace simple a login.html (sin cambios). Con sesión, un menú
-   desplegable (Punto 14): cabecera con nombre/email + Mi perfil,
-   Mis proyectos, Mi proyecto activo (Punto 27), Solicitudes, Cerrar
-   sesión.
+   Completa la cabecera según haya o no sesión activa, sin reconstruirla
+   (Punto 50). El HTML de cada página ya trae todos los accesos posibles
+   (data-nav-for) y nav-account-hint.js, en el <head>, marca
+   <html data-nav="…"> con la composición esperada: lo que no corresponde
+   no ocupa sitio y lo que sí corresponde ocupa su sitio exacto, invisible y
+   sin foco, hasta que este script confirma la sesión, el rol y el plan
+   (atributo data-on). Así nada aparece, desaparece ni se desplaza al
+   resolverse la sesión. La pista es solo de diseño: este script la corrige
+   (data-nav) y la guarda para la siguiente página ("mobau_nav_hint" = tipo de
+   cuenta confirmado para ESTE usuario); nunca concede permisos.
 
-   Ajuste de estabilidad visual: el menú se monta en cuanto se conoce
-   la sesión (una sola espera: MobauAuth.getSession(), igual que antes
-   de Punto 14) usando session.user.email. El nombre real
-   (professional_profiles.professional_name) se pide aparte, en
-   segundo plano, y solo actualiza el texto de la cabecera cuando
-   llega — nunca vuelve a montar el menú ni retrasa que aparezca y se
-   pueda usar. Antes, esa segunda consulta se esperaba ANTES de
-   insertar nada: con sesión lenta o típica, el hueco en el header
-   duraba el doble (dos round-trips en vez de uno), y en cada
-   navegación de página completa (Inicio/Catálogo/Distribuidores/...)
-   se veía como si el menú "desapareciera y volviera a aparecer".
-
-   Cada carga de página vuelve a preguntar la sesión y el rol. Lo único
-   que se guarda (Punto 38-A) es la pista estética "mobau_account_kind"
-   de localStorage (MobauAccountHint, supabase-client.js): solo evita el
-   destello de la cabecera de profesional a un distribuidor en las
-   páginas con nav-account-hint.js; nunca concede permisos ni decide
-   accesos. El rol confirmado (MobauAccess.accountKind()) la corrige.
-
-   Cuenta de distribuidor (Punto 38-A): experiencia B2B separada. La
-   cabecera pasa a Resumen · Mis productos · Catálogo (las propuestas de
-   38-C se gestionan desde Mis productos), el logo lleva al
-   panel, el menú de cuenta solo tiene "Perfil de empresa" y "Cerrar
-   sesión", y desaparecen "Mi selección", Inicio, Distribuidores,
-   Contacto y los enlaces de proyectos (también los del pie).
-
-   Cuenta de Mobau (Punto 39, profiles.role = 'admin'): sin selección,
-   proyectos ni perfil profesional; cabecera Moderación · Catálogo y menú
-   Moderación · Cerrar sesión. «Moderación» solo aparece si el servidor
-   confirma un admin activo (mobau_admin_session().admin, una sola llamada
-   y solo para este tipo de cuenta); la consola vuelve a comprobarlo y
-   exige además el segundo factor.
+   - Sin sesión: «Iniciar sesión» (ya pintado) y nada más.
+   - Con sesión (Punto 14): el hueco reservado se sustituye por el menú de
+     cuenta (misma caja y mismo ancho): nombre/email, Mi perfil, Mi moodboard
+     y Cerrar sesión. «Mis proyectos» es un enlace directo de la cabecera
+     (solo con herramientas profesionales, Punto 43), no un elemento del menú.
+     El nombre real (professional_profiles.professional_name) llega aparte,
+     en segundo plano, y solo cambia el texto.
+   - Cuenta de distribuidor (Punto 38-A): Resumen · Mis productos · Productos;
+     el logo lleva al panel y el menú queda en «Perfil de empresa» y
+     «Cerrar sesión». Desaparecen «Mi selección», Distribuidores, Contacto y
+     los enlaces de proyectos (también los del pie).
+   - Cuenta de Mobau (Punto 39, profiles.role = 'admin'): sin selección,
+     proyectos ni perfil profesional; cabecera Moderación · Productos y menú
+     Moderación · Cerrar sesión. «Moderación» solo se revela si el servidor
+     confirma un admin activo (mobau_admin_session().admin, una sola llamada
+     y solo para este tipo de cuenta); la consola vuelve a comprobarlo y
+     exige además el segundo factor.
    ============================================================ */
 
 (async () => {
+  /* Punto 50: composición de la cabecera. navState() decide el valor de
+     <html data-nav> con lo ya confirmado (rol y acceso); devuelve null mientras
+     no se pueda decidir, y entonces se queda la pista del <head>. Se aplica
+     sobre los elementos que ya existen (data-nav-for): solo cambia atributos. */
+  const root = document.documentElement;
+  const HINT_KEY = "mobau_nav_hint";
+  const navState = (access) => {
+    const kind = MobauAccess.confirmedKind;
+    if (kind === "supplier" || kind === "mobau") return kind;
+    if (access === "pro" || access === "gratis" || access === "anon" || access === "unknown") return access;
+    return null;
+  };
+  /* Pista de diseño para la siguiente página: solo tipo de cuenta, usuario y el
+     contador visible de «Mi selección»; nunca tokens, perfil ni permisos. */
+  const storeHint = (nav) => {
+    try {
+      /* Sin sesión o con una lectura fallida: no se reserva nada para la siguiente página. */
+      if (nav === "anon" || nav === "unknown"){ localStorage.removeItem(HINT_KEY); return; }
+      if (!["pro", "gratis", "supplier", "mobau"].includes(nav)) return;
+      const u = MobauAuth.storedUserId();
+      if (!u) return;
+      const hint = { u, k: nav };
+      const link = document.getElementById("selection-count-link");
+      const n = nav === "pro" && link && !link.hidden ? parseInt((link.querySelector(".sel-n") || {}).textContent.replace(/\D/g, ""), 10) : 0;
+      if (n > 0) hint.n = n;
+      localStorage.setItem(HINT_KEY, JSON.stringify(hint));
+    } catch (e) { /* sin almacenamiento: solo se pierde la pista */ }
+  };
+  const syncNav = (access) => {
+    const nav = navState(access);
+    if (!nav) return;
+    if (root.getAttribute("data-nav") !== nav) root.setAttribute("data-nav", nav);
+    document.querySelectorAll(".site-header [data-pro-nav]").forEach(el => { el.toggleAttribute("data-on", nav === "pro"); el.inert = nav !== "pro"; });
+    document.querySelectorAll(".site-header [data-supplier-nav]").forEach(el => { el.toggleAttribute("data-on", nav === "supplier"); el.inert = nav !== "supplier"; });
+    storeHint(nav);
+  };
+  MobauAccess.access().then(syncNav);
+  document.addEventListener("mobau:access", (e) => syncNav(e.detail.access));
+
   /* Punto 43: «Mi selección» solo con herramientas profesionales (plan
      Individual o Estudio, MobauAccess.access() = "pro"). El enlace llega
      oculto en el HTML de cada cabecera (atributo hidden, CC1): así no se ve
@@ -54,10 +83,15 @@
     const showSelectionLink = (access) => {
       if (!selectionLink.isConnected) return;
       selectionLink.hidden = access !== "pro";
+      selectionLink.inert = access !== "pro";
       if (access === "pro" && typeof updateSelectionBadge === "function") updateSelectionBadge();
     };
     MobauAccess.access().then(showSelectionLink);
     document.addEventListener("mobau:access", (e) => showSelectionLink(e.detail.access));
+    /* El contador lo escribe updateSelectionBadge() (script.js, sin cambios): aquí solo se
+       observa para que la pista de la siguiente página reserve el ancho de su círculo. */
+    new MutationObserver(() => { if (root.getAttribute("data-nav") === "pro") storeHint("pro"); })
+      .observe(selectionLink, { childList: true, subtree: true });
   }
 
   /* Punto 43 (CC1): Gratis no tiene proyectos, presupuestos ni solicitudes.
@@ -90,9 +124,14 @@
   const session = await MobauAuth.getSession();
 
   if (!session){
-    slot.outerHTML = `<a href="login.html">Iniciar sesión</a>`;
+    /* «Iniciar sesión» ya está pintado (#nav-login): solo se retira el hueco reservado. */
+    root.setAttribute("data-nav", "anon");
+    storeHint("anon");
+    slot.remove();
     return;
   }
+  /* Había sesión aunque la pista dijera lo contrario (p. ej. iniciada en otra pestaña): se reserva «Mi cuenta». */
+  if (root.getAttribute("data-nav") === "anon") root.setAttribute("data-nav", "pending");
 
   const email = session.user.email || "";
   const escapeHtml = (str) => (str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -109,9 +148,6 @@
           <div class="account-menu-email">${escapeHtml(email)}</div>
         </div>
         <a href="inscripcion-profesional.html" id="account-menu-profile" role="menuitem">Mi perfil</a>
-        <a href="proyectos.html?status=active" data-architect-only data-pro-only hidden role="menuitem">Mis proyectos</a>
-        <a href="proyectos.html?status=active" id="account-menu-active-project" data-architect-only data-pro-only hidden role="menuitem">Mi proyecto activo</a>
-        <a href="proyectos.html?status=requested" data-architect-only data-pro-only hidden role="menuitem">Solicitudes</a>
         <a href="moodboard.html" id="account-menu-moodboard" data-architect-only hidden role="menuitem">Mi moodboard</a>
         <button type="button" class="account-menu-item" id="account-menu-logout" role="menuitem">Cerrar sesión</button>
       </div>
@@ -152,14 +188,12 @@
     if (e.key === "Escape" && panel.classList.contains("is-open")) closeMenu({ focusTrigger: true });
   });
 
-  /* Punto 43 (CC1): «Mis proyectos», «Mi proyecto activo» y «Solicitudes»
-     salen ocultos y solo aparecen con herramientas profesionales (Individual
-     o Estudio); vuelven a ocultarse si el acceso baja. «Mi moodboard» (por
-     ahora una pantalla informativa) aparece para las cuentas profesionales,
-     con plan o Gratis; nunca para distribuidor ni Mobau, que pierden todos
-     estos enlaces más abajo (data-architect-only). */
+  /* Punto 50: el menú de cuenta profesional queda en Mi perfil, Mi moodboard y
+     Cerrar sesión; «Mis proyectos» es el enlace directo de la cabecera. «Mi
+     moodboard» (por ahora una pantalla informativa) aparece para las cuentas
+     profesionales, con plan o Gratis; nunca para distribuidor ni Mobau, que lo
+     pierden más abajo (data-architect-only). */
   const applyAccessToMenu = (access) => {
-    panel.querySelectorAll("[data-pro-only]").forEach(el => { el.hidden = access !== "pro"; });
     const moodboardLink = document.getElementById("account-menu-moodboard");
     if (moodboardLink) moodboardLink.hidden = !(access === "pro" || access === "gratis");
   };
@@ -208,6 +242,7 @@
      pista guardada, donde lo de cliente ya está oculto por CSS. Si la
      consulta falla ("unknown"), la cabecera queda como la de siempre. */
   accountKindPromise.then(kind => {
+    syncNav(null);
     if (kind === "mobau"){
       applyMobauAccount();
       return;
@@ -238,7 +273,8 @@
   });
 
   /* Cuenta de Mobau: quita lo de profesional y, solo con admin activo,
-     añade «Moderación» a la cabecera y al menú (idempotente: data-mobau-nav). */
+     revela «Moderación» (ya reservada en la cabecera) y la añade al menú.
+     No reconstruye la cabecera: <html data-nav="mobau"> oculta lo de cliente. */
   function applyMobauAccount(){
     const profileLink = document.getElementById("account-menu-profile");
     if (profileLink) profileLink.remove();
@@ -246,12 +282,6 @@
 
     const selectionLink = document.getElementById("selection-count-link");
     if (selectionLink) selectionLink.remove();
-    const links = document.querySelector(".site-header .nav-links");
-    if (links){
-      links.querySelectorAll(":scope > a:not([data-mobau-nav])").forEach(a => {
-        if (a.getAttribute("href") !== "catalogo.html") a.remove();
-      });
-    }
     document.querySelectorAll('.site-footer a[href="distribuidores.html"], .site-footer a[href="proyectos.html"]').forEach(a => {
       (a.closest("li") || a).remove();
     });
@@ -259,22 +289,11 @@
     MobauAccess.adminSession().then(state => {
       if (!state.admin) return;
       const home = MobauAccess.MOBAU_HOME;
-      const onConsole = /^moderacion/.test(window.location.pathname.split("/").pop() || "");
       document.querySelectorAll(".site-header .brand").forEach(a => { a.href = home; });
       const nameEl = document.getElementById("account-menu-name");
       if (nameEl) nameEl.textContent = "Equipo Mobau";
 
-      if (links && !links.querySelector("[data-mobau-nav]")){
-        const a = document.createElement("a");
-        a.href = home;
-        a.textContent = "Moderación";
-        a.setAttribute("data-mobau-nav", "");
-        if (onConsole){
-          a.className = "active";
-          a.setAttribute("aria-current", "page");
-        }
-        links.prepend(a);
-      }
+      document.querySelectorAll(".site-header [data-mobau-nav]").forEach(a => { a.setAttribute("data-on", ""); a.inert = false; });
       if (!panel.querySelector("[data-mobau-nav]")){
         const item = document.createElement("a");
         item.href = home;
@@ -287,10 +306,8 @@
     }).catch(() => {});
   }
 
-  /* Cabecera y pie de distribuidor sobre el HTML estático de cada página
-     (sin reescribir las ~21 cabeceras): idempotente — los enlaces propios
-     llevan data-supplier-nav y no se duplican (panel-distribuidor.html ya
-     los trae escritos). */
+  /* Cabecera y pie de distribuidor: los enlaces propios (Resumen, Mis productos) ya están en
+     cada cabecera y se revelan con syncNav(); aquí solo el logo, la selección y el pie. */
   function applySupplierHeader(){
     const home = MobauAccess.SUPPLIER_HOME;
     document.querySelectorAll(".site-header .brand").forEach(a => { a.href = home; });
@@ -298,140 +315,8 @@
     const selectionLink = document.getElementById("selection-count-link");
     if (selectionLink) selectionLink.remove();
 
-    const links = document.querySelector(".site-header .nav-links");
-    if (links){
-      links.querySelectorAll(":scope > a:not([data-supplier-nav])").forEach(a => {
-        if (a.getAttribute("href") !== "catalogo.html") a.remove();
-      });
-      if (!links.querySelector("[data-supplier-nav]")){
-        const items = [["Resumen", home], ["Mis productos", "distribuidor-productos.html"]].map(([label, href]) => {
-          const a = document.createElement("a");
-          a.href = href;
-          a.textContent = label;
-          a.setAttribute("data-supplier-nav", "");
-          return a;
-        });
-        links.prepend(...items);
-      }
-    }
-
     document.querySelectorAll('.site-footer a[href="distribuidores.html"], .site-footer a[href="proyectos.html"]').forEach(a => {
       (a.closest("li") || a).remove();
-    });
-  }
-
-  /* Punto 27 — "Mi proyecto activo".
-
-     BUG REAL DE SINCRONIZACIÓN (corregido aquí): la versión anterior
-     dejaba el href en el fallback hasta que MobauProjects.list("active")
-     resolvía, en una línea de tiempo TOTALMENTE separada de la del
-     usuario. Con sesión ya restaurada (el caso normal: recargar la
-     página, volver de otra pestaña, abrir el menú después de un rato)
-     MobauAuth.getSession() resuelve casi al instante, el menú queda
-     usable de inmediato, y el primer clic real solía llegar ANTES de
-     que la consulta a product_prices/projects terminara — la
-     navegación ocurre con el href que hubiera EN ESE INSTANTE en el
-     DOM (el fallback), sin importar que la promesa fuera a resolver
-     bien 100–300ms después. El "segundo clic" solo parecía arreglarlo
-     porque, para entonces, ya había pasado de sobra una navegación de
-     página completa — tiempo real suficiente para que la consulta ya
-     hubiera terminado en segundo plano.
-
-     CORRECCIÓN: una sola promesa compartida (resolveActiveProjectHref,
-     memoizada en activeProjectHrefPromise) entre quien actualiza el
-     href al resolver y el propio clic del enlace. Si el clic llega
-     antes de resolver, se intercepta ESE clic (preventDefault) y se
-     espera la MISMA promesa ya en curso — nunca una consulta nueva,
-     nunca un setTimeout fijo, nunca exige un segundo clic. */
-  let activeProjectHrefPromise = null;
-  let activeProjectHrefResolved = false;
-
-  function resolveActiveProjectHref(){
-    if (activeProjectHrefPromise) return activeProjectHrefPromise;
-    const fallback = "proyectos.html?status=active";
-    activeProjectHrefPromise = (async () => {
-      /* 1) DOM listo: en TODAS las páginas <script src="nav-session.js">
-         va antes que <script src="proyectos-data.js"> — sin esperar
-         esto, `typeof MobauProjects` puede evaluarse antes de que ese
-         script exista todavía (confirmado con sesión real ya en
-         caché: el guard corría antes de que el parser llegara al
-         siguiente <script>). */
-      if (document.readyState === "loading"){
-        await new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
-      }
-      /* 2) Páginas sin proyectos-data.js (index.html, distribuidores.html,
-         inscripción profesional, proyecto.html, rfq.html…): no existe
-         arquitectura para resolver el proyecto real ahí. Límite
-         conocido y documentado, no un bug — el fallback es el
-         resultado correcto en esas páginas, siempre. */
-      if (typeof MobauProjects === "undefined") return fallback;
-      /* Punto 43 (CC1): sin herramientas profesionales no hay proyectos que
-         consultar (el enlace ni siquiera se muestra). */
-      if ((await MobauAccess.access()) !== "pro") return fallback;
-      /* 3) Reutiliza MobauAuth.getSession() — nunca una consulta nueva
-         de sesión. Si ya no hay sesión (cerró sesión entre que se
-         montó el menú y el clic — caso extremo pero real), nunca se
-         resuelve ni se navega a un destino privado: fallback. */
-      const currentSession = await MobauAuth.getSession();
-      if (!currentSession) return fallback;
-      /* 4) Una sola consulta real, sin importar cuántas veces se llame
-         esta función (al montar el menú Y desde el clic): la promesa
-         ya en curso se reutiliza siempre, MobauProjects.list("active")
-         se ejecuta como máximo una vez por carga de página. Cero o
-         más de uno (no debería pasar con la regla de un solo proyecto
-         activo por plan; si pasa, no se elige ninguno al azar ni se
-         corrige el dato) → fallback. Error de red → fallback (list()
-         ya lo registra y devuelve [] por su cuenta). */
-      try {
-        const activeProjects = await MobauProjects.list("active");
-        return activeProjects.length === 1
-          ? `proyectos-detalle.html?id=${activeProjects[0].id}`
-          : fallback;
-      } catch {
-        return fallback;
-      }
-    })();
-    return activeProjectHrefPromise;
-  }
-
-  const activeProjectLink = document.getElementById("account-menu-active-project");
-  if (activeProjectLink){
-    /* aria-busy en vez de cualquier CSS nuevo: anuncia el estado de
-       carga a lectores de pantalla sin ocupar espacio ni cambiar la
-       altura del header — se retira apenas resuelve, junto con el
-       href real. */
-    activeProjectLink.setAttribute("aria-busy", "true");
-
-    /* Orden deliberado: el listener de clic prematuro se instala ANTES
-       de iniciar resolveActiveProjectHref() (más abajo) — así la
-       protección ya existe desde el instante en que se crea el
-       enlace, sin depender de que ningún clic no pueda colarse en el
-       hueco síncrono entre ambas líneas.
-       Primer clic antes de resolver: preventDefault() es temporal — se
-       usa SOLO mientras activeProjectHrefResolved sigue en false, y
-       deja de aplicarse en cuanto la promesa (ya en curso, la misma de
-       abajo) resuelve; a partir de ahí el enlace navega solo con su
-       href ya real, sin este listener de por medio. Solo se intercepta
-       el clic simple de botón principal — clic central, Ctrl/Cmd+clic
-       o Mayús+clic para abrir en pestaña nueva siguen su camino nativo
-       normal con el href que haya en ese instante, igual que cualquier
-       enlace real: eso no se puede ni se debe interceptar, y es
-       exactamente lo que mantiene el elemento como un <a> real para
-       teclado, lectores de pantalla y "copiar enlace". */
-    activeProjectLink.addEventListener("click", (e) => {
-      if (activeProjectHrefResolved) return;
-      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      e.preventDefault();
-      resolveActiveProjectHref().then(href => {
-        activeProjectLink.href = href;
-        window.location.href = href;
-      });
-    });
-
-    resolveActiveProjectHref().then(href => {
-      activeProjectLink.href = href;
-      activeProjectLink.removeAttribute("aria-busy");
-      activeProjectHrefResolved = true;
     });
   }
 })();

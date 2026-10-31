@@ -139,17 +139,29 @@ const visible = el => !!el && !el.hidden && getComputedStyle(el).display !== "no
       const sel = q("#selection-count-link");
       filas.push([rol, navText(), q(".site-header .brand").getAttribute("href"), !!q(".gsearch"), sel ? (sel.hidden ? "oculto" : sel.textContent) : "no existe"]);
     }
-    check("R1 navegación por cuenta: Productos y Distribuidores (sin Inicio ni Contacto), Mi cuenta / Iniciar sesión, logo y «Mi selección» según el plan",
+    check("R1 navegación por cuenta: Productos y Distribuidores (sin Inicio ni Contacto), «Mis proyectos» directo solo con plan (Punto 50), Mi cuenta / Iniciar sesión, logo y «Mi selección» según el plan",
       filas, [["sin sesión", "Productos · Distribuidores · Iniciar sesión", "index.html", true, "oculto"], ["Gratis", "Productos · Distribuidores · Mi cuenta", "index.html", true, "oculto"],
-        ["Individual", "Productos · Distribuidores · Mi cuenta", "index.html", true, "Mi selección (3)"], ["distribuidor", "Resumen · Mis productos · Productos · Mi cuenta", "panel-distribuidor.html", true, "no existe"],
+        ["Individual", "Productos · Distribuidores · Mis proyectos · Mi cuenta", "index.html", true, "Mi selección (3)"], ["distribuidor", "Resumen · Mis productos · Productos · Mi cuenta", "panel-distribuidor.html", true, "no existe"],
         ["Mobau", "Moderación · Productos · Mi cuenta", "moderacion.html", true, "no existe"]]);
     await open("moderacion.html", QS_MOBAU);
     check("R2 consola de moderación: sin buscador (excepción acordada) y con «Productos»", [!!q(".gsearch"), !!q(".gsearch-open"), navText()], [false, false, "Moderación · Productos · Mi cuenta"]);
-    await open("index.html", QS_IND);
-    check("R3 lema junto al logo a 1366 px; el pie conserva «Contacto» y nombra «Productos»",
+    /* Punto 50: con plan, la cabecera lleva «Mis proyectos» y «Mi selección»; el lema se oculta por debajo de 1480 px
+       para que el buscador conserve al menos 460 px. Las demás composiciones conservan el lema desde 1360 px. */
+    const lemaBuscador = () => [visible(q(".site-header .brand span")), Math.round(q(".gsearch").getBoundingClientRect().width)];
+    await open("index.html", QS_ANON);
+    check("R3 sin sesión: lema junto al logo a 1366 px; el pie conserva «Contacto» y nombra «Productos»",
       [visible(q(".site-header .brand span")), q(".site-header .brand span").textContent, qa(".site-footer h4").map(h => h.textContent).includes("Contacto"), qa(".site-footer a[href='catalogo.html']").map(a => a.textContent)], [true, "Plataforma de diseño", true, ["Productos"]]);
+    await open("index.html", QS_IND, { w: 1366 });
+    const l1366 = lemaBuscador();
+    check("R3b con plan a 1366 px: sin lema (no cabe con «Mis proyectos»), buscador ≥ 460 px", [l1366[0], l1366[1] >= 460], [false, true]);
+    await open("index.html", QS_IND, { w: 1500 });
+    const l1500 = lemaBuscador();
+    check("R3c con plan a 1500 px: lema visible y buscador ≥ 460 px", [l1500[0], l1500[1] >= 460], [true, true]);
     await open("index.html", QS_IND, { w: 1280 });
-    check("R4 por debajo de 1360 px el lema se oculta y el buscador conserva su ancho", [visible(q(".site-header .brand span")), Math.round(q(".gsearch").getBoundingClientRect().width) >= 500], [false, true]);
+    const l1280 = lemaBuscador();
+    check("R4 por debajo de 1360 px el lema se oculta; con plan el buscador mide ≥ 400 px y sin sesión ≥ 500 px", [l1280[0], l1280[1] >= 400], [false, true]);
+    await open("index.html", QS_ANON, { w: 1280 });
+    check("R4b sin sesión a 1280 px: sin lema y buscador ≥ 500 px", [visible(q(".site-header .brand span")), Math.round(q(".gsearch").getBoundingClientRect().width) >= 500], [false, true]);
 
     /* ===== Móvil (emulación de anchura, no un teléfono real) ===== */
     w = await open("index.html", QS_IND, { w: 390, h: 844 });
@@ -163,7 +175,7 @@ const visible = el => !!el && !el.hidden && getComputedStyle(el).display !== "no
     key("Escape"); await sleep(200);
     check("T4 Esc cierra la hoja sin borrar y el foco vuelve a ⌕", [D().body.classList.contains("gsearch-sheet"), field().value, D().activeElement === q(".gsearch-open")], [false, "dama", true]);
     q(".nav-toggle").click(); await sleep(200);
-    check("T5 menú: Productos, Distribuidores y Mi cuenta", [D().body.classList.contains("nav-open"), visible(q(".nav-links")), navText()], [true, true, "Productos · Distribuidores · Mi cuenta"]);
+    check("T5 menú (con plan): Productos, Distribuidores, Mis proyectos y Mi cuenta; sin «Iniciar sesión»", [D().body.classList.contains("nav-open"), visible(q(".nav-links")), navText()], [true, true, "Productos · Distribuidores · Mis proyectos · Mi cuenta"]);
     for (const [rol, qs] of [["sin sesión", QS_ANON], ["Gratis", QS_GRATIS]]){
       await open("index.html", qs, { w: 390, h: 844 });
       check(`T6 móvil ${rol}: sin «Mi selección»`, visible(q("#selection-count-link")), false);

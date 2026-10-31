@@ -48,6 +48,7 @@
     .mod-actions .btn{ width:100%; justify-content:center; }
   }
 </style>
+<script src="nav-account-hint.js"></script>
 </head>
 <body>
 
@@ -56,9 +57,11 @@
   <div class="wrap nav">
     <a href="index.html" class="brand">Mobau <span>Plataforma de diseño</span></a>
     <nav class="nav-links" aria-label="Principal">
+      <a href="moderacion.html" data-nav-for="mobau" inert data-mobau-nav class="active" aria-current="page">Moderación</a>
       <a href="catalogo.html">Productos</a>
       <span class="nav-sep"></span>
-      <span id="nav-session-slot"></span>
+      <a href="login.html" id="nav-login" data-nav-for="anon" data-on>Iniciar sesión</a>
+      <div id="nav-session-slot" class="account-menu" data-nav-for="account" aria-hidden="true"><button type="button" class="account-menu-trigger" tabindex="-1" disabled>Mi cuenta <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
     </nav>
     <div class="nav-cta">
       <button class="nav-toggle" aria-label="Abrir menú"><span></span></button>

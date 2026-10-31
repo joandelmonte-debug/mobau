@@ -290,12 +290,16 @@ add("Proyectos · Gratis (CC1)", "Fallo de acceso: aviso de recarga, sin conteni
   return { ok: g.visible && g.title === "No pudimos comprobar tu acceso." && eqJ(g.buttons, ["Recargar"]) && o.queries.length === 0, got: o };
 });
 
-/* CC1: navegación y Mi cuenta */
+/* CC1: navegación y Mi cuenta. Punto 50: «Mis proyectos» es un enlace directo de la cabecera (junto a «Mi cuenta»);
+   el menú de cuenta ya no tiene «Mis proyectos», «Mi proyecto activo» ni «Solicitudes» (siempre «no existe»). */
 const menu = () => {
   const d = D();
   const item = (sel) => { const el = d.querySelector(sel); return el ? (el.hidden ? "oculto" : "visible") : "no existe"; };
-  return { proyectos: item('#account-menu-panel a[href="proyectos.html?status=active"]:not(#account-menu-active-project)'),
-           activo: item("#account-menu-active-project"), solicitudes: item('#account-menu-panel a[href="proyectos.html?status=requested"]'),
+  const direct = d.querySelector('.site-header .nav-links a[data-pro-nav]');
+  const cs = direct ? W().getComputedStyle(direct) : null;
+  const panelHasProjects = !!d.querySelector('#account-menu-panel a[href^="proyectos.html"], #account-menu-active-project');
+  return { proyectos: !direct ? "no existe" : (cs.display === "none" || cs.visibility === "hidden" || !direct.hasAttribute("data-on") ? "oculto" : "visible"),
+           activo: panelHasProjects ? "existe" : "no existe", solicitudes: panelHasProjects ? "existe" : "no existe",
            moodboard: item("#account-menu-moodboard"),
            pie: [...d.querySelectorAll('.site-footer a[href="proyectos.html"]')].filter(a => !(a.closest("li") || a).hidden).length };
 };
@@ -305,18 +309,18 @@ const menuCase = (name, qs, exp) => add("Navegación (CC1)", name, async () => {
   const ok = ["proyectos", "activo", "solicitudes", "moodboard", "pie"].every(k => o[k] === exp[k]) && (exp.noQueries ? o.queries.length === 0 : true) && o.errors.length === 0;
   return { ok, got: o };
 });
-menuCase("Gratis: sin enlaces de proyectos (menú y pie), con «Mi moodboard», sin consultas", "pro=0",
-  { proyectos: "oculto", activo: "oculto", solicitudes: "oculto", moodboard: "visible", pie: 0, noQueries: true });
-menuCase("Individual: enlaces de proyectos y «Mi moodboard»", "pro=1",
-  { proyectos: "visible", activo: "visible", solicitudes: "visible", moodboard: "visible", pie: 1 });
-menuCase("Sin sesión: sin menú ni «Mis proyectos» en el pie", "rol=anon",
-  { proyectos: "no existe", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
+menuCase("Gratis: sin «Mis proyectos» (cabecera y pie), con «Mi moodboard», sin consultas", "pro=0",
+  { proyectos: "oculto", activo: "no existe", solicitudes: "no existe", moodboard: "visible", pie: 0, noQueries: true });
+menuCase("Individual: «Mis proyectos» directo en la cabecera (no en el menú) y «Mi moodboard»", "pro=1",
+  { proyectos: "visible", activo: "no existe", solicitudes: "no existe", moodboard: "visible", pie: 1 });
+menuCase("Sin sesión: sin menú ni «Mis proyectos» (cabecera y pie)", "rol=anon",
+  { proyectos: "oculto", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
 menuCase("Distribuidor: sin proyectos ni moodboard", "rol=supplier",
-  { proyectos: "no existe", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
+  { proyectos: "oculto", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
 menuCase("Mobau: sin proyectos ni moodboard", "rol=mobau",
-  { proyectos: "no existe", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
-menuCase("Fallo de acceso: sin enlaces de proyectos ni moodboard", "pro=err",
-  { proyectos: "oculto", activo: "oculto", solicitudes: "oculto", moodboard: "oculto", pie: 0, noQueries: true });
+  { proyectos: "oculto", activo: "no existe", solicitudes: "no existe", moodboard: "no existe", pie: 0 });
+menuCase("Fallo de acceso: sin «Mis proyectos» ni moodboard", "pro=err",
+  { proyectos: "oculto", activo: "no existe", solicitudes: "no existe", moodboard: "oculto", pie: 0, noQueries: true });
 add("Mi cuenta (CC1)", "Gratis: solo el perfil, sin proyectos ni solicitudes", async () => {
   await open("cuenta.html?pro=0", 1300);
   const d = D();

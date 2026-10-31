@@ -70,6 +70,7 @@
     .pp-file-row{ grid-template-columns: 1fr; }
   }
 </style>
+<script src="nav-account-hint.js"></script>
 </head>
 <body class="marco">
 
@@ -96,7 +97,8 @@
       <a href="distribuidor-productos.html" class="active" aria-current="page" data-supplier-nav>Mis productos</a>
       <a href="catalogo.html">Productos</a>
       <span class="nav-sep"></span>
-      <span id="nav-session-slot"></span>
+      <a href="login.html" id="nav-login" data-nav-for="anon" data-on>Iniciar sesión</a>
+      <div id="nav-session-slot" class="account-menu" data-nav-for="account" aria-hidden="true"><button type="button" class="account-menu-trigger" tabindex="-1" disabled>Mi cuenta <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
     </nav>
     <div class="nav-cta">
       <button type="button" class="iconbtn gsearch-open" aria-label="Buscar productos y componentes"><svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path></svg></button>

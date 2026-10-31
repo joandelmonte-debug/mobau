@@ -129,6 +129,30 @@
 .site-header #selection-count-link .sel-ico{ display:none; }
 .site-header #selection-count-link .sel-n{ min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:var(--h-ink); color:#fff; font-size:12.5px; line-height:20px; text-align:center; }
 .site-header #selection-count-link .sel-n:empty{ display:none; }
+
+/* Punto 50 — composición estable de la cabecera. nav-account-hint.js (en el <head>) marca <html data-nav="…">
+   (anon | pending | pro | gratis | supplier | mobau) y nav-session.js lo corrige con la sesión, el rol y el plan
+   confirmados. Los accesos que dependen de la cuenta (data-nav-for) están en el HTML: los que no corresponden a la
+   composición esperada no ocupan sitio; los que sí, ocupan EXACTAMENTE su sitio, visibles pero inertes, hasta
+   que se confirman (data-on), así nada se desplaza al llegar. «Iniciar sesión» (sin sesión guardada) se pinta ya. */
+/* Los accesos reservados se ven en su sitio desde la primera pintura cuando la pista es de esta cuenta, pero son inertes
+   (atributo inert: sin clic ni foco) hasta que nav-session.js los confirma y retira inert. */
+/* Cabecera aún sin recibir entera (el HTML llega por partes; en Productos precede un bloque grande de estilos): el
+   buscador y la navegación no se pintan hasta que el último botón de la fila existe, para no mostrar una composición
+   a medias. El logo no se oculta. Es solo el tiempo de recepción del HTML, no la resolución de la sesión. */
+.site-header .wrap.nav:not(:has(> .nav-cta .nav-toggle)) > :not(.brand){ visibility:hidden; }
+html:not([data-nav="pro"]) .site-header [data-nav-for="pro"],
+html:not([data-nav="supplier"]) .site-header [data-nav-for="supplier"],
+html:not([data-nav="mobau"]) .site-header [data-nav-for="mobau"],
+html:not([data-nav="anon"]) .site-header [data-nav-for="anon"],
+html[data-nav="anon"] .site-header [data-nav-for="account"],
+html[data-nav="supplier"] .site-header [data-nav-pub],
+html[data-nav="mobau"] .site-header [data-nav-pub]{ display:none !important; }
+/* «Mi selección» (hidden hasta confirmar el plan; styles.css fuerza [hidden] con !important): con la pista «pro» ya ocupa su sitio, con el contador que tenía. */
+html[data-nav="pro"] .site-header .nav-cta #selection-count-link[hidden]{ display:inline-flex !important; }
+html[data-nav="pro"] .site-header #selection-count-link[hidden] .sel-n:empty{ display:inline-block; }
+html[data-nav="pro"] .site-header #selection-count-link[hidden] .sel-n:empty::before{ content:var(--nav-n, ""); }
+html[data-nav="pro"]:not([style*="--nav-n"]) .site-header #selection-count-link[hidden] .sel-n:empty{ display:none; }
 .site-header .iconbtn{
   width:44px; height:44px; flex:none; display:none; align-items:center; justify-content:center; border:0; border-radius:50%;
   background:none; color:var(--h-ink-2); cursor:pointer; padding:0;
@@ -144,6 +168,11 @@ body.nav-open .site-header .nav-toggle span::after{ transform:translateY(-6px) r
 /* Escritorio estrecho: un poco menos de aire entre enlaces. */
 @media (max-width:1359px){
   .site-header .brand span{ display:none; }
+}
+/* Punto 50: con «Mis proyectos» y «Mi selección» (cuenta con plan) el buscador no conserva 460 px con el lema
+   por debajo de ~1480 px; el resto de composiciones mantiene el lema desde 1360 px. */
+@media (max-width:1479px){
+  html[data-nav="pro"] .site-header .brand span{ display:none; }
 }
 @media (max-width:1279px){
   .site-header .wrap.nav{ gap:22px; }
